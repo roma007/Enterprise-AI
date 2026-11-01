@@ -114,4 +114,9 @@ def normalize_for_compare(key: str, value: str | None) -> str:
     elif key in {"so_no"}:
         v = re.sub(r"^(SO|S/O)[-\s]?", "", v.upper())
         v = re.sub(r"[^A-Z0-9]", "", v)
+    elif key in {"pickup_addr", "delivery_addr", "client", "cargo_desc",
+                 "vessel_voyage", "remark"}:
+        # 地址/名称类：空格、全半角、标点差异不该算错
+        v = re.sub(r"\s+", "", v)
+        v = v.replace("（", "(").replace("）", ")").replace("、", ",").replace("，", ",")
     return v

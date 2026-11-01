@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday reset clean
+.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake reset clean
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -44,3 +44,7 @@ clean:
 # 模拟一整天：入口 → 解析 → 分级 → 确认 → 指标 → 风险 → 拆分 → 改单
 simday:
 	PYTHONPATH=. $(PY) scripts/sim_day.py
+
+# 资料采集模拟：扫描质量 / TMS 导入 / 配对 / 工时
+intake:
+	PYTHONPATH=. $(PY) scripts/sim_intake.py

@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from . import ocr
 from .config import ROOT, settings
-from .csvio import export_csv, parse_tms_csv
+from .csvio import decode_csv_bytes, export_csv, parse_tms_csv
 from . import wecom
 from .evalrun import SAMPLE_PATH, run_all
 from .extract import extract
@@ -330,8 +330,10 @@ async def api_import_tms(file: UploadFile = File(...)):
     data = await file.read()
     if len(data) > MAX_UPLOAD:
         raise HTTPException(status_code=413, detail="文件超过 10MB")
-    text = data.decode("utf-8-sig", errors="ignore") or data.decode("gbk", errors="ignore")
-    return parse_tms_csv(text)
+    text, enc = decode_csv_bytes(data)
+    result = parse_tms_csv(text)
+    result["encoding"] = enc
+    return result
 
 
 @app.post("/api/pair")

@@ -16,11 +16,11 @@ from .schema import FIELD_KEYS, LABELS
 # 客户表头 → 标准字段。顺序即优先级（先精确匹配，再包含匹配）
 HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "booking_no": ("委托单号", "托书号", "托书编号", "订单号", "单号", "booking", "booking_no", "order_no"),
-    "client": ("客户名称", "客户", "货代", "委托单位", "委托方", "client"),
-    "container_no": ("箱号", "集装箱号", "柜号", "container", "container_no", "cntr"),
-    "container_type": ("箱型", "柜型", "箱形", "container_type", "type"),
+    "client": ("客户名称", "客户", "货主", "货代", "委托单位", "委托方", "client", "shipper"),
+    "container_no": ("箱号", "集装箱号", "柜号", "柜编码", "container", "container_no", "cntr"),
+    "container_type": ("箱型", "柜型", "箱形", "柜别", "container_type", "type"),
     "container_qty": ("箱量", "箱数", "柜量", "数量", "qty", "quantity"),
-    "seal_no": ("封号", "铅封号", "封条号", "seal", "seal_no"),
+    "seal_no": ("封号", "铅封号", "封条", "封条号", "seal", "seal_no"),
     "closing_time": ("截港时间", "截关时间", "截港", "截关", "cutoff", "cut_off"),
     "loading_window": ("装柜时间", "装货时间", "装柜", "loading"),
     "pickup_addr": ("提箱地", "提箱地址", "装货地", "提空箱点", "pickup"),
@@ -46,6 +46,20 @@ def _map_header(name: str) -> str | None:
             if a.lower().replace(" ", "").replace("_", "") in n:
                 return key
     return None
+
+
+def decode_csv_bytes(data: bytes) -> tuple[str, str]:
+    """CSV 编码探测：必须用 strict 解码判断，不能用 errors='ignore'。
+
+    踩过的坑：`data.decode('utf-8', errors='ignore') or data.decode('gbk')`
+    这种写法在 GBK 文件上会返回一串乱码（非空），导致永远不会回退到 GBK。
+    """
+    for enc in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return data.decode(enc), enc
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="ignore"), "utf-8(ignore)"
 
 
 def parse_tms_csv(text: str) -> dict:

@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 交付云 · 企业AI化项目管理系统</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#fff; --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8;
+    --line:#e6e9ef; --brand:#4f46e5; --brand-soft:#eef2ff; --brand-2:#6366f1;
+    --green:#059669; --green-soft:#ecfdf5;
+    --amber:#d97706; --amber-soft:#fffbeb;
+    --red:#dc2626; --red-soft:#fef2f2;
+    --slate-soft:#f1f5f9;
+    --r:12px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--ink); font-size:14px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{display:flex;}
+  /* ---------- sidebar ---------- */
+  .sidebar{
+    width:232px; background:#0f172a; color:#cbd5e1; position:fixed; top:0; bottom:0; left:0;
+    display:flex; flex-direction:column; padding:18px 12px; z-index:50;
+  }
+  .logo{display:flex; align-items:center; gap:10px; padding:4px 8px 18px;}
+  .logo-mark{
+    width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;
+  }
+  .logo-text{font-size:14px;font-weight:600;color:#f8fafc;letter-spacing:.2px;}
+  .logo-sub{font-size:10px;color:#64748b;letter-spacing:.6px;text-transform:uppercase;}
+  .nav-group{margin-top:14px;}
+  .nav-title{font-size:10px;letter-spacing:.8px;color:#475569;padding:0 10px 6px;text-transform:uppercase;}
+  .nav-item{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;
+    color:#94a3b8;cursor:pointer;font-size:13px;transition:.15s;user-select:none;
+  }
+  .nav-item:hover{background:#1e293b;color:#e2e8f0;}
+  .nav-item.active{background:#1e293b;color:#fff;box-shadow:inset 2px 0 0 var(--brand-2);}
+  .nav-item svg{width:16px;height:16px;flex:none;opacity:.85;}
+  .nav-badge{margin-left:auto;background:var(--brand);color:#fff;font-size:10px;border-radius:999px;padding:1px 6px;}
+  .sidebar-foot{margin-top:auto;padding:10px;border-top:1px solid #1e293b;display:flex;gap:10px;align-items:center;}
+  .avatar{width:30px;height:30px;border-radius:50%;background:#334155;color:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
+  /* ---------- main ---------- */
+  .main{margin-left:232px;flex:1;min-width:0;}
+  .topbar{
+    height:60px;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:14px;padding:0 28px;position:sticky;top:0;z-index:40;
+  }
+  .crumb{font-size:13px;color:var(--ink3);}
+  .crumb b{color:var(--ink);font-weight:600;}
+  .crumb span{margin:0 6px;}
+  .spacer{flex:1;}
+  .btn{
+    border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 13px;border-radius:8px;
+    font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s;font-family:inherit;
+  }
+  .btn:hover{border-color:#cbd5e1;background:#fafafa;}
+  .btn-primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .btn-primary:hover{background:#4338ca;border-color:#4338ca;}
+  .btn-sm{padding:4px 10px;font-size:12px;}
+  .content{padding:26px 32px 60px;max-width:1240px;}
+  h1{font-size:22px;margin:0 0 4px;font-weight:650;letter-spacing:-.2px;}
+  h2{font-size:16px;margin:0 0 12px;font-weight:650;}
+  h3{font-size:13px;margin:0 0 8px;font-weight:650;color:var(--ink2);}
+  .sub{color:var(--ink3);font-size:13px;margin:0 0 22px;}
+  /* ---------- cards ---------- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;}
+  .card + .card{margin-top:16px;}
+  .grid{display:grid;gap:16px;}
+  .g4{grid-template-columns:repeat(4,1fr);}
+  .g3{grid-template-columns:repeat(3,1fr);}
+  .g2{grid-template-columns:1fr 1fr;}
+  .stat-label{font-size:12px;color:var(--ink3);margin-bottom:6px;}
+  .stat-value{font-size:26px;font-weight:650;letter-spacing:-.5px;line-height:1.1;}
+  .stat-note{font-size:11px;color:var(--ink3);margin-top:6px;}
+  /* ---------- badges ---------- */
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600;white-space:nowrap;}
+  .b-green{background:var(--green-soft);color:var(--green);}
+  .b-amber{background:var(--amber-soft);color:var(--amber);}
+  .b-red{background:var(--red-soft);color:var(--red);}
+  .b-brand{background:var(--brand-soft);color:var(--brand);}
+  .b-gray{background:var(--slate-soft);color:#64748b;}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:11px;color:var(--ink3);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);letter-spacing:.3px;text-transform:uppercase;}
+  td{padding:11px 10px;border-bottom:1px solid #f1f3f7;vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#fafbfd;}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+  /* ---------- stage timeline ---------- */
+  .timeline{display:flex;align-items:center;gap:0;margin:22px 0 6px;}
+  .tl-item{flex:1;text-align:center;position:relative;}
+  .tl-line{position:absolute;top:13px;left:50%;width:100%;height:2px;background:var(--line);z-index:0;}
+  .tl-item:last-child .tl-line{display:none;}
+  .tl-dot{
+    width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid var(--line);
+    margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+    color:var(--ink3);position:relative;z-index:1;
+  }
+  .tl-item.done .tl-dot{background:var(--green);border-color:var(--green);color:#fff;}
+  .tl-item.done .tl-line{background:var(--green);}
+  .tl-item.current .tl-dot{background:#fff;border-color:var(--brand);color:var(--brand);box-shadow:0 0 0 5px var(--brand-soft);}
+  .tl-item.current .tl-line{background:linear-gradient(90deg,var(--brand),var(--line));}
+  .tl-label{font-size:12px;color:var(--ink2);font-weight:600;}
+  .tl-item.current .tl-label{color:var(--brand);}
+  .tl-sub{font-size:10px;color:var(--ink3);}
+  /* ---------- checklist ---------- */
+  .ck{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px dashed #eef1f6;}
+  .ck:last-child{border-bottom:none;}
+  .ck-box{width:18px;height:18px;border-radius:5px;border:1.5px solid #cbd5e1;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;}
+  .ck-box.ok{background:var(--green);border-color:var(--green);color:#fff;font-size:11px;}
+  .ck-box.no{background:var(--red-soft);border-color:#fca5a5;}
+  .ck-text{font-size:13px;}
+  .ck-note{font-size:11px;color:var(--ink3);margin-top:2px;}
+  /* ---------- matrix ---------- */
+  .matrix-wrap{position:relative;padding:26px 20px 46px 62px;}
+  .matrix{position:relative;height:420px;border-left:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;}
+  .plot{
+    position:absolute;inset:36px;
+    background:
+      linear-gradient(to right, #f1f5f9 1px, transparent 1px) 0 0/25% 100%,
+      linear-gradient(to top, #f1f5f9 1px, transparent 1px) 0 0/100% 25%;
+  }
+  .bubble{
+    position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;color:#fff;cursor:pointer;transition:.18s;transform:translate(-50%,50%);
+    box-shadow:0 2px 8px rgba(15,23,42,.18);border:2px solid rgba(255,255,255,.9);
+  }
+  .bubble:hover{transform:translate(-50%,50%) scale(1.15);z-index:9;}
+  .bubble.p{background:#4f46e5;}
+  .bubble.c{background:#0ea5e9;}
+  .bubble.w{background:#94a3b8;}
+  .axis-y{position:absolute;left:12px;top:26px;bottom:46px;display:flex;align-items:center;}
+  .axis-y span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;color:var(--ink3);letter-spacing:2px;}
+  .axis-x{position:absolute;bottom:20px;left:62px;right:20px;text-align:center;font-size:11px;color:var(--ink3);letter-spacing:2px;}
+  .tick-y{position:absolute;left:-22px;font-size:10px;color:var(--ink3);transform:translateY(50%);}
+  .tick-x{position:absolute;bottom:-20px;font-size:10px;color:var(--ink3);transform:translateX(-50%);}
+  .legend{display:flex;gap:18px;margin-top:14px;font-size:12px;color:var(--ink2);}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+  /* ---------- tabs ---------- */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;}
+  .tab{padding:9px 16px;font-size:13px;color:var(--ink2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab:hover{color:var(--ink);}
+  .tab.active{color:var(--brand);border-bottom-color:var(--brand);font-weight:600;}
+  /* ---------- misc ---------- */
+  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:6px;background:var(--slate-soft);color:#475569;}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px dashed #eef1f6;}
+  .kv:last-child{border-bottom:none;}
+  .kv span:first-child{color:var(--ink3);}
+  .kv span:last-child{font-weight:600;}
+  .progress{height:6px;background:#eef1f6;border-radius:999px;overflow:hidden;}
+  .progress > i{display:block;height:100%;background:var(--brand);border-radius:999px;}
+  .proj-card{
+    background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;cursor:pointer;transition:.15s;
+  }
+  .proj-card:hover{border-color:#c7d2fe;box-shadow:0 6px 20px rgba(79,70,229,.08);transform:translateY(-1px);}
+  .proj-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .proj-name{font-weight:650;font-size:14px;}
+  .proj-meta{font-size:12px;color:var(--ink3);margin-bottom:14px;}
+  .proj-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12px;color:var(--ink2);}
+  .quote{border-left:3px solid var(--brand-2);background:#fafbff;padding:10px 14px;border-radius:0 8px 8px 0;font-size:13px;color:var(--ink2);margin:10px 0;}
+  .transcript{font-size:13px;line-height:1.9;color:#334155;max-height:410px;overflow:auto;padding-right:8px;}
+  .transcript p{margin:0 0 10px;}
+  .speaker{color:var(--brand);font-weight:600;}
+  .list-item{padding:12px 14px;border-radius:10px;cursor:pointer;border:1px solid transparent;transition:.15s;}
+  .list-item:hover{background:#fafbfd;}
+  .list-item.active{background:var(--brand-soft);border-color:#c7d2fe;}
+  .li-title{font-size:13px;font-weight:600;}
+  .li-sub{font-size:11px;color:var(--ink3);margin-top:2px;}
+  .hyp{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px dashed #eef1f6;}
+  .hyp:last-child{border-bottom:none;}
+  .hyp-status{cursor:pointer;flex:none;}
+  .empty{text-align:center;color:var(--ink3);padding:40px 0;font-size:13px;}
+  .warn-bar{background:var(--amber-soft);border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:9px;font-size:12.5px;margin-bottom:16px;display:flex;gap:8px;align-items:flex-start;}
+  .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;}
+  .link{color:var(--brand);cursor:pointer;font-size:12px;}
+  .link:hover{text-decoration:underline;}
+  .roi-input{width:96px;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13px;font-family:inherit;text-align:right;}
+  .roi-input:focus{outline:none;border-color:var(--brand);}
+  @media(max-width:1100px){
+    .g4{grid-template-columns:repeat(2,1fr);}
+    .g2{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">AI</div>
+      <div>
+        <div class="logo-text">AI 交付云</div>
+        <div class="logo-sub">Delivery OS</div>
+      </div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">工作台</div>
+      <div class="nav-item active" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        项目总览
+      </div>
+      <div class="nav-item" data-view="project">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        项目详情
+      </div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">诊断 · S1</div>
+      <div class="nav-item" data-view="stakeholders">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14c2.8 0 4.5 2 4.5 5"/></svg>
+        干系人
+      </div>
+      <div class="nav-item" data-view="interviews">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 01-8 8H4l2.5-3A8 8 0 1121 12z"/></svg>
+        访谈与痛点
+      </div>
+      <div class="nav-item" data-view="inventory">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>
+        四维盘点
+      </div>
+      <div class="nav-item" data-view="opportunities">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="16" r="2.6"/><circle cx="14" cy="8" r="2.6"/><circle cx="19" cy="15" r="2.6"/><path d="M9 14l3.4-3.6M16.4 9.6L18 12.8"/></svg>
+        机会地图
+        <span class="nav-badge">6</span>
+      </div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-title">输出</div>
+      <div class="nav-item" data-view="deliverables">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/></svg>
+        交付物中心
+      </div>
+    </div>
+    <div class="sidebar-foot">
+      <div class="avatar">陈</div>
+      <div style="font-size:12px;color:#cbd5e1;">
+        <div style="color:#f1f5f9;font-weight:600;">陈静</div>
+        <div style="font-size:10px;color:#64748b;">项目经理 · 恒智咨询</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb">恒智咨询 <span>/</span> <b id="crumb-client">宏远国际物流</b> <span>/</span> <b id="crumb-view">项目总览</b></div>
+      <div class="spacer"></div>
+      <button class="btn btn-sm">导出</button>
+      <button class="btn btn-sm btn-primary">+ 新建</button>
+    </header>
+    <div class="content" id="view"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   数据（来自「宏远国际物流」集卡运输诊断案例）
+   ============================================================ */
+const DB = {
+  project: {
+    client: '宏远国际物流有限公司',
+    name: 'AI 化诊断项目',
+    stage: 'S1',
+    start: '2026-10-12',
+    end: '2026-10-30',
+    pm: '陈静',
+    owner: '李强 · 运营副总',
+    progress: 62,
+    daysLeft: 3,
+    stages: [
+      { k:'S0', n:'商机', d:'已完成' },
+      { k:'S1', n:'诊断', d:'进行中' },
+      { k:'S2', n:'方案', d:'未开始' },
+      { k:'S3', n:'POC', d:'未开始' },
+      { k:'S4', n:'交付', d:'未开始' },
+      { k:'S5', n:'运营', d:'未开始' }
+    ]
+  },
+  cards: [
+    { label:'在跑项目', value:'7', note:'其中 2 个处于 G1 待审' },
+    { label:'本周待过门禁', value:'3', note:'G1 × 2 · G2 × 1' },
+    { label:'风险项目', value:'2', note:'1 个数据阻断 · 1 个延期' },
+    { label:'本季签约', value:'¥86万', note:'诊断转化率 43%' }
+  ],
+  projects: [
+    { id:'p1', client:'宏远国际物流', name:'AI 化诊断', stage:'S1 诊断', gate:'G1 待审', health:'amber', pm:'陈静', next:'补齐数据维度抽样', due:'还剩 3 天', progress:62, amount:18 },
+    { id:'p2', client:'华远供应链', name:'仓储智能化诊断', stage:'S2 方案', gate:'G2 未启动', health:'green', pm:'王磊', next:'方案评审会', due:'还剩 9 天', progress:78, amount:26 },
+    { id:'p3', client:'顺捷集运', name:'全周期交付', stage:'S4 交付', gate:'G4 待审', health:'red', pm:'刘洋', next:'接口联调受阻', due:'已逾期 4 天', progress:84, amount:120 },
+    { id:'p4', client:'东方冷链', name:'AI 化诊断', stage:'S1 诊断', gate:'G1 检查中', health:'green', pm:'陈静', next:'第 4 场访谈', due:'还剩 11 天', progress:35, amount:16 }
+  ],
+  gates: [
+    { item:'业务流程图经业务负责人确认', ok:true,  note:'王敏 确认 · 2026-10-20 · 会议' },
+    { item:'访谈完成 ≥ 5 人，纪要已归档', ok:true, note:'已完成 5 场 · 平均 52 分钟' },
+    { item:'四维盘点完成度 ≥ 80%', ok:true, note:'当前 76%，差 2 项' },
+    { item:'痛点清单 ≥ 10 条且全部有来源', ok:false, note:'当前 8 条，缺 2 条' },
+    { item:'机会点 ≥ 3 个且均有评分理由', ok:true, note:'6 个，理由已填' },
+    { item:'至少 1 个机会点有真实基线', ok:true, note:'OP-01 已采集现场计时' },
+    { item:'技术阻断项已识别', ok:true, note:'OP-05 标记阻断' },
+    { item:'一页纸简报已生成并通过 PM 审核', ok:false, note:'待生成' }
+  ],
+  stakeholders: [
+    { name:'张伟', title:'总经理', role:'decision_maker', influence:5, attitude:'neutral', concerns:['投入产出','风险'], interviewed:true },
+    { name:'李强', title:'运营副总', role:'project_owner', influence:5, attitude:'champion', concerns:['内部推进','汇报'], interviewed:true },
+    { name:'王敏', title:'调度经理', role:'business_owner', influence:4, attitude:'skeptic', concerns:['怕被替代','流程改动'], interviewed:true },
+    { name:'刘芳', title:'单证主管', role:'business_owner', influence:3, attitude:'supporter', concerns:['减少加班'], interviewed:true },
+    { name:'陈磊', title:'IT 经理', role:'it_data', influence:4, attitude:'neutral', concerns:['数据安全','接口工作量'], interviewed:true },
+    { name:'赵刚', title:'车队队长', role:'frontline', influence:2, attitude:'blocker', concerns:['司机习惯','App 负担'], interviewed:false }
+  ],
+  interviews: [
+    { id:'i1', who:'张伟', title:'总经理', date:'2026-10-14', min:55, mode:'onsite', status:'confirmed',
+      summary:'关注整体投入产出，明确"先做能看到效果的一块"；对数据安全敏感，倾向境内方案。',
+      quotes:['我不想听 AI 能做什么，我想知道多久能回本。','先把一个点做透，别铺太大。'] },
+    { id:'i2', who:'李强', title:'运营副总', date:'2026-10-15', min:60, mode:'onsite', status:'confirmed',
+      summary:'项目内部 owner，最关心跨部门协调与向上汇报素材；愿意推动，但缺抓手。',
+      quotes:['我得能拿着东西去开会，不能每次都说"在推进"。'] },
+    { id:'i3', who:'王敏', title:'调度经理', date:'2026-10-16', min:48, mode:'onsite', status:'confirmed',
+      summary:'对 AI 有防御心理，担心被替代；实际调度靠经验 + 微信群，异常处理占大量时间。',
+      quotes:['系统再智能，最后还不是我们背锅。','现在改一单要打三个电话。'] },
+    { id:'i4', who:'刘芳', title:'单证主管', date:'2026-10-17', min:50, mode:'onsite', status:'confirmed',
+      summary:'单证组 5 人，日均 200 单，单均 10 分钟，长期加班；痛点最具体、最可量化。',
+      quotes:['每天录到八点，眼睛都花了。','托书格式五花八门，微信里什么都有。'] },
+    { id:'i5', who:'陈磊', title:'IT 经理', date:'2026-10-18', min:45, mode:'video', status:'confirmed',
+      summary:'TMS 有 API 但文档不全，订单数据可只读同步；对数据出境明确反对。',
+      quotes:['数据不能出境，这是红线。','要接口可以，但得排期。'] }
+  ],
+  transcript: [
+    ['刘芳','我们单证组一共五个人，每天大概两百单。'],
+    ['顾问','一单大概要多久？'],
+    ['刘芳','快的五六分钟，慢的二十分钟。平均十分钟左右吧，主要是托书格式太乱。'],
+    ['刘芳','客户在微信里发图片、发 Excel、发 PDF，什么都有。我们得一条条敲进系统。'],
+    ['顾问','有没有统计过错误率？'],
+    ['刘芳','箱号敲错是常事，上次错了一个数字，柜子差点上错船。'],
+    ['刘芳','每天录到八点，眼睛都花了。周末还得来补。']
+  ],
+  pains: [
+    { code:'P-001', desc:'托书格式混乱，微信/邮件/PDF 混杂，需人工逐条录入', src:'访谈#4 06:20', sev:5, freq:'每日', impact:'200 单/日 × 10 分钟' },
+    { code:'P-002', desc:'箱号/封号人工录入错误，曾导致错箱风险', src:'访谈#4 12:40', sev:5, freq:'每周', impact:'月均 3–5 次' },
+    { code:'P-003', desc:'单证组长期加班，人员流失率高', src:'访谈#4 18:10', sev:4, freq:'每日', impact:'日均加班 2 小时' },
+    { code:'P-004', desc:'压车费/等候费靠人工记忆，漏收严重', src:'访谈#3 22:05', sev:4, freq:'每日', impact:'待确认（估 1.5% 营收）' },
+    { code:'P-005', desc:'客户反复电话询问货物位置，客服疲于应付', src:'访谈#3 31:40', sev:3, freq:'每日', impact:'日均 40+ 通电话' },
+    { code:'P-006', desc:'调度靠经验派车，回程空驶率高', src:'访谈#3 15:20', sev:5, freq:'每日', impact:'空驶率约 35%' },
+    { code:'P-007', desc:'TMS 与财务系统数据不一致，月末对账靠 Excel', src:'访谈#5 08:30', sev:3, freq:'每月', impact:'月末 3 人 × 3 天' },
+    { code:'P-008', desc:'码头预约与进港时间不联动，常出现压港', src:'现场观察', sev:3, freq:'每周', impact:'待确认' }
+  ],
+  inventory: {
+    business: [
+      { name:'接单与托书录入', owner:'单证组', vol:'200 单/日', time:'10 分钟/单', abnormal:'约 8%' },
+      { name:'调度派车', owner:'调度组', vol:'180 车次/日', time:'6 分钟/单', abnormal:'约 15%' },
+      { name:'工厂装柜', owner:'司机 + 客户', vol:'—', time:'2–5 小时', abnormal:'压车 20%' },
+      { name:'进港与报关配合', owner:'操作组', vol:'—', time:'—', abnormal:'压港 12%' }
+    ],
+    data: [
+      { name:'订单数据', src:'TMS', vol:'200/日', span:'3 年', verified:true, note:'抽样 100 条，缺箱号 12 条' },
+      { name:'车辆轨迹', src:'北斗', vol:'100 台', span:'1 年', verified:true, note:'采样间隔 30 秒，可用' },
+      { name:'单证影像', src:'文件服务器', vol:'约 60G', span:'2 年', verified:false, note:'未抽样' },
+      { name:'费用数据', src:'财务系统', vol:'—', span:'3 年', verified:false, note:'口径与 TMS 不一致' },
+      { name:'港区预约', src:'易港通', vol:'—', span:'—', verified:false, note:'仅有网页，无 API' }
+    ],
+    system: [
+      { name:'TMS 运输管理系统', vendor:'某国内厂商', ver:'v5.2', api:'部分', export:true, owner:'陈磊' },
+      { name:'财务系统', vendor:'用友', ver:'U8', api:'有', export:true, owner:'财务部' },
+      { name:'北斗定位平台', vendor:'运营商', ver:'—', api:'有', export:true, owner:'陈磊' },
+      { name:'报关/单一窗口', vendor:'官方', ver:'—', api:'无', export:false, owner:'操作组' }
+    ],
+    org: [
+      { name:'单证组', n:5, cap:'中', will:'支持', chain:'刘芳 → 李强' },
+      { name:'调度组', n:6, cap:'中', will:'中立', chain:'王敏 → 李强' },
+      { name:'车队', n:110, cap:'低', will:'抵触', chain:'赵刚 → 王敏' },
+      { name:'IT', n:3, cap:'高', will:'中立', chain:'陈磊 → 张伟' }
+    ]
+  },
+  opps: [
+    { code:'OP-01', title:'订单/托书自动结构化录入', v:5, f:4, u:1.0, d:3, stage:'scored', data:'需申请接口', blocker:false,
+      rationale:'单证岗 5 人日均 200 单，单均 10 分钟，基线为现场计时，可信；TMS 有只读 API，需 IT 排期。',
+      pains:['P-001','P-003'],
+      hypotheses:[
+        { s:'托书解析字段级准确率可达 95%', t:'feasibility', st:'unverified' },
+        { s:'微信渠道可通过转发入口改造', t:'adoption', st:'unverified' },
+        { s:'单证岗工作量可释放 60%', t:'value', st:'unverified' },
+        { s:'TMS 可开放订单只读接口', t:'data', st:'validated' }
+      ],
+      baseline:{ metric:'单均录入耗时', value:'10 分钟', source:'2026-09 现场计时 + 排班表', conf:'high' },
+      roi:{ cons:18, neu:29, opt:38, cost:40, annual:6 }
+    },
+    { code:'OP-02', title:'异常费用识别与追收', v:4, f:4, u:1.2, d:3, stage:'scored', data:'需申请接口', blocker:false,
+      rationale:'压车费漏收是行业通病，客户自估 1.5% 营收；规则相对明确，但费用数据口径待统一。',
+      pains:['P-004'],
+      hypotheses:[
+        { s:'漏收率可从 1.5% 降至 0.8%', t:'value', st:'unverified' },
+        { s:'费用数据可与 TMS 单据关联', t:'data', st:'unverified' }
+      ],
+      baseline:{ metric:'异常费用漏收率', value:'约 1.5%', source:'财务口径估算（未抽样）', conf:'low' },
+      roi:{ cons:20, neu:36, opt:52, cost:25, annual:5 }
+    },
+    { code:'OP-03', title:'单证自动核对（箱号/封号/重量）', v:4, f:4, u:1.0, d:4, stage:'scored', data:'可直接取数', blocker:false,
+      rationale:'错箱风险高、规则清晰、数据已在系统内，属于典型的高确定性场景。',
+      pains:['P-002'],
+      hypotheses:[
+        { s:'规则核对可覆盖 90% 错单类型', t:'feasibility', st:'validated' },
+        { s:'可减少 80% 人工复核时间', t:'value', st:'unverified' }
+      ],
+      baseline:{ metric:'月均错单次数', value:'3–5 次', source:'操作组台账', conf:'medium' },
+      roi:{ cons:8, neu:15, opt:22, cost:12, annual:2 }
+    },
+    { code:'OP-04', title:'客户运输进度自助查询', v:3, f:5, u:0.8, d:5, stage:'scored', data:'可直接取数', blocker:false,
+      rationale:'轨迹数据完整，技术难度低；但价值主要在客服减负，财务收益有限。',
+      pains:['P-005'],
+      hypotheses:[
+        { s:'客服电话量可下降 40%', t:'value', st:'unverified' }
+      ],
+      baseline:{ metric:'日均查询电话', value:'40+ 通', source:'客服记录（未系统化）', conf:'low' },
+      roi:{ cons:5, neu:10, opt:16, cost:15, annual:3 }
+    },
+    { code:'OP-05', title:'智能调度与配载优化', v:5, f:2, u:1.0, d:2, stage:'parked', data:'需建设', blocker:true,
+      rationale:'价值最高但组织阻力大，调度主管明确抵触；且回程货源不足，优化空间受限。',
+      pains:['P-006'],
+      hypotheses:[
+        { s:'空驶率可从 35% 降至 28%', t:'value', st:'unverified' },
+        { s:'调度愿意采纳算法建议', t:'adoption', st:'refuted' }
+      ],
+      baseline:{ metric:'空驶率', value:'约 35%', source:'北斗轨迹测算', conf:'medium' },
+      roi:{ cons:20, neu:45, opt:80, cost:120, annual:25 }
+    },
+    { code:'OP-06', title:'回程货源匹配', v:4, f:1, u:0.8, d:1, stage:'parked', data:'不可得', blocker:false,
+      rationale:'需要外部货源池，客户目前没有平台资源，短期不具备条件。',
+      pains:['P-006'],
+      hypotheses:[
+        { s:'可接入第三方货源平台', t:'feasibility', st:'refuted' }
+      ],
+      baseline:{ metric:'回程载货率', value:'不足 20%', source:'调度估算', conf:'low' },
+      roi:{ cons:0, neu:0, opt:0, cost:0, annual:0 }
+    }
+  ],
+  deliverables: [
+    { name:'一页纸诊断简报', type:'one_pager', status:'待生成', note:'G1 门禁必需' },
+    { name:'完整诊断报告', type:'diagnosis_report', status:'草稿 62%', note:'自动拼装中' },
+    { name:'ROI 测算表', type:'roi_sheet', status:'已生成', note:'v3 · 2026-10-24' },
+    { name:'分期路线图', type:'roadmap', status:'待生成', note:'依赖机会点终评' }
+  ],
+  shares: [
+    { doc:'诊断报告 v2', to:'李强 · 运营副总', channel:'邮件', date:'2026-10-22' },
+    { doc:'ROI 测算表 v3', to:'张伟 · 总经理', channel:'微信', date:'2026-10-24' },
+    { doc:'访谈纪要汇总', to:'李强 · 运营副总', channel:'会议', date:'2026-10-20' }
+  ],
+  todos: [
+    { t:'补齐数据维度抽样（单证影像 / 费用）', who:'陈磊', due:'10-28', done:false },
+    { t:'新增 2 条痛点至 10 条', who:'陈静', due:'10-28', done:false },
+    { t:'生成一页纸简报并送审', who:'陈静', due:'10-29', done:false },
+    { t:'与王敏确认调度阻碍点', who:'陈静', due:'10-27', done:true }
+  ],
+  decisions: [
+    { t:'确认诊断范围：聚焦单证与调度两端', by:'张伟', date:'10-14', out:'approved' },
+    { t:'同意开放 TMS 只读接口', by:'陈磊', date:'10-18', out:'approved' },
+    { t:'暂缓智能调度，优先做订单录入', by:'李强', date:'10-24', out:'deferred' }
+  ],
+  risks: [
+    { t:'调度主管抵触，可能影响后续推行', cat:'组织', p:4, i:4 },
+    { t:'TMS 接口排期不确定', cat:'技术', p:3, i:3 },
+    { t:'费用数据口径与 TMS 不一致', cat:'数据', p:4, i:3 }
+  ]
+};
+
+/* ============================================================
+   工具
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const score = o => +(o.v * o.f * o.u).toFixed(1);
+const band = o => { const s = score(o); return s >= 20 ? 'priority' : s >= 12 ? 'candidate' : 'parked'; };
+const bandLabel = b => ({priority:'优先', candidate:'候选', parked:'搁置'}[b]);
+const bandClass = b => ({priority:'b-brand', candidate:'b-gray', parked:'b-gray'}[b]);
+const healthDot = h => ({green:'var(--green)', amber:'var(--amber)', red:'var(--red)'}[h]);
+const attLabel = a => ({champion:'拥护', supporter:'支持', neutral:'中立', skeptic:'疑虑', blocker:'抵触'}[a]);
+const attClass = a => ({champion:'b-green', supporter:'b-green', neutral:'b-gray', skeptic:'b-amber', blocker:'b-red'}[a]);
+const roleLabel = r => ({decision_maker:'决策人', project_owner:'项目负责人', business_owner:'业务负责人', it_data:'IT/数据', frontline:'一线'}[r]);
+
+let VIEW = 'dashboard';
+let OPP = 'OP-01';
+let INV_TAB = 'business';
+
+/* ============================================================
+   视图：工作台
+   ============================================================ */
+function viewDashboard() {
+  const cards = DB.cards.map(c => `
+    <div class="card">
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value">${c.value}</div>
+      <div class="stat-note">${c.note}</div>
+    </div>`).join('');
+
+  const projs = DB.projects.map(p => `
+    <div class="proj-card" data-project="${p.id}">
+      <div class="proj-head">
+        <span class="dot" style="background:${healthDot(p.health)}"></span>
+        <span class="proj-name">${p.client}</span>
+        <span class="badge b-gray" style="margin-left:auto">${p.stage}</span>
+      </div>
+      <div class="proj-meta">${p.name} · PM ${p.pm} · ¥${p.amount}万</div>
+      <div class="progress"><i style="width:${p.progress}%"></i></div>
+      <div class="proj-foot">
+        <span>${p.gate}</span>
+        <span style="color:${p.health === 'red' ? 'var(--red)' : 'var(--ink3)'}">${p.due}</span>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--ink2)">下一步：${p.next}</div>
+    </div>`).join('');
+
+  return `
+    <h1>项目总览</h1>
+    <p class="sub">2026 年 10 月 · 恒智咨询 · 物流与供应链事业部</p>
+    <div class="grid g4">${cards}</div>
+    <div class="section-head" style="margin-top:28px">
+      <h2 style="margin:0">项目列表</h2>
+      <span class="link">按健康度排序</span>
+    </div>
+    <div class="grid g2">${projs}</div>
+    <div class="card" style="margin-top:20px">
+      <h3>本周需要你处理</h3>
+      <table>
+        <thead><tr><th>事项</th><th>项目</th><th>截止</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>宏远物流 G1 诊断门禁评审</td><td>宏远国际物流</td><td class="num">10-30</td><td><span class="badge b-amber">待审</span></td></tr>
+          <tr><td>顺捷集运 接口联调阻塞升级</td><td>顺捷集运</td><td class="num">10-27</td><td><span class="badge b-red">逾期</span></td></tr>
+          <tr><td>华远供应链 方案评审会</td><td>华远供应链</td><td class="num">11-03</td><td><span class="badge b-gray">准备中</span></td></tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ============================================================
+   视图：项目详情
+   ============================================================ */
+function viewProject() {
+  const p = DB.project;
+  const tl = p.stages.map(s => {
+    const idx = p.stages.findIndex(x => x.k === s.k);
+    const cur = p.stages.findIndex(x => x.k === p.stage);
+    const cls = idx < cur ? 'done' : idx === cur ? 'current' : '';
+    return `<div class="tl-item ${cls}">
+      <div class="tl-line"></div>
+      <div class="tl-dot">${idx < cur ? '✓' : idx + 1}</div>
+      <div class="tl-label">${s.n}</div>
+      <div class="tl-sub">${s.d}</div>
+    </div>`;
+  }).join('');
+
+  const gates = DB.gates.map(g => `
+    <div class="ck">
+      <div class="ck-box ${g.ok ? 'ok' : 'no'}">${g.ok ? '✓' : ''}</div>
+      <div>
+        <div class="ck-text">${g.item}</div>
+        <div class="ck-note">${g.note}</div>
+      </div>
+    </div>`).join('');
+
+  const todos = DB.todos.map(t => `
+    <div class="ck">
+      <div class="ck-box ${t.done ? 'ok' : ''}">${t.done ? '✓' : ''}</div>
+      <div>
+        <div class="ck-text" style="${t.done ? 'text-decoration:line-through;color:var(--ink3)' : ''}">${t.t}</div>
+        <div class="ck-note">${t.who} · 截止 ${t.due}</div>
+      </div>
+    </div>`).join('');
+
+  const decisions = DB.decisions.map(d => `
+    <div class="kv">
+      <span>${d.t}</span>
+      <span style="font-weight:400;color:var(--ink2)">${d.by} · ${d.date} · <b style="color:${d.out === 'approved' ? 'var(--green)' : 'var(--amber)'}">${d.out === 'approved' ? '已批' : '暂缓'}</b></span>
+    </div>`).join('');
+
+  const risks = DB.risks.map(r => `
+    <div class="kv">
+      <span>${r.t}</span>
+      <span><span class="pill">${r.cat}</span> <b style="color:${r.p * r.i >= 12 ? 'var(--red)' : 'var(--amber)'}">${r.p}×${r.i}</b></span>
+    </div>`).join('');
+
+  const passed = DB.gates.filter(g => g.ok).length;
+
+  return `
+    <h1>${p.client}</h1>
+    <p class="sub">${p.name} · PM ${p.pm} · 客户负责人 ${p.owner} · ${p.start} → ${p.end}</p>
+
+    <div class="card">
+      <div class="section-head">
+        <h3 style="margin:0">阶段进度</h3>
+        <span class="badge ${p.daysLeft <= 3 ? 'b-amber' : 'b-gray'}">剩余 ${p.daysLeft} 天</span>
+      </div>
+      <div class="timeline">${tl}</div>
+    </div>
+
+    <div class="grid g2" style="margin-top:16px;align-items:start">
+      <div class="card">
+        <div class="section-head">
+          <h3 style="margin:0">G1 诊断门禁</h3>
+          <span class="badge ${passed === 8 ? 'b-green' : 'b-amber'}">${passed}/8 通过</span>
+        </div>
+        ${gates}
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm">提交评审</button>
+          <button class="btn btn-sm">查看清单详情</button>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>我的待办</h3>
+          ${todos}
+        </div>
+        <div class="card">
+          <h3>关键决策记录</h3>
+          ${decisions}
+        </div>
+        <div class="card">
+          <h3>风险 Top 3</h3>
+          ${risks}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>阶段产出物</h3>
+      <table>
+        <thead><tr><th>交付物</th><th>状态</th><th>负责人</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>访谈纪要 ×5</td><td><span class="badge b-green">已归档</span></td><td>陈静</td><td><span class="link">查看</span></td></tr>
+          <tr><td>现状业务流程图</td><td><span class="badge b-green">客户已确认</span></td><td>陈静</td><td><span class="link">查看</span></td></tr>
+          <tr><td>四维盘点表</td><td><span class="badge b-amber">76%</span></td><td>陈静 / 陈磊</td><td><span class="link">去补齐</span></td></tr>
+          <tr><td>机会地图</td><td><span class="badge b-green">已生成</span></td><td>陈静</td><td><span class="link">查看</span></td></tr>
+          <tr><td>一页纸简报</td><td><span class="badge b-gray">待生成</span></td><td>陈静</td><td><span class="link">生成</span></td></tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ============================================================
+   视图：干系人
+   ============================================================ */
+function viewStakeholders() {
+  const rows = DB.stakeholders.map(s => `
+    <tr>
+      <td><b>${s.name}</b></td>
+      <td>${s.title}</td>
+      <td><span class="pill">${roleLabel(s.role)}</span></td>
+      <td class="num">${'●'.repeat(s.influence)}${'○'.repeat(5 - s.influence)}</td>
+      <td><span class="badge ${attClass(s.attitude)}">${attLabel(s.attitude)}</span></td>
+      <td>${s.concerns.map(c => `<span class="pill" style="margin-right:4px">${c}</span>`).join('')}</td>
+      <td>${s.interviewed ? '<span class="badge b-green">已访谈</span>' : '<span class="badge b-red">未访谈</span>'}</td>
+    </tr>`).join('');
+
+  const dots = DB.stakeholders.map(s => {
+    const x = (s.influence - 1) / 4 * 100;
+    const y = ({blocker:8, skeptic:28, neutral:52, supporter:76, champion:94})[s.attitude];
+    return `<div title="${s.name} · ${s.title}" style="position:absolute;left:${x}%;bottom:${y}%;transform:translate(-50%,50%);text-align:center;z-index:2">
+      <div style="width:14px;height:14px;border-radius:50%;margin:0 auto;background:${s.attitude === 'blocker' ? 'var(--red)' : s.attitude === 'skeptic' ? 'var(--amber)' : s.attitude === 'champion' ? 'var(--green)' : '#94a3b8'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.15)"></div>
+      <div style="font-size:10px;color:var(--ink2);margin-top:3px;white-space:nowrap">${s.name}</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <h1>干系人</h1>
+    <p class="sub">6 人 · 其中 1 人未访谈（赵刚 · 车队队长 · 抵触）</p>
+    <div class="warn-bar">
+      <span>⚠</span>
+      <div><b>赵刚（车队队长）标记为「抵触」且尚未访谈。</b> 一线不配合是推行失败的首要原因，建议在 G1 前补一场访谈。</div>
+    </div>
+
+    <div class="card">
+      <h3>影响力 × 态度</h3>
+      <div style="position:relative;height:300px;margin:20px 30px 30px 50px;border-left:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;background:linear-gradient(to right,#f8fafc 1px,transparent 1px) 0 0/50% 100%,linear-gradient(to top,#f8fafc 1px,transparent 1px) 0 0/100% 50%">
+        ${dots}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);margin-top:-18px">
+        <span>影响低</span><span>影响高 →</span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--green)"></i>拥护/支持</span>
+        <span><i style="background:#94a3b8"></i>中立</span>
+        <span><i style="background:var(--amber)"></i>疑虑</span>
+        <span><i style="background:var(--red)"></i>抵触</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>名单</h3>
+      <table>
+        <thead><tr><th>姓名</th><th>职位</th><th>角色</th><th>影响力</th><th>态度</th><th>关注点</th><th>访谈</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ============================================================
+   视图：访谈与痛点
+   ============================================================ */
+function viewInterviews() {
+  const list = DB.interviews.map((iv, i) => `
+    <div class="list-item ${i === 3 ? 'active' : ''}">
+      <div class="li-title">${iv.who} · ${iv.title}</div>
+      <div class="li-sub">${iv.date} · ${iv.min} 分钟 · ${iv.mode === 'onsite' ? '驻场' : '视频'}</div>
+    </div>`).join('');
+
+  const lines = DB.transcript.map(l => `<p><span class="speaker">${l[0]}：</span>${l[1]}</p>`).join('');
+
+  const pains = DB.pains.map(p => `
+    <tr>
+      <td class="mono">${p.code}</td>
+      <td>${p.desc}</td>
+      <td><span class="pill">严重度 ${p.sev}</span></td>
+      <td class="mono" style="color:var(--ink3)">${p.src}</td>
+    </tr>`).join('');
+
+  return `
+    <h1>访谈与痛点</h1>
+    <p class="sub">5 场访谈 · 8 条痛点 · 录音转写未启用（手打纪要 + AI 摘要）</p>
+
+    <div class="grid" style="grid-template-columns:250px 1fr 330px;align-items:start">
+      <div class="card" style="padding:12px">
+        <h3 style="padding-left:6px">访谈列表</h3>
+        ${list}
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <div style="font-weight:650">刘芳 · 单证主管</div>
+            <div style="font-size:11px;color:var(--ink3)">2026-10-17 · 50 分钟 · 驻场 · 已确认</div>
+          </div>
+          <span class="badge b-green">AI 摘要已生成</span>
+        </div>
+        <div class="quote">${DB.interviews[3].summary}</div>
+        <div class="transcript">${lines}</div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn btn-sm">重新生成摘要</button>
+          <button class="btn btn-sm">划词标记为痛点</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>本场抽取的痛点</h3>
+        <div class="kv"><span>P-001 托书格式混乱</span><span class="link" style="font-weight:400">已归并 → OP-01</span></div>
+        <div class="kv"><span>P-002 箱号录入错误</span><span class="link" style="font-weight:400">已归并 → OP-03</span></div>
+        <div class="kv"><span>P-003 长期加班</span><span class="link" style="font-weight:400">已归并 → OP-01</span></div>
+        <div style="margin-top:14px;padding:10px;background:#fafbff;border-radius:8px;font-size:12px;color:var(--ink2)">
+          <b>AI 提示：</b>本场共识别 3 条可量化痛点，「单均 10 分钟」可作为基线。
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="section-head">
+        <h3 style="margin:0">痛点库</h3>
+        <span class="badge b-amber">8 / 10 条（G1 要求 ≥10）</span>
+      </div>
+      <table>
+        <thead><tr><th>编号</th><th>描述</th><th>严重度</th><th>来源</th></tr></thead>
+        <tbody>${pains}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ============================================================
+   视图：四维盘点
+   ============================================================ */
+function viewInventory() {
+  const tabs = [
+    { k:'business', n:'业务', c:'4 项' },
+    { k:'data', n:'数据', c:'5 项' },
+    { k:'system', n:'系统', c:'4 项' },
+    { k:'org', n:'组织', c:'4 项' }
+  ];
+  const tabHtml = tabs.map(t => `<div class="tab ${INV_TAB === t.k ? 'active' : ''}" data-tab="${t.k}">${t.n} <span style="color:var(--ink3);font-size:11px">${t.c}</span></div>`).join('');
+
+  let body = '';
+  if (INV_TAB === 'business') {
+    body = `<table><thead><tr><th>环节</th><th>责任方</th><th>日均量</th><th>单均耗时</th><th>异常率</th></tr></thead><tbody>
+      ${DB.inventory.business.map(r => `<tr><td><b>${r.name}</b></td><td>${r.owner}</td><td class="num">${r.vol}</td><td class="num">${r.time}</td><td class="num">${r.abnormal}</td></tr>`).join('')}
+    </tbody></table>`;
+  } else if (INV_TAB === 'data') {
+    body = `<table><thead><tr><th>数据对象</th><th>来源</th><th>量级</th><th>历史跨度</th><th>抽样验证</th><th>结论</th></tr></thead><tbody>
+      ${DB.inventory.data.map(r => `<tr>
+        <td><b>${r.name}</b></td><td>${r.src}</td><td class="num">${r.vol}</td><td class="num">${r.span}</td>
+        <td>${r.verified ? '<span class="badge b-green">已验证</span>' : '<span class="badge b-amber">未验证</span>'}</td>
+        <td style="color:var(--ink2)">${r.note}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  } else if (INV_TAB === 'system') {
+    body = `<table><thead><tr><th>系统</th><th>厂商</th><th>版本</th><th>API</th><th>可导出</th><th>维护方</th></tr></thead><tbody>
+      ${DB.inventory.system.map(r => `<tr><td><b>${r.name}</b></td><td>${r.vendor}</td><td class="mono">${r.ver}</td><td>${r.api === '无' ? '<span class="badge b-red">无</span>' : `<span class="badge ${r.api === '有' ? 'b-green' : 'b-amber'}">${r.api}</span>`}</td><td>${r.export ? '✓' : '✕'}</td><td>${r.owner}</td></tr>`).join('')}
+    </tbody></table>`;
+  } else {
+    body = `<table><thead><tr><th>部门</th><th>人数</th><th>数字化能力</th><th>变革意愿</th><th>决策链</th></tr></thead><tbody>
+      ${DB.inventory.org.map(r => `<tr><td><b>${r.name}</b></td><td class="num">${r.n}</td><td>${r.cap}</td><td><span class="badge ${r.will === '支持' ? 'b-green' : r.will === '抵触' ? 'b-red' : 'b-gray'}">${r.will}</span></td><td style="color:var(--ink2)">${r.chain}</td></tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  return `
+    <h1>四维盘点</h1>
+    <p class="sub">业务 / 数据 / 系统 / 组织 · 整体完成度 76%</p>
+    <div class="warn-bar">
+      <span>⚠</span>
+      <div><b>数据维度有 2 项未做抽样验证。</b> 按规则 R2，相关机会点的 ROI 置信度将被自动降级为「低」。</div>
+    </div>
+    <div class="card">
+      <div class="tabs">${tabHtml}</div>
+      ${body}
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-sm">批量导入 Excel</button>
+        <button class="btn btn-sm">导出盘点表</button>
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   视图：机会地图
+   ============================================================ */
+function viewOpportunities() {
+  const bubbles = DB.opps.map(o => {
+    const b = band(o);
+    const size = Math.max(32, Math.min(56, 28 + (o.roi.neu / 2)));
+    const left = (o.f - 1) / 4 * 100;
+    const bottom = (o.v - 1) / 4 * 100;
+    return `<div class="bubble ${b === 'priority' ? 'p' : b === 'candidate' ? 'c' : 'w'}"
+      style="left:${left}%;bottom:${bottom}%;width:${size}px;height:${size}px"
+      data-opp="${o.code}" title="${o.code} ${o.title}｜V${o.v} F${o.f}｜ROI ${o.roi.neu}万">${o.code.replace('OP-', '')}</div>`;
+  }).join('');
+
+  const ticksY = [1,2,3,4,5].map(n => `<div class="tick-y" style="bottom:${(n-1)/4*100}%">${n}</div>`).join('');
+  const ticksX = [1,2,3,4,5].map(n => `<div class="tick-x" style="left:${(n-1)/4*100}%">${n}</div>`).join('');
+
+  const rows = DB.opps.map(o => {
+    const b = band(o);
+    return `<tr style="cursor:pointer" data-opp="${o.code}">
+      <td class="mono">${o.code}</td>
+      <td><b>${o.title}</b>${o.blocker ? ' <span class="badge b-red">技术阻断</span>' : ''}</td>
+      <td class="num">${o.v}</td>
+      <td class="num">${o.f}</td>
+      <td class="num">${o.u}</td>
+      <td class="num"><b>${score(o)}</b></td>
+      <td><span class="badge ${b === 'priority' ? 'b-brand' : 'b-gray'}">${bandLabel(b)}</span></td>
+      <td style="color:var(--ink2)">${o.data}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <h1>机会地图</h1>
+    <p class="sub">6 个机会点 · 评分公式 P = 价值 × 可行性 × 紧迫性</p>
+
+    <div class="card">
+      <div class="section-head">
+        <h3 style="margin:0">价值 × 可行性</h3>
+        <div class="legend" style="margin:0">
+          <span><i class="bubble p" style="width:9px;height:9px;position:static;transform:none"></i>优先 ≥20</span>
+          <span><i class="bubble c" style="width:9px;height:9px;position:static;transform:none"></i>候选 12–19</span>
+          <span><i class="bubble w" style="width:9px;height:9px;position:static;transform:none"></i>搁置 &lt;12</span>
+        </div>
+      </div>
+      <div class="matrix-wrap">
+        <div class="axis-y"><span>价 值 →</span></div>
+        <div class="matrix">
+          <div class="plot">
+            ${ticksY}${ticksX}${bubbles}
+          </div>
+        </div>
+        <div class="axis-x">可 行 性 →</div>
+      </div>
+      <div style="font-size:11px;color:var(--ink3);text-align:center;margin-top:4px">气泡大小 = 中性年化收益</div>
+    </div>
+
+    <div class="card">
+      <h3>明细</h3>
+      <table>
+        <thead><tr><th>编号</th><th>机会点</th><th>V</th><th>F</th><th>U</th><th>P</th><th>档位</th><th>数据状态</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ============================================================
+   视图：机会点详情
+   ============================================================ */
+function viewOppDetail() {
+  const o = DB.opps.find(x => x.code === OPP) || DB.opps[0];
+  const b = band(o);
+  const hyps = o.hypotheses.map((h, i) => {
+    const cls = h.st === 'validated' ? 'b-green' : h.st === 'refuted' ? 'b-red' : 'b-amber';
+    const lbl = h.st === 'validated' ? '已验证' : h.st === 'refuted' ? '已推翻' : '未验证';
+    return `<div class="hyp">
+      <span class="badge ${cls} hyp-status" data-hyp="${i}">${lbl}</span>
+      <div>
+        <div style="font-size:13px">${h.s}</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px">${({value:'价值假设',feasibility:'可行性',adoption:'采纳',data:'数据'})[h.t]}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const painTags = o.pains.map(p => {
+    const pp = DB.pains.find(x => x.code === p);
+    return `<span class="pill" style="margin:0 4px 6px 0" title="${pp ? pp.desc : ''}">${p}</span>`;
+  }).join('');
+
+  const payback = o.roi.neu > 0 ? (o.roi.cost / (o.roi.neu / 12)).toFixed(1) : '—';
+
+  return `
+    <div style="margin-bottom:6px"><span class="link" data-view="opportunities">← 返回机会地图</span></div>
+    <h1>${o.title}</h1>
+    <p class="sub">
+      <span class="mono">${o.code}</span> ·
+      <span class="badge ${b === 'priority' ? 'b-brand' : 'b-gray'}">${bandLabel(b)} · P = ${score(o)}</span>
+      ${o.blocker ? '<span class="badge b-red">技术阻断</span>' : ''}
+      <span class="badge b-gray">${o.stage}</span>
+    </p>
+
+    ${o.blocker ? `<div class="warn-bar"><span>⛔</span><div><b>该机会点存在技术阻断项。</b> 按规则 R3，在指定风险承担人之前不能进入「方案设计」。</div></div>` : ''}
+
+    <div class="grid" style="grid-template-columns:1.1fr 1.2fr 1fr;align-items:start">
+      <div class="card">
+        <h3>评分</h3>
+        <div class="kv"><span>价值 V</span><span>${o.v} / 5</span></div>
+        <div class="kv"><span>可行性 F</span><span>${o.f} / 5</span></div>
+        <div class="kv"><span>紧迫性 U</span><span>${o.u}</span></div>
+        <div class="kv"><span>优先级 P</span><span style="color:var(--brand)">${score(o)}</span></div>
+        <div class="kv"><span>数据就绪度 D</span><span>${o.d} / 5</span></div>
+        <div style="margin-top:12px;font-size:12px;color:var(--ink2);background:#fafbfd;padding:10px;border-radius:8px;line-height:1.7">
+          <b>评分理由：</b>${o.rationale}
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:11px;color:var(--ink3);margin-bottom:6px">关联痛点</div>
+          ${painTags}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3 style="margin:0">价值假设（${o.hypotheses.length}）</h3>
+          <span class="link">+ 新增</span>
+        </div>
+        ${hyps}
+        <div style="margin-top:12px;font-size:11px;color:var(--ink3)">
+          点击状态标签可切换：未验证 → 已验证 / 已推翻
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+          <h3>基线</h3>
+          <div class="kv"><span>${o.baseline.metric}</span><span>${o.baseline.value}</span></div>
+          <div class="kv"><span>数据来源</span><span style="font-weight:400;font-size:12px;color:var(--ink2)">${o.baseline.source}</span></div>
+          <div class="kv"><span>置信度</span><span><span class="badge ${o.baseline.conf === 'high' ? 'b-green' : o.baseline.conf === 'medium' ? 'b-amber' : 'b-red'}">${o.baseline.conf}</span></span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ROI 测算</h3>
+        <div style="margin:6px 0 10px">
+          <div class="kv"><span>保守</span><span class="num">${o.roi.cons} 万/年</span></div>
+          <div class="kv"><span>中性</span><span class="num" style="color:var(--brand)">${o.roi.neu} 万/年</span></div>
+          <div class="kv"><span>乐观</span><span class="num">${o.roi.opt} 万/年</span></div>
+          <div class="kv"><span>一次性投入</span><span class="num">${o.roi.cost} 万</span></div>
+          <div class="kv"><span>年运维</span><span class="num">${o.roi.annual} 万</span></div>
+        </div>
+        <div style="background:var(--brand-soft);border-radius:9px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--brand);margin-bottom:2px">回本周期</div>
+          <div style="font-size:22px;font-weight:650;color:var(--brand)">${payback} <span style="font-size:13px;font-weight:500">个月</span></div>
+        </div>
+        <div style="margin-top:14px">
+          <h3>快速试算</h3>
+          <div class="kv" style="padding:6px 0"><span>中性年收益（万）</span><input class="roi-input" id="roi-neu" type="number" value="${o.roi.neu}"></div>
+          <div class="kv" style="padding:6px 0"><span>一次性投入（万）</span><input class="roi-input" id="roi-cost" type="number" value="${o.roi.cost}"></div>
+          <div class="kv" style="padding:8px 0 0;border:none"><span>回本</span><span id="roi-out" style="color:var(--brand)">${payback} 个月</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-primary">推进到方案设计</button>
+          <button class="btn btn-sm">标记阻断</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   视图：交付物
+   ============================================================ */
+function viewDeliverables() {
+  const docs = DB.deliverables.map(d => `
+    <div class="card" style="padding:16px 18px;margin:0">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-weight:650;font-size:13.5px">${d.name}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:2px">${d.note}</div>
+        </div>
+        <span class="badge ${d.status === '已生成' ? 'b-green' : d.status === '待生成' ? 'b-gray' : 'b-amber'}">${d.status}</span>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm ${d.status === '已生成' ? '' : 'btn-primary'}">${d.status === '已生成' ? '查看' : '生成'}</button>
+        <button class="btn btn-sm">预览</button>
+      </div>
+    </div>`).join('');
+
+  const shares = DB.shares.map(s => `
+    <tr><td><b>${s.doc}</b></td><td>${s.to}</td><td><span class="pill">${s.channel}</span></td><td class="num">${s.date}</td></tr>`).join('');
+
+  return `
+    <h1>交付物中心</h1>
+    <p class="sub">数字全部来自数据库，AI 只负责措辞 —— 这是可信度的底线</p>
+
+    <div class="grid g4">${docs}</div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="section-head">
+        <h3 style="margin:0">外发记录</h3>
+        <span style="font-size:11px;color:var(--ink3)">不做客户门户，每次外发必须留痕</span>
+      </div>
+      <table>
+        <thead><tr><th>文档</th><th>发给</th><th>渠道</th><th>时间</th></tr></thead>
+        <tbody>${shares}</tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>生成逻辑</h3>
+      <div style="font-size:13px;color:var(--ink2);line-height:2">
+        ① 读取项目全部结构化数据（访谈 / 痛点 / 盘点 / 机会点 / ROI）<br>
+        ② 按物流行业模板组装章节<br>
+        ③ AI 仅生成过渡句与措辞，<b style="color:var(--ink)">不生成任何数字</b><br>
+        ④ PM 审核 → 导出 Word/PDF → 登记外发
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   渲染与路由
+   ============================================================ */
+const VIEWS = {
+  dashboard: viewDashboard,
+  project: viewProject,
+  stakeholders: viewStakeholders,
+  interviews: viewInterviews,
+  inventory: viewInventory,
+  opportunities: viewOpportunities,
+  opp: viewOppDetail,
+  deliverables: viewDeliverables
+};
+
+const TITLES = {
+  dashboard:'项目总览', project:'项目详情', stakeholders:'干系人',
+  interviews:'访谈与痛点', inventory:'四维盘点', opportunities:'机会地图',
+  opp:'机会点详情', deliverables:'交付物中心'
+};
+
+function render() {
+  $('#view').innerHTML = VIEWS[VIEW]();
+  $('#crumb-view').textContent = TITLES[VIEW];
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === VIEW);
+  });
+  window.scrollTo(0, 0);
+  bind();
+}
+
+function go(v) { VIEW = v; render(); }
+
+function bind() {
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.onclick = () => go(n.dataset.view);
+  });
+  document.querySelectorAll('[data-view]').forEach(n => {
+    if (!n.classList.contains('nav-item')) n.onclick = () => go(n.dataset.view);
+  });
+  document.querySelectorAll('[data-opp]').forEach(n => {
+    n.onclick = () => { OPP = n.dataset.opp; go('opp'); };
+  });
+  document.querySelectorAll('[data-project]').forEach(n => {
+    n.onclick = () => go('project');
+  });
+  document.querySelectorAll('[data-tab]').forEach(n => {
+    n.onclick = () => { INV_TAB = n.dataset.tab; render(); };
+  });
+  document.querySelectorAll('[data-hyp]').forEach(n => {
+    n.onclick = () => {
+      const o = DB.opps.find(x => x.code === OPP);
+      const h = o.hypotheses[+n.dataset.hyp];
+      h.st = h.st === 'unverified' ? 'validated' : h.st === 'validated' ? 'refuted' : 'unverified';
+      render();
+    };
+  });
+  const neu = document.getElementById('roi-neu');
+  const cost = document.getElementById('roi-cost');
+  if (neu && cost) {
+    const upd = () => {
+      const n = +neu.value || 0, c = +cost.value || 0;
+      const out = document.getElementById('roi-out');
+      out.textContent = n > 0 ? (c / (n / 12)).toFixed(1) + ' 个月' : '—';
+    };
+    neu.oninput = upd; cost.oninput = upd;
+  }
+}
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+pydantic>=2.7,<3
+httpx>=0.27
+python-multipart>=0.0.9
+
+# OCR（可选：缺任意一项时应用仍可运行，只是上传功能不可用）
+pillow>=10.0
+pymupdf>=1.24
+rapidocr-onnxruntime>=1.3

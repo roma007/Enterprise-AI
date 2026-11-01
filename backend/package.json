@@ -1,0 +1,43 @@
+{
+  "name": "ai-delivery-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "企业 AI 化项目管理系统 · 后端（诊断阶段 MVP）",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "demo": "tsx scripts/demo.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "psql \"${DATABASE_URL:-postgres://127.0.0.1:5432/ai_delivery}\" -v ON_ERROR_STOP=1 -q -f db/003_seed.sql",
+    "db:reset": "psql \"${DATABASE_URL:-postgres://127.0.0.1:5432/ai_delivery}\" -v ON_ERROR_STOP=1 -q -f db/000_reset.sql && npm run db:migrate && npm run db:seed",
+    "typecheck": "tsc --noEmit",
+    "verify": "tsx scripts/verify-rules.ts",
+    "verify:report": "tsx scripts/verify-report.ts",
+    "verify:write": "tsx scripts/verify-write.ts",
+    "openapi": "tsx scripts/export-openapi.ts",
+    "audit:archive": "tsx scripts/archive-audit.ts",
+    "pdf:cleanup": "tsx scripts/cleanup-pdf-jobs.ts",
+    "share:cleanup": "tsx scripts/cleanup-share-views.ts",
+    "share:archive": "tsx scripts/cleanup-share-views.ts",
+    "sessions:cleanup": "tsx scripts/cleanup-user-sessions.ts"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^10.1.6",
+    "@fastify/swagger": "^9.9.2",
+    "@fastify/swagger-ui": "^6.1.2",
+    "docx": "^9.15.0",
+    "dotenv": "^18.0.9",
+    "exceljs": "^4.4.0",
+    "fastify": "^5.2.1",
+    "marked": "^18.1.2",
+    "pg": "^8.13.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

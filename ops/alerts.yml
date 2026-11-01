@@ -1,0 +1,65 @@
+groups:
+  - name: ai-delivery
+    rules:
+      - alert: BackendDown
+        expr: up{job="ai-delivery-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'AI 交付云后端不可达'
+          description: 'Prometheus 连续 2 分钟抓取 /metrics 失败，检查容器、端口与网关。'
+
+      - alert: DatabaseDown
+        expr: db_up{job="ai-delivery-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'AI 交付云数据库不可用'
+          description: '后端 /metrics db_up=0，检查 PostgreSQL 与连接数。'
+
+      - alert: High5xxRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '5xx 比例超过 2%'
+          description: '检查最近部署、数据库错误与 PDF/Chromium 异常；用 requestId 检索日志。'
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_ms_bucket[5m]))
+          ) > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'P95 请求延迟超过 1s'
+          description: '查看慢请求日志与 route 维度指标，确认是否为报告/PDF/大列表。'
+
+      - alert: SlowRequestSpike
+        expr: sum(increase(slow_requests_total[5m])) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: '慢请求数量异常'
+          description: '5 分钟内超过 20 次慢请求（默认阈值 500ms），结合 route 指标定位。'
+
+      - alert: NoTraffic
+        expr: sum(rate(http_requests_total[15m])) == 0
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: '30 分钟无请求'
+          description: '确认是否为非工作时段；若为工作时段，检查前端/网关。'

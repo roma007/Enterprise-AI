@@ -1,0 +1,17 @@
+# Prometheus 抓取示例：把 backend 换成实际主机名/容器名
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: ai-delivery-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['backend:8788']
+    # 设置了 METRICS_TOKEN 时启用
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /etc/prometheus/ai-delivery-metrics-token

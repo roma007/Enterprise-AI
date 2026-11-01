@@ -1,0 +1,15 @@
+node_modules/
+dist/
+backups/
+.env
+.env.local
+.DS_Store
+*.log
+
+# 数据与虚拟环境
+*.db
+*.db-journal
+llm_cache.json
+ai-copilot/.venv/
+ai-copilot/data/
+ai-copilot/.env

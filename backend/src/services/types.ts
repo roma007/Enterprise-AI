@@ -1,0 +1,15 @@
+export type DeliverableType =
+  | 'charter'
+  | 'one_pager'
+  | 'diagnosis_report'
+  | 'roadmap'
+  | 'roi_sheet'
+  | 'data_report'
+  | 'prd'
+  | 'architecture'
+  | 'proposal'
+  | 'poc_report'
+  | 'uat_report'
+  | 'value_report'
+  | 'quote'
+  | 'acceptance';

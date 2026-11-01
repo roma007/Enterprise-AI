@@ -1,0 +1,750 @@
+"""遥测存储：记录每次解析与人工修正。
+
+这不是"日志"，是"证据"：
+- 字段级准确率、人工修正率 → 直接喂给交付平台的 POC 结论与 ValueRecord
+- token 与耗时 → 算 AI 单均成本
+- 修正明细 → 反哺评测集与提示词
+- review_level + handle_ms → 分级审批与"到底省了多少工时"
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sqlite3
+import uuid
+from datetime import datetime, timedelta, timezone
+
+from .config import settings
+from .rules import RISK_KEYS
+from .schema import Draft
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS runs (
+    id          TEXT PRIMARY KEY,
+    ts          TEXT NOT NULL,
+    engine      TEXT NOT NULL,
+    text_hash   TEXT NOT NULL,
+    chars       INTEGER NOT NULL,
+    elapsed_ms  INTEGER NOT NULL,
+    tokens      INTEGER NOT NULL,
+    errors      INTEGER NOT NULL,
+    warns       INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS feedback (
+    id          TEXT PRIMARY KEY,
+    run_id      TEXT NOT NULL,
+    ts          TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    auto_value  TEXT,
+    final_value TEXT,
+    changed     INTEGER NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_run ON feedback(run_id);
+CREATE TABLE IF NOT EXISTS inbound (
+    id          TEXT PRIMARY KEY,
+    ts          TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    text_hash   TEXT NOT NULL,
+    preview     TEXT,
+    run_id      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_inbound_hash ON inbound(text_hash);
+CREATE TABLE IF NOT EXISTS learn_queue (
+    id          TEXT PRIMARY KEY,
+    run_id      TEXT NOT NULL,
+    ts          TEXT NOT NULL,
+    reason      TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    gold_json   TEXT,
+    labeled_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_learn_status ON learn_queue(status);
+"""
+
+# 增量列：老库自动补，不用重建
+_EXTRA_COLUMNS = (
+    ("runs", "review_level", "TEXT DEFAULT 'single'"),
+    ("runs", "handle_ms", "INTEGER"),
+    ("runs", "forced", "INTEGER DEFAULT 0"),
+    ("runs", "confirmed", "INTEGER DEFAULT 0"),
+    ("runs", "model", "TEXT DEFAULT ''"),
+    ("runs", "prompt_ver", "TEXT DEFAULT ''"),
+    ("runs", "pipeline_ver", "TEXT DEFAULT ''"),
+    ("runs", "raw_text", "TEXT"),
+    ("runs", "fields_json", "TEXT"),
+    ("runs", "inbound_id", "TEXT"),
+    ("runs", "version", "INTEGER DEFAULT 0"),
+    ("learn_queue", "corrected", "INTEGER DEFAULT 0"),
+)
+
+
+def _conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    with _conn() as conn:
+        conn.executescript(_SCHEMA)
+        for table, col, decl in _EXTRA_COLUMNS:
+            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if col not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def save_run(raw: str, draft: Draft) -> str:
+    run_id = uuid.uuid4().hex[:12]
+    text_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    fields_json = json.dumps(
+        {k: {"value": v.value, "confidence": v.confidence, "source": v.source}
+         for k, v in draft.fields.items()},
+        ensure_ascii=False,
+    )
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO runs (id, ts, engine, text_hash, chars, elapsed_ms, tokens,"
+            " errors, warns, review_level, model, prompt_ver, pipeline_ver,"
+            " raw_text, fields_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                run_id,
+                _now(),
+                draft.engine,
+                text_hash,
+                len(raw),
+                draft.elapsed_ms,
+                draft.tokens,
+                sum(1 for c in draft.checks if c.level == "error"),
+                sum(1 for c in draft.checks if c.level == "warn"),
+                draft.review_level,
+                draft.model,
+                draft.prompt_version,
+                draft.pipeline_version,
+                raw,
+                fields_json,
+            ),
+        )
+        # 入口捕获过同一份原文 → 关联，用于算绕过率
+        conn.execute(
+            "UPDATE inbound SET run_id=? WHERE run_id IS NULL AND text_hash=?",
+            (run_id, text_hash),
+        )
+
+    # D5：可疑样本自动进标注池
+    reason = learn_reason(draft)
+    if reason:
+        enqueue_learn(run_id, reason)
+    return run_id
+
+
+def record_inbound(text: str, source: str = "wecom") -> dict:
+    """记录一次"来单"。
+
+    入口唯一化的关键：所有托书先进这张表，再由系统处理。
+    没有对应确认记录的 inbound，就是"绕过"。
+    """
+    inbound_id = uuid.uuid4().hex[:12]
+    text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO inbound (id, ts, source, text_hash, preview) VALUES (?,?,?,?,?)",
+            (inbound_id, _now(), source, text_hash, text[:40]),
+        )
+    return {"id": inbound_id, "text_hash": text_hash}
+
+
+class AlreadyConfirmed(Exception):
+    """B3：这张单已经被别人确认过，且这次提交的内容不同。"""
+
+    def __init__(self, run_id: str, version: int):
+        self.run_id = run_id
+        self.version = version
+        super().__init__(f"{run_id} 已被确认（version {version}）")
+
+
+def save_feedback(
+    run_id: str,
+    auto: dict[str, str],
+    final: dict[str, str],
+    handle_ms: int | None = None,
+) -> dict:
+    changed = {k: (auto.get(k, ""), v) for k, v in final.items() if (auto.get(k, "") or "") != (v or "")}
+    ts = _now()
+
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT confirmed, review_level, version FROM runs WHERE id=?", (run_id,)
+        ).fetchone()
+        level = (row["review_level"] if row else "") or "single"
+
+        if row and row["confirmed"]:
+            # B3：已经确认过。内容一致 → 幂等返回；内容不同 → 409，让人自己看
+            prev = conn.execute(
+                "SELECT gold_json FROM learn_queue WHERE id=?", (run_id,)
+            ).fetchone()
+            current = {k: v for k, v in final.items() if v}
+            try:
+                prev_gold = json.loads(prev["gold_json"]) if prev and prev["gold_json"] else None
+            except json.JSONDecodeError:
+                prev_gold = None
+            if prev_gold is not None and prev_gold == current:
+                return {
+                    "run_id": run_id, "review_level": level, "fields": len(auto),
+                    "changed": 0, "correction_rate": 0.0, "changed_fields": [],
+                    "handle_ms": handle_ms, "idempotent": True,
+                }
+            raise AlreadyConfirmed(run_id, int(row["version"] or 1))
+
+        conn.execute(
+            "UPDATE runs SET confirmed=1, handle_ms=?, forced=?,"
+            " version=COALESCE(version,0)+1 WHERE id=?",
+            (handle_ms, 1 if level == "blocked" else 0, run_id),
+        )
+        for key, (a, f) in changed.items():
+            conn.execute(
+                "INSERT INTO feedback (id, run_id, ts, field, auto_value, final_value, changed)"
+                " VALUES (?,?,?,?,?,?,1)",
+                (uuid.uuid4().hex[:12], run_id, ts, key, a, f),
+            )
+
+    total = len(auto)
+    # D5：人工确认即产出一条金标；改过的单要单独标记（那才是难例）
+    label_run(run_id, final, corrected=bool(changed))
+    return {
+        "run_id": run_id,
+        "review_level": level,
+        "fields": total,
+        "changed": len(changed),
+        "correction_rate": round(len(changed) / total, 4) if total else 0.0,
+        "changed_fields": list(changed.keys()),
+        "handle_ms": handle_ms,
+        "idempotent": False,
+    }
+
+
+def metrics(baseline_sec: float = 180.0) -> dict:
+    """指标中心：这是第 6 个月老板问"省了多少"时，唯一能拿出来的东西。"""
+    with _conn() as conn:
+        r = conn.execute(
+            "SELECT COUNT(*) n,"
+            " COALESCE(SUM(tokens),0) tokens,"
+            " COALESCE(AVG(elapsed_ms),0) avg_ms,"
+            " COALESCE(SUM(CASE WHEN review_level='auto' THEN 1 ELSE 0 END),0) auto_n,"
+            " COALESCE(SUM(CASE WHEN review_level='single' THEN 1 ELSE 0 END),0) single_n,"
+            " COALESCE(SUM(CASE WHEN review_level='double' THEN 1 ELSE 0 END),0) double_n,"
+            " COALESCE(SUM(CASE WHEN review_level='blocked' THEN 1 ELSE 0 END),0) blocked_n,"
+            " COALESCE(SUM(confirmed),0) confirmed_n,"
+            " COALESCE(SUM(forced),0) forced_n,"
+            " COALESCE(AVG(handle_ms),0) avg_handle"
+            " FROM runs"
+        ).fetchone()
+        fb = conn.execute(
+            "SELECT COUNT(*) n, COALESCE(SUM(changed),0) ch FROM feedback"
+        ).fetchone()
+        saved = conn.execute(
+            "SELECT COALESCE(SUM(MAX(0, ? - handle_ms / 1000.0)),0) s"
+            " FROM runs WHERE handle_ms IS NOT NULL",
+            (baseline_sec,),
+        ).fetchone()
+        daily = conn.execute(
+            "SELECT substr(ts,1,10) d, COUNT(*) n, COALESCE(SUM(confirmed),0) c"
+            " FROM runs GROUP BY d ORDER BY d DESC LIMIT 30"
+        ).fetchall()
+        inbound = conn.execute(
+            "SELECT COUNT(*) n,"
+            " COALESCE(SUM(CASE WHEN i.run_id IS NOT NULL AND r.confirmed=1 THEN 1 ELSE 0 END),0) done"
+            " FROM inbound i LEFT JOIN runs r ON r.id = i.run_id"
+        ).fetchone()
+
+    # 修正率的分母必须是"已确认单的全部非空字段"，不是"被改过的字段"。
+    # 否则每次改动都会把修正率推到 100%，看起来像系统全错。
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT fields_json FROM runs WHERE confirmed=1"
+        ).fetchall()
+    filled = 0
+    for row in rows:
+        try:
+            fields = json.loads(row["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        filled += sum(1 for v in fields.values() if (v or {}).get("value"))
+    changed = fb["ch"] or 0
+    correction_rate = round(changed / filled, 4) if filled else 0.0
+
+    in_n = inbound["n"] or 0
+    in_done = inbound["done"] or 0
+    bypass_rate = round((in_n - in_done) / in_n, 4) if in_n else 0.0
+    n = r["n"] or 0
+    confirmed = r["confirmed_n"] or 0
+    return {
+        "tickets_parsed": n,
+        "tickets_confirmed": confirmed,
+        "tokens": r["tokens"],
+        "avg_parse_ms": round(r["avg_ms"], 1),
+        "avg_handle_sec": round((r["avg_handle"] or 0) / 1000.0, 1) if confirmed else 0,
+        "review_levels": {
+            "auto": r["auto_n"], "single": r["single_n"],
+            "double": r["double_n"], "blocked": r["blocked_n"],
+        },
+        "auto_pass_rate": round((r["auto_n"] or 0) / n, 4) if n else 0.0,
+        "forced_n": r["forced_n"],
+        "correction_rate": correction_rate,
+        "baseline_manual_sec": baseline_sec,
+        "saved_hours": round((saved["s"] or 0) / 3600.0, 2),
+        "inbound_count": in_n,
+        "inbound_confirmed": in_done,
+        "bypass_rate": bypass_rate,
+        # C4 告警：超过 20% 说明"人挑活"已经影响到实际价值
+        "bypass_alert": bypass_rate > 0.2,
+        "daily": [dict(x) for x in daily],
+    }
+
+
+def confirmed_tickets(limit: int = 5000) -> list[dict]:
+    """导出用：已确认单据的标准字段。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT fields_json FROM runs WHERE confirmed=1 ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            fields = json.loads(r["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        out.append({k: (v or {}).get("value") or "" for k, v in fields.items()})
+    return out
+
+
+def find_by_booking_no(no: str, limit: int = 800) -> dict | None:
+    """按委托单号找最近一张已确认的单（改单要用它当基准）。"""
+    target = "".join(ch for ch in (no or "") if ch.isalnum()).upper()
+    if not target:
+        return None
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, fields_json FROM runs WHERE confirmed=1 ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    for r in rows:
+        try:
+            fields = json.loads(r["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        got = ((fields.get("booking_no") or {}).get("value") or "")
+        if "".join(ch for ch in got if ch.isalnum()).upper() == target:
+            return {
+                "run_id": r["id"],
+                "ts": r["ts"],
+                "fields": {k: (v or {}).get("value") or "" for k, v in fields.items()},
+            }
+    return None
+
+
+def enqueue_learn(run_id: str, reason: str) -> None:
+    """把"可疑样本"放进标注池。可疑 = 需复核 / 有阻断 / 靠容错抽出来的。"""
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO learn_queue (id, run_id, ts, reason, status)"
+            " VALUES (?,?,?,?,'pending')",
+            (run_id, run_id, _now(), reason),
+        )
+
+
+def learn_reason(draft: Draft) -> str | None:
+    """判断这一单值不值得进标注池。"""
+    if draft.review_level == "blocked":
+        return "blocked"
+    if any((v.source or "").startswith("fuzzy") for v in draft.fields.values()):
+        return "fuzzy_match"
+    if draft.review_level == "double":
+        return "low_confidence"
+    if "检测到" in (draft.note or "") and "票" in (draft.note or ""):
+        return "multi_ticket"
+    return None
+
+
+def label_run(run_id: str, gold: dict[str, str], reason: str = "confirmed",
+              corrected: bool = False) -> None:
+    """人工确认 = 一条金标。这是"越用越准"的唯一来源。
+
+    corrected=True 表示人改过——这类才是真正的难例；
+    人直接点确认的，说明系统本来就对，价值在于"覆盖了新格式"，不在于提分。
+    """
+    gold_json = json.dumps({k: v for k, v in gold.items() if v}, ensure_ascii=False)
+    ts = _now()
+    with _conn() as conn:
+        cur = conn.execute(
+            "UPDATE learn_queue SET status='labeled', gold_json=?, labeled_at=?, corrected=?"
+            " WHERE id=?",
+            (gold_json, ts, 1 if corrected else 0, run_id),
+        )
+        if cur.rowcount == 0:
+            conn.execute(
+                "INSERT OR REPLACE INTO learn_queue"
+                " (id, run_id, ts, reason, status, gold_json, labeled_at, corrected)"
+                " VALUES (?,?,?,?,'labeled',?,?,?)",
+                (run_id, run_id, ts, reason, gold_json, ts, 1 if corrected else 0),
+            )
+
+
+def learn_queue(status: str = "pending", limit: int = 100) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT q.id, q.run_id, q.ts, q.reason, q.status, q.gold_json,"
+            " r.review_level, r.engine, substr(r.raw_text,1,80) AS preview"
+            " FROM learn_queue q LEFT JOIN runs r ON r.id = q.run_id"
+            " WHERE q.status = ? ORDER BY q.ts DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def learn_stats() -> dict:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT status, reason, COUNT(*) n, COALESCE(SUM(corrected),0) c"
+            " FROM learn_queue GROUP BY status, reason"
+        ).fetchall()
+    out = {"pending": 0, "labeled": 0, "corrected": 0, "by_reason": {}}
+    for r in rows:
+        out[r["status"]] = out.get(r["status"], 0) + r["n"]
+        if r["status"] == "labeled":
+            out["by_reason"][r["reason"]] = r["n"]
+            out["corrected"] += r["c"] or 0
+    out["total"] = out.get("pending", 0) + out.get("labeled", 0)
+    return out
+
+
+def learn_export(limit: int = 2000) -> str:
+    """导出成评测集格式（JSONL），可直接追加到 samples/ 后被 evalrun 使用。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT q.run_id, q.reason, q.gold_json, q.corrected, r.raw_text"
+            " FROM learn_queue q JOIN runs r ON r.id = q.run_id"
+            " WHERE q.status='labeled' AND q.gold_json IS NOT NULL"
+            " ORDER BY q.ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    lines = []
+    for r in rows:
+        try:
+            gold = json.loads(r["gold_json"])
+        except json.JSONDecodeError:
+            continue
+        lines.append(json.dumps({
+            "id": r["run_id"],
+            "title": f"真实{'修正' if r['corrected'] else '确认'} · {r['reason']}",
+            "raw": r["raw_text"] or "",
+            "gold": gold,
+            "corrected": bool(r["corrected"]),
+        }, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+def find_amend_candidates(fields: dict, days: int = 3, limit: int = 5) -> list[dict]:
+    """B1：客户没写原单号时，按"箱号 / 客户 + 近 N 天"反查原单。
+
+    只给候选，不替用户决定——猜错比不猜更糟。
+    """
+    def norm(s: str) -> str:
+        return "".join(ch for ch in (s or "") if ch.isalnum()).upper()
+
+    mine = {x for x in re.split(r"[,，、;；\s]+", fields.get("container_no") or "") if x}
+    mine = {norm(x) for x in mine}
+    client = norm(fields.get("client") or "")
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, fields_json FROM runs WHERE confirmed=1 AND ts >= ?"
+            " ORDER BY ts DESC LIMIT 200",
+            (since,),
+        ).fetchall()
+
+    out = []
+    for r in rows:
+        try:
+            f = json.loads(r["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        vals = {k: ((v or {}).get("value") or "") for k, v in f.items()}
+        theirs = {norm(x) for x in re.split(r"[,，、;；\s]+", vals.get("container_no", "")) if x}
+
+        # 客户名用包含匹配：抽取时可能把"这票有变"粘在客户名后面
+        theirs_client = norm(vals.get("client", ""))
+        same_client = bool(client and theirs_client and min(len(client), len(theirs_client)) >= 4
+                           and (client in theirs_client or theirs_client in client))
+
+        score, why = 0.0, []
+        if mine and theirs and (mine & theirs):
+            score += 0.9
+            why.append("箱号一致")
+        if same_client:
+            score += 0.6
+            why.append("客户一致")
+        if score <= 0:
+            continue
+        out.append({
+            "run_id": r["id"],
+            "ts": r["ts"],
+            "score": round(min(1.0, score), 2),
+            "reason": "+".join(why),
+            "booking_no": vals.get("booking_no", ""),
+            "client": vals.get("client", ""),
+            "container_no": vals.get("container_no", ""),
+            "fields": vals,
+        })
+
+    out.sort(key=lambda x: (-x["score"], x["ts"]))
+    return out[:limit]
+
+
+def audit(run_id: str) -> dict:
+    """C2：还原一张单的完整链路——谁、何时、用什么版本、改了什么。"""
+    with _conn() as conn:
+        r = conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+        if not r:
+            return {}
+        fb = conn.execute(
+            "SELECT field, auto_value, final_value, ts FROM feedback"
+            " WHERE run_id=? ORDER BY ts",
+            (run_id,),
+        ).fetchall()
+    row = dict(r)
+    try:
+        row["fields"] = json.loads(row.pop("fields_json") or "{}")
+    except json.JSONDecodeError:
+        row["fields"] = {}
+    row["corrections"] = [dict(x) for x in fb]
+    return row
+
+
+def audit_csv(limit: int = 1000) -> str:
+    """C2：把"改了什么"导出成表格，交给客户或内部复核。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT r.id AS run_id, r.ts, r.engine, r.model, r.prompt_ver, r.pipeline_ver,"
+            " r.review_level, r.confirmed, f.field, f.auto_value, f.final_value"
+            " FROM runs r LEFT JOIN feedback f ON f.run_id = r.id AND f.changed = 1"
+            " ORDER BY r.ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    head = ["run_id", "ts", "engine", "model", "prompt_ver", "pipeline_ver",
+            "review_level", "confirmed", "field", "auto_value", "final_value"]
+    lines = [",".join(head)]
+    for x in rows:
+        d = dict(x)
+        lines.append(",".join(
+            '"%s"' % str(d.get(c, "") if d.get(c) is not None else "").replace('"', '""')
+            for c in head
+        ))
+    return "\n".join(lines)
+
+
+def risk_sim(monthly_tickets: int, penalty: float, threshold: float,
+             hourly_cost: float = 45.0, baseline_sec: float = 180.0) -> dict:
+    """C5 风险模拟：如果取消人工确认，会怎样？
+
+    不辩论，直接算给老板看。
+    口径：
+    - 用已确认的单当样本，看"若按 threshold 自动通过"会放过哪些**实际被人改过**的单
+    - 错单率 = 被放过的错单 / 被放过的总单
+    - 月损失 = 月票量 × 错单率 × 单次罚款
+    - 省下的成本 = 月票量 × 自动通过率 × 单票确认耗时 × 时薪
+    """
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT r.id, r.fields_json, r.handle_ms, r.review_level,"
+            " (SELECT COUNT(*) FROM feedback f WHERE f.run_id=r.id AND f.changed=1) AS chg"
+            " FROM runs r WHERE r.confirmed=1"
+        ).fetchall()
+
+    total = auto_pass = bad_auto = 0
+    handle_sum = 0
+    handle_n = 0
+
+    for row in rows:
+        try:
+            fields = json.loads(row["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        if not any((fields.get(k) or {}).get("value") for k in RISK_KEYS):
+            continue
+        total += 1
+        # 与 C1 保持同一口径：能不能直过，看分级审批结果，而不是另算一套阈值
+        if row["review_level"] == "auto":
+            auto_pass += 1
+            if row["chg"]:
+                bad_auto += 1
+        if row["handle_ms"]:
+            handle_sum += row["handle_ms"]
+            handle_n += 1
+
+    if total == 0:
+        return {"ok": False, "reason": "还没有已确认的单，无法测算"}
+
+    if auto_pass == 0:
+        return {
+            "ok": False,
+            "reason": f"当前 {total} 单里没有一单达到自动通过阈值（{threshold:.0%}），"
+                      "无法测算取消人工确认的后果。需要更多规整样本，或调低阈值再试。",
+        }
+
+    auto_rate = auto_pass / total
+    # 0 错单不等于 0 风险。用 Laplace 平滑：n 次里 0 次失败，真实错误率的
+    # 上界大约是 1/(n+2)，而不是 0。否则会拿 12 个样本替客户背书"可以取消人工"。
+    error_rate = (bad_auto + 1) / (auto_pass + 2)
+    observed_error_rate = bad_auto / auto_pass if auto_pass else 0.0
+    bad_tickets = monthly_tickets * auto_rate * error_rate
+    monthly_loss = bad_tickets * penalty
+    avg_handle_sec = (handle_sum / handle_n / 1000.0) if handle_n else 60.0
+    # 省的是"基线 − 实际"，不是"实际耗时"
+    saved_hours = monthly_tickets * auto_rate * max(0.0, baseline_sec - avg_handle_sec) / 3600.0
+    saved_money = saved_hours * hourly_cost
+    net = saved_money - monthly_loss
+
+    return {
+        "ok": True,
+        "threshold": threshold,
+        "samples": total,
+        "auto_pass_rate": round(auto_rate, 4),
+        "error_rate_among_auto": round(error_rate, 4),
+        "observed_error_rate": round(observed_error_rate, 4),
+        "sample_auto_pass": auto_pass,
+        "monthly_tickets": monthly_tickets,
+        "expected_bad_tickets": round(bad_tickets, 2),
+        "penalty_per_error": penalty,
+        "expected_monthly_loss": round(monthly_loss, 2),
+        "monthly_review_hours_saved": round(saved_hours, 2),
+        "monthly_review_cost_saved": round(saved_money, 2),
+        "net_monthly": round(net, 2),
+        "verdict": (
+            "不建议取消人工确认" if net < 0 else
+            "可以在小范围试运行，但必须保留抽检" if net < saved_money * 0.3 else
+            "数据支持取消大部分人工确认"
+        ),
+        "basis": "样本为已确认单据；错单率采用 Laplace 平滑（观测 0 错单也不等于 0 风险）。",
+    }
+
+
+def report_md(baseline_sec: float = 180.0, hourly_cost: float = 45.0) -> str:
+    m = metrics(baseline_sec)
+    saved_money = m["saved_hours"] * hourly_cost
+    lines = [
+        "# 托书 AI 录入 · 运行报告",
+        "",
+        f"> 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"> 基线口径：人工单票 {baseline_sec:.0f} 秒，人工时薪 {hourly_cost:.0f} 元",
+        "",
+        "## 一、处理量",
+        "",
+        "| 指标 | 数值 |",
+        "|---|---|",
+        f"| 解析票数 | {m['tickets_parsed']} |",
+        f"| 已确认票数 | {m['tickets_confirmed']} |",
+        f"| 平均出稿耗时 | {m['avg_parse_ms']} ms |",
+        f"| 平均确认耗时 | {m['avg_handle_sec']} 秒/单 |",
+        "",
+        "## 二、分级审批分布（C1）",
+        "",
+        "| 级别 | 单数 | 说明 |",
+        "|---|---|---|",
+        f"| 自动通过 | {m['review_levels']['auto']} | 风险字段（箱号/箱型/箱量/截港/电话）全部 ≥90%，无人介入 |",
+        f"| 单人确认 | {m['review_levels']['single']} | 有提醒，或风险字段不够确定 |",
+        f"| 双人复核 | {m['review_levels']['double']} | 必填或风险字段置信度 <80% |",
+        f"| 强行通过 | {m['forced_n']} | 存在阻断项，已留痕 |",
+        "",
+        f"**自动通过率：{m['auto_pass_rate']:.1%}** —— 这是「省了多少人力」的真正来源。",
+        "",
+        "## 三、质量",
+        "",
+        "| 指标 | 数值 |",
+        "|---|---|",
+        f"| 人工修正率 | {m['correction_rate']:.1%} |",
+        "",
+        "## 四、价值",
+        "",
+        "| 项 | 数值 |",
+        "|---|---|",
+        f"| 累计节省工时 | **{m['saved_hours']} 小时** |",
+        f"| 折算金额 | **{saved_money:,.0f} 元** |",
+        "",
+        "> 计算方式：Σ max(0, 基线 {0:.0f}s − 实际确认耗时)，只统计已确认的票。".format(baseline_sec),
+        "",
+        "## 五、绕过率（C4）",
+        "",
+        "| 项 | 数值 |",
+        "|---|---|",
+        f"| 入口捕获来单 | {m['inbound_count']} |",
+        f"| 完成确认 | {m['inbound_confirmed']} |",
+        f"| **绕过率** | **{m['bypass_rate']:.1%}** |",
+        "",
+        ("⚠️ 绕过率超过 20%：说明人只把简单单交给系统，难单自己录了。"
+         "**此时上面的『节省工时』是被高估的。**"
+         if m["bypass_alert"] else
+         "绕过率正常（≤20%）。"),
+        "",
+        "## 六、说明",
+        "",
+        "- 基线必须用客户真实工时校准，默认值仅为演示口径。",
+        "- 避开「跳过系统」的票不计入本表，因此本表**高估**节省量，需配合绕过率（C4）一起看。",
+    ]
+    return "\n".join(lines)
+
+
+def stats() -> dict:
+    with _conn() as conn:
+        runs = conn.execute("SELECT COUNT(*) c, COALESCE(SUM(tokens),0) t, COALESCE(AVG(elapsed_ms),0) e FROM runs").fetchone()
+        fb = conn.execute("SELECT COUNT(*) n, COALESCE(SUM(changed),0) ch FROM feedback").fetchone()
+    n_fields = fb["n"] or 0
+    return {
+        "runs": runs["c"],
+        "tokens": runs["t"],
+        "avg_elapsed_ms": round(runs["e"], 1),
+        "feedback_rows": n_fields,
+        "corrected_rows": fb["ch"] or 0,
+        "correction_rate": round((fb["ch"] or 0) / n_fields, 4) if n_fields else 0.0,
+    }
+
+
+def queue(limit: int = 50) -> list[dict]:
+    """人工兜底队列：需复核但还没确认的单（D2 的"低置信转人工"落点）。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, review_level, errors, warns, chars, preview"
+            " FROM (SELECT id, ts, review_level, errors, warns, chars,"
+            "       substr(raw_text,1,40) AS preview FROM runs"
+            "       WHERE confirmed=0 AND review_level IN ('double','blocked'))"
+            " ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def recent(n: int = 20) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, engine, chars, elapsed_ms, tokens, errors, warns,"
+            " review_level, handle_ms, forced"
+            " FROM runs ORDER BY ts DESC LIMIT ?",
+            (n,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def dump_feedback(limit: int = 500) -> str:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT run_id, ts, field, auto_value, final_value FROM feedback"
+            " WHERE changed=1 ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return json.dumps([dict(r) for r in rows], ensure_ascii=False, indent=2)

@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>集卡托书 AI 录入 · Demo</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#fff; --line:#e3e6ea; --ink:#1b2430; --muted:#6b7684;
+    --brand:#1f4e79; --brand2:#2d7dd2; --ok:#2f855a; --warn:#b7791f; --err:#c53030;
+    --chip:#eef2f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:12px}
+  .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--muted);border:1px solid var(--line)}
+  .badge.on{background:#e6f4ea;color:var(--ok);border-color:#bfe3cb}
+  .badge.off{background:#fff4e5;color:var(--warn);border-color:#f3ddb8}
+  main{display:grid;grid-template-columns:minmax(360px,42%) 1fr;gap:16px;padding:16px;align-items:start}
+  @media(max-width:980px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  textarea{width:100%;min-height:340px;border:0;padding:14px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;border-radius:0 0 10px 10px;outline:none;background:#fff}
+  .row{display:flex;gap:8px;padding:10px 14px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line)}
+  button{font:inherit;font-size:13px;padding:7px 14px;border-radius:7px;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink);transition:.15s}
+  button:hover{border-color:var(--brand2);color:var(--brand2)}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.primary:hover{background:#17405f;color:#fff}
+  button.ghost{background:transparent;color:var(--muted)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);max-height:110px;overflow:auto}
+  .chip{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--chip);cursor:pointer;border:1px solid transparent;color:#33404f}
+  .chip:hover{border-color:var(--brand2);color:var(--brand2)}
+  label.up{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;padding:7px 14px;border-radius:7px;border:1px dashed var(--brand2);color:var(--brand2);cursor:pointer;background:#f7fbff}
+  label.up:hover{background:#eef6ff}
+  label.up.off{opacity:.45;cursor:not-allowed;border-color:var(--line);color:var(--muted);background:#fafbfc}
+  .dropzone{outline:2px dashed var(--brand2);outline-offset:-8px;background:#f7fbff}
+  .summary{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+  .pill{padding:2px 9px;border-radius:999px;font-size:12px}
+  .pill.err{background:#fde8e8;color:var(--err)}
+  .pill.warn{background:#fdf3e2;color:var(--warn)}
+  .pill.ok{background:#e6f4ea;color:var(--ok)}
+  .pill.rl-auto{background:#e6f4ea;color:var(--ok);font-weight:600}
+  .pill.rl-single{background:#e8f0fb;color:var(--brand2);font-weight:600}
+  .pill.rl-double{background:#fdf3e2;color:var(--warn);font-weight:600}
+  .pill.rl-blocked{background:#fde8e8;color:var(--err);font-weight:600}
+  .banner{margin:12px 14px 0;padding:10px 12px;border-radius:8px;background:#fde8e8;border:1px solid #f5c2c2;color:var(--err);font-size:13px}
+  .fields{padding:6px 0 12px}
+  .frow{display:grid;grid-template-columns:120px 1fr 64px;gap:10px;align-items:center;padding:6px 14px}
+  .frow label{font-size:12px;color:var(--muted);text-align:right}
+  .frow label b{color:var(--err)}
+  .frow input{width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px;outline:none}
+  .frow input:focus{border-color:var(--brand2)}
+  .frow input.err{border-color:var(--err);background:#fffafa}
+  .frow input.warn{border-color:#e2c089;background:#fffdf8}
+  .conf{height:5px;border-radius:3px;background:#eef1f4;overflow:hidden;margin-top:4px;grid-column:2}
+  .conf i{display:block;height:100%;background:var(--ok)}
+  .conf i.mid{background:var(--warn)}
+  .conf i.low{background:var(--err)}
+  .empty{padding:60px 20px;text-align:center;color:var(--muted);font-size:13px}
+  .checks{padding:4px 14px 12px}
+  .check{display:flex;gap:8px;padding:5px 0;font-size:12.5px;align-items:flex-start;border-bottom:1px dashed #eef0f3}
+  .check:last-child{border-bottom:0}
+  .dot{width:7px;height:7px;border-radius:50%;margin-top:6px;flex:0 0 auto}
+  .dot.error{background:var(--err)} .dot.warn{background:var(--warn)} .dot.info{background:var(--brand2)}
+  .check .msg{flex:1}
+  .check .code{color:#9aa4b0;font-size:11px;font-family:ui-monospace,monospace}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;background:#fafbfc}
+  .kpi{display:flex;gap:10px;padding:12px 14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:110px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:20px;font-weight:650;color:var(--brand)}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:80vw}
+  .toast.show{opacity:1}
+  footer{padding:0 20px 28px;color:#9aa4b0;font-size:11.5px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>集卡托书 · AI 结构化录入</h1>
+  <span class="sub">原文 → 草稿 → 规则挑错 → 人工确认 → 留痕</span>
+  <span id="engineBadge" class="badge">检测引擎中…</span>
+  <span style="flex:1"></span>
+  <button class="ghost" id="btnMetrics" style="padding:4px 12px;font-size:12px">运行指标</button>
+  <a href="/api/report.md" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none">月报 ↗</a>
+</header>
+
+<main>
+  <section class="card">
+    <h2>
+      <span>① 托书原文</span>
+      <span style="font-weight:400">可直接改，或点下方样本</span>
+    </h2>
+    <textarea id="raw" placeholder="把客户发来的托书贴在这里：微信消息、邮件、Excel 复制都行。"></textarea>
+    <div class="chips" id="chips"></div>
+    <div class="row">
+      <button class="primary" id="btnParse">解析</button>
+      <button id="btnSplit">多票拆分</button>
+      <label class="up" id="uploadLabel" for="fileInput">上传图片 / PDF</label>
+      <input id="fileInput" type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.pdf,.txt,.csv" hidden />
+      <label id="llmToggle" style="font-size:12px;color:var(--muted);display:none;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" id="useLlm" checked style="width:14px;height:14px" /> 模型增强
+      </label>
+      <button class="ghost" id="btnClear">清空</button>
+      <span id="parseInfo" class="sub" style="color:var(--muted);font-size:12px"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span>② 结构化草稿</span>
+      <button class="ghost" id="btnEval" style="padding:3px 10px;font-size:12px">跑评测</button>
+    </h2>
+    <div id="summary" class="summary" style="display:none"></div>
+    <div id="ticketBar" style="display:none;padding:8px 14px;border-bottom:1px solid var(--line)"></div>
+    <div id="banner"></div>
+    <div id="checks" class="checks" style="display:none"></div>
+    <div id="fields" class="fields">
+      <div class="empty">左侧粘贴托书，点“解析”。<br/>字段会带置信度显示，规则会主动挑错。</div>
+    </div>
+    <div class="row" id="confirmRow" style="display:none;justify-content:space-between">
+      <span id="correctionInfo" style="font-size:12px;color:var(--muted)"></span>
+      <span>
+        <a id="auditLink" href="#" target="_blank" style="font-size:12px;color:var(--muted);margin-right:10px;text-decoration:none">审计 ↗</a>
+        <button id="btnCsv">导出 CSV</button>
+        <button class="primary" id="btnConfirm">确认并记录</button>
+      </span>
+    </div>
+  </section>
+</main>
+
+<section class="card" id="evalCard" style="margin:0 16px 16px;display:none">
+  <h2><span>评测结果</span><span id="evalEngine" style="font-weight:400"></span></h2>
+  <div class="kpi" id="evalKpi"></div>
+  <div style="padding:0 14px 10px" id="evalCompare"></div>
+  <div style="padding:0 14px 14px"><table id="evalTable"></table></div>
+</section>
+
+<section class="card" id="metricsCard" style="margin:0 16px 16px;display:none">
+  <h2><span>运行指标 · C3</span><span style="font-weight:400;font-size:12px" id="metricsNote"></span>
+    <button class="ghost" id="btnRisk" style="padding:3px 10px;font-size:12px;margin-left:auto">风险模拟 C5</button>
+  </h2>
+  <div class="kpi" id="metricsKpi"></div>
+  <div id="riskOut" style="padding:0 14px 10px"></div>
+  <div style="padding:0 14px 14px"><table id="metricsTable"></table></div>
+</section>
+
+<footer id="foot"></footer>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let META = null, LAST = null, ROWS = [], HANDLE_START = 0;
+
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+async function boot(){
+  const meta = await (await fetch('/api/meta')).json();
+  META = meta;
+  const b = $('#engineBadge');
+  if (meta.llm_enabled){ b.textContent = '模型：' + meta.model; b.className='badge on'; }
+  else { b.textContent = '规则引擎（未配置模型）'; b.className='badge off'; }
+  if(!meta.ocr_ready){ $('#uploadLabel').classList.add('off'); $('#uploadLabel').title='OCR 依赖未安装'; }
+  if(meta.llm_enabled){ $('#llmToggle').style.display='inline-flex'; }
+  $('#foot').textContent = (meta.org ? meta.org + ' · ' : '') + '演示用原型：字段准确率必须用真实托书重新评测，本页数字不构成对外承诺。';
+  const s = await (await fetch('/api/samples')).json();
+  $('#chips').innerHTML = s.samples.map(x=>`<span class="chip" data-id="${x.id}">${x.title}</span>`).join('');
+  $('#chips').onclick = e => {
+    const c = e.target.closest('.chip'); if(!c) return;
+    const item = s.samples.find(x=>x.id===c.dataset.id);
+    $('#raw').value = item.raw;
+    parse();
+  };
+}
+
+async function parse(){
+  const text = $('#raw').value.trim();
+  if(!text){ toast('请先粘贴托书内容'); return; }
+  $('#btnParse').disabled = true;
+  $('#btnParse').textContent = '解析中…';
+  try{
+    const res = await fetch('/api/extract', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text, use_llm: $('#useLlm').checked})
+    });
+    if(!res.ok){ toast('解析失败：' + (await res.text()).slice(0,120)); return; }
+    LAST = await res.json();
+    render(LAST);
+  } finally {
+    $('#btnParse').disabled = false;
+    $('#btnParse').textContent = '解析';
+  }
+}
+
+async function uploadFile(file){
+  if(!file) return;
+  const label = $('#uploadLabel');
+  if(label.classList.contains('off')){ toast('OCR 依赖未安装，请改用粘贴文本'); return; }
+  label.textContent = '识别中…';
+  try{
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('use_llm', $('#useLlm') ? $('#useLlm').checked : true);
+    const res = await fetch('/api/extract/upload', { method:'POST', body: fd });
+    if(!res.ok){
+      let msg = await res.text();
+      try { msg = JSON.parse(msg).detail || msg; } catch(e){}
+      toast('识别失败：' + String(msg).slice(0,80));
+      return;
+    }
+    const d = await res.json();
+    if(d.raw_text) $('#raw').value = d.raw_text;
+    LAST = d;
+    render(d);
+    toast(`已识别 · ${d.ocr ? d.ocr.note : ''}`);
+  } finally {
+    label.textContent = '上传图片 / PDF';
+    $('#fileInput').value = '';
+  }
+}
+
+function levelFor(key){
+  const cs = (LAST.checks||[]).filter(c=>c.field===key);
+  if(cs.some(c=>c.level==='error')) return 'err';
+  if(cs.some(c=>c.level==='warn')) return 'warn';
+  return '';
+}
+
+function render(d){
+  LAST = d;   // 必须在 levelFor 之前设置，否则拆分切票时会读到上一张单
+  // summary
+  const errs = d.checks.filter(c=>c.level==='error').length;
+  const warns = d.checks.filter(c=>c.level==='warn').length;
+  const filled = Object.values(d.fields).filter(f=>f.value).length;
+  const sum = $('#summary'); sum.style.display='flex';
+  const RL = {auto:'自动通过', single:'单人确认', double:'双人复核', blocked:'存在阻断'};
+  const rl = d.review_level || 'single';
+  sum.innerHTML = `
+    <span class="pill rl-${rl}">${RL[rl] || rl}</span>
+    <span class="pill ${errs?'err':'ok'}">${errs} 项阻断</span>
+    <span class="pill ${warns?'warn':'ok'}">${warns} 项提醒</span>
+    <span class="pill ok">已抽 ${filled} 字段</span>
+    <span>${d.elapsed_ms} ms</span>
+    <span>${d.tokens ? d.tokens + ' tokens' : ''}</span>
+    ${d.ocr ? `<span class="pill ok">${d.ocr.note}</span>` : ''}
+    ${d.note ? `<span class="pill warn">${d.note}</span>` : ''}
+    <span class="mono" style="font-size:11px">${d.engine}</span>`;
+  $('#parseInfo').textContent = `run ${d.run_id} · ${d.elapsed_ms}ms`;
+
+  // banner for blocking
+  const hard = d.checks.filter(c=>c.level==='error');
+  $('#banner').innerHTML = hard.length
+    ? `<div class="banner"><b>${hard[0].message}</b>${hard.length>1?`<div style="margin-top:4px;font-size:12px">另有 ${hard.length-1} 项阻断问题，见下方</div>`:''}</div>`
+    : '';
+
+  // D9：改单 diff
+  const am = d.amend;
+  if(am && am.diff && am.diff.length){
+    const rows = am.diff.map(x=>`<div style="font-size:12.5px;padding:3px 0">
+      <b>${x.label}</b> · ${x.action}<br/>
+      <span style="color:var(--err);text-decoration:line-through">${x.old||'（空）'}</span>
+      <span style="color:var(--muted)"> → </span>
+      <span style="color:var(--ok);font-weight:600">${x.new}</span></div>`).join('');
+    $('#banner').innerHTML += `<div style="margin:12px 14px 0;padding:10px 12px;border-radius:8px;background:#f3f7fb;border:1px solid #dbe6f2">
+      <div style="font-weight:600;margin-bottom:6px">改单 · 基于原单 ${am.base_booking_no}</div>${rows}</div>`;
+  } else if(am && am.note){
+    $('#banner').innerHTML += `<div class="banner">${am.note}</div>`;
+  }
+
+  // checks
+  const cbox = $('#checks');
+  if(d.checks.length){
+    cbox.style.display='block';
+    cbox.innerHTML = d.checks.map(c=>`
+      <div class="check"><span class="dot ${c.level}"></span>
+        <span class="msg">${c.message}</span>
+        <span class="code">${c.code}</span></div>`).join('');
+  } else { cbox.style.display='none'; }
+
+  // fields
+  const box = $('#fields');
+  box.innerHTML = META.fields.map(f=>{
+    const got = d.fields[f.key] || {value:'',confidence:0,source:'missing'};
+    const lv = levelFor(f.key);
+    const pct = Math.round((got.confidence||0)*100);
+    const cls = pct>=85?'':pct>=60?'mid':'low';
+    return `<div class="frow">
+      <label>${f.label}${f.blocking?' <b>*</b>':''}</label>
+      <input data-key="${f.key}" class="${lv}" value="${(got.value||'').replace(/"/g,'&quot;')}"
+             placeholder="${f.placeholder||''}" />
+      <span style="font-size:11px;color:var(--muted);text-align:right">${got.value?pct+'%':'—'}</span>
+      <span></span>
+      <div class="conf" style="grid-column:2/4"><i class="${cls}" style="width:${got.value?pct:0}%"></i></div>
+    </div>`;
+  }).join('');
+
+  $('#confirmRow').style.display='flex';
+  $('#correctionInfo').textContent = '修改后点“确认并记录”，修正会进入评测集。';
+  $('#btnConfirm').textContent = (d.review_level === 'blocked')
+    ? '强行确认（留痕）' : (d.review_level === 'auto' ? '确认' : '确认并记录');
+  HANDLE_START = Date.now();
+  $('#auditLink').href = '/api/audit/' + d.run_id;
+  ROWS = META.fields.map(f => [f.label, (d.fields[f.key]||{}).value || '']);
+}
+
+async function confirmDraft(){
+  if(!LAST) return;
+  const auto = {}, final = {};
+  document.querySelectorAll('#fields input').forEach(i=>{
+    const k = i.dataset.key;
+    auto[k] = (LAST.fields[k]||{}).value || '';
+    final[k] = i.value.trim();
+  });
+  const res = await fetch('/api/confirm', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      run_id: LAST.run_id, auto, final,
+      handle_ms: HANDLE_START ? Math.max(0, Date.now() - HANDLE_START) : null
+    })
+  });
+  const r = await res.json();
+  toast(`已记录：${r.fields} 个字段，人工修正 ${r.changed} 个（${(r.correction_rate*100).toFixed(1)}%），耗时 ${((Date.now()-HANDLE_START)/1000).toFixed(1)} 秒`);
+  ROWS = META.fields.map(f => [f.label, (final[f.key]||'')]);
+  $('#correctionInfo').textContent = `本次修正 ${r.changed} 项，级别 ${r.review_level}，已写入遥测库。`;
+  HANDLE_START = 0;
+  loadMetrics();
+}
+
+async function loadMetrics(){
+  const m = await (await fetch('/api/metrics')).json();
+  const ls = await (await fetch('/api/learn/stats')).json();
+  $('#metricsCard').style.display='block';
+  $('#metricsNote').textContent = `基线 人工 ${m.baseline_manual_sec}s/单 · 自动通过率 ${(m.auto_pass_rate*100).toFixed(1)}%`;
+  $('#metricsKpi').innerHTML = `
+    <div><b>${m.tickets_parsed}</b><span>解析票数</span></div>
+    <div><b>${m.tickets_confirmed}</b><span>已确认</span></div>
+    <div><b>${m.avg_handle_sec}s</b><span>平均确认耗时</span></div>
+    <div><b>${m.saved_hours}h</b><span>累计节省工时</span></div>
+    <div><b>${(m.correction_rate*100).toFixed(1)}%</b><span>人工修正率</span></div>
+    <div><b style="color:${m.bypass_alert?'var(--err)':'var(--brand)'}">${m.inbound_count? (m.bypass_rate*100).toFixed(1)+'%' : '—'}</b><span>绕过率（C4）</span></div>
+    <div><b>${ls.pending}</b><span>待标注（D5）</span></div>
+    <div><b>${ls.labeled}</b><span>已积累金标</span></div>`;
+  const rl = m.review_levels;
+  const bypassNote = m.inbound_count
+    ? (m.bypass_alert
+        ? `<div class="banner" style="margin:8px 14px 0">⚠️ 绕过率 ${(m.bypass_rate*100).toFixed(1)}% 超过 20%：人只把简单单交给系统，难单自己录了。<b>此时「节省工时」是被高估的。</b></div>`
+        : `<div style="padding:8px 14px 0;font-size:12px;color:var(--muted)">入口捕获 ${m.inbound_count} 条，完成确认 ${m.inbound_confirmed} 条，绕过率 ${(m.bypass_rate*100).toFixed(1)}%。</div>`)
+    : `<div style="padding:8px 14px 0;font-size:12px;color:var(--muted)">尚无入口数据。接入企微机器人/H5 后（调用 /api/inbound）才能算绕过率。</div>`;
+  $('#metricsTable').innerHTML = bypassNote + `
+    <tr><th>分级审批</th><th>单数</th><th>占解析票数</th></tr>
+    <tr><td>自动通过（风险字段全 ≥90%，无人介入）</td><td>${rl.auto}</td><td>${m.tickets_parsed?((rl.auto/m.tickets_parsed)*100).toFixed(0):0}%</td></tr>
+    <tr><td>单人确认（有提醒或不确定）</td><td>${rl.single}</td><td>${m.tickets_parsed?((rl.single/m.tickets_parsed)*100).toFixed(0):0}%</td></tr>
+    <tr><td>双人复核（必填/风险字段 &lt;80%）</td><td>${rl.double}</td><td>${m.tickets_parsed?((rl.double/m.tickets_parsed)*100).toFixed(0):0}%</td></tr>
+    <tr><td>强行通过（有阻断，已留痕）</td><td>${m.forced_n}</td><td>—</td></tr>`;
+  $('#metricsCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function exportCsv(){
+  const esc = v => `"${String(v).replace(/"/g,'""')}"`;
+  const csv = ['字段,值', ...ROWS.map(r=>r.map(esc).join(','))].join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `booking-${(LAST?.run_id)||'draft'}.csv`;
+  a.click();
+  toast('已导出 CSV');
+}
+
+async function runEval(){
+  const btn = $('#btnEval'); btn.disabled = true; btn.textContent = '跑批中…';
+  try{
+    const r = await (await fetch('/api/eval', {method:'POST'})).json();
+    const t = r.tuned, h = r.holdout;
+    $('#evalCard').style.display='block';
+    $('#evalEngine').textContent = `${t.engine} · 调优集 ${t.samples} 份 / 留出集 ${h?h.samples:0} 份`;
+
+    const kpi = (x, name) => x ? `
+      <div><b>${(x.field_accuracy*100).toFixed(1)}%</b><span>${name} · 字段级</span></div>
+      <div><b>${(x.blocking_accuracy*100).toFixed(1)}%</b><span>${name} · 必填</span></div>
+      <div><b>${(x.record_exact_rate*100).toFixed(1)}%</b><span>${name} · 整单全对</span></div>` : '';
+
+    $('#evalKpi').innerHTML = kpi(t, '调优集') + kpi(h, '留出集');
+
+    // 三模式对照（只有配了模型才有意义）
+    const c = r.compare;
+    if(c){
+      const row = (x, name) => x ? `<tr><td>${name}</td>
+          <td>${(x.field_accuracy*100).toFixed(1)}%</td>
+          <td>${(x.blocking_accuracy*100).toFixed(1)}%</td>
+          <td>${(x.record_exact_rate*100).toFixed(1)}%</td>
+          <td class="mono" style="font-size:11px">${x.engine}</td></tr>` : '';
+      const body = row(c.rule,'仅规则') + row(c.llm,'仅模型') + row(c.merged,'合并');
+      $('#evalCompare').innerHTML = c.llm
+        ? `<div style="font-size:12px;color:var(--muted);margin:4px 0 6px">留出集 · 三模式对照（合并 = 规则抽格式 + 模型补语义，强格式字段以规则为准）</div>
+           <table><tr><th>引擎</th><th>字段级</th><th>必填</th><th>整单全对</th><th>说明</th></tr>${body}</table>`
+        : `<div style="font-size:12px;color:var(--warn)">未配置模型，无法做三模式对照。填好 .env 的 LLM_API_KEY 后重跑。</div>`;
+    } else {
+      $('#evalCompare').innerHTML = '';
+    }
+
+    const rows = (x, tag) => x ? x.by_field.map(v=>`<tr><td>${tag}</td><td>${v.label}</td>
+        <td>${v.accuracy===null?'—':(v.accuracy*100).toFixed(0)+'%'}</td>
+        <td>${v.total}</td><td>${v.missing}</td></tr>`).join('') : '';
+
+    $('#evalTable').innerHTML =
+      `<tr><th>样本集</th><th>字段</th><th>准确率</th><th>样本数</th><th>漏抽</th></tr>`
+      + rows(h, '留出集') + rows(t, '调优集');
+
+    toast(h ? `留出集（未调优）字段级 ${(h.field_accuracy*100).toFixed(1)}%` : '评测完成');
+    $('#evalCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+  } finally { btn.disabled=false; btn.textContent='跑评测'; }
+}
+
+async function runRisk(){
+  const r = await (await fetch('/api/risk-sim?monthly_tickets=2000&penalty=8300&threshold=0.9')).json();
+  if(!r.ok){ $('#riskOut').innerHTML = `<div class="banner">${r.reason}</div>`; return; }
+  const cls = r.net_monthly < 0 ? 'banner' : '';
+  $('#riskOut').innerHTML = `
+    <div class="${cls}" style="border-radius:8px;padding:10px 12px;font-size:13px;background:${r.net_monthly<0?'#fde8e8':'#f3f7fb'};border:1px solid ${r.net_monthly<0?'#f5c2c2':'#dbe6f2'};color:${r.net_monthly<0?'var(--err)':'var(--ink)'}">
+      <b>结论：${r.verdict}</b><br/>
+      若取消人工确认（阈值 ${(r.threshold*100).toFixed(0)}%，月票 ${r.monthly_tickets}）：
+      自动通过率 ${(r.auto_pass_rate*100).toFixed(0)}%，其中错单率 ${(r.error_rate_among_auto*100).toFixed(1)}%
+      → 每月预计错 <b>${r.expected_bad_tickets}</b> 单，损失 <b>${r.expected_monthly_loss.toLocaleString()}</b> 元；<br/>
+      省下人工 <b>${r.monthly_review_hours_saved}</b> 小时（约 ${r.monthly_review_cost_saved.toLocaleString()} 元）
+      → <b>净收益 ${r.net_monthly.toLocaleString()} 元/月</b>。<br/>
+      <span style="color:var(--muted);font-size:12px">${r.basis}</span>
+    </div>`;
+}
+
+async function splitTickets(){
+  const text = $('#raw').value.trim();
+  if(!text){ toast('请先粘贴内容'); return; }
+  const btn=$('#btnSplit'); btn.disabled=true; btn.textContent='拆分中…';
+  try{
+    const r = await fetch('/api/split', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text, use_llm: $('#useLlm').checked})});
+    const d = await r.json();
+    if(!d.count){ toast('没有可拆分的内容'); return; }
+    window.TICKETS = d.tickets;
+    $('#ticketBar').style.display = 'flex';
+    $('#ticketBar').style.gap = '6px';
+    $('#ticketBar').innerHTML = `<span style="font-size:12px;color:var(--muted);align-self:center">共 ${d.count} 票：</span>` +
+      d.tickets.map((t,i)=>`<span class="chip" onclick="showTicket(${i})">第 ${i+1} 票 · ${t.fields.client?.value || '未识别'}</span>`).join('');
+    showTicket(0);
+  } finally { btn.disabled=false; btn.textContent='多票拆分'; }
+}
+
+function showTicket(i){
+  const t = window.TICKETS && window.TICKETS[i];
+  if(!t) return;
+  render(t);
+  document.querySelectorAll('#ticketBar .chip').forEach((c,k)=>c.style.outline = k===i ? '2px solid var(--brand2)' : 'none');
+}
+
+$('#btnSplit').onclick = splitTickets;
+$('#btnRisk').onclick = runRisk;
+$('#btnMetrics').onclick = loadMetrics;
+$('#btnParse').onclick = parse;
+$('#fileInput').onchange = e => uploadFile(e.target.files[0]);
+
+const dz = document.querySelector('main section.card');
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.classList.add('dropzone');
+}));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.classList.remove('dropzone');
+}));
+dz.addEventListener('drop', e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f) uploadFile(f);
+});
+$('#btnConfirm').onclick = confirmDraft;
+$('#btnCsv').onclick = exportCsv;
+$('#btnEval').onclick = runEval;
+$('#btnClear').onclick = ()=>{ $('#raw').value=''; $('#fields').innerHTML='<div class="empty">左侧粘贴托书，点“解析”。</div>'; $('#summary').style.display='none'; $('#banner').innerHTML=''; $('#checks').style.display='none'; $('#confirmRow').style.display='none'; };
+document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter') parse(); });
+
+boot();
+</script>
+</body>
+</html>

@@ -13,3 +13,6 @@ llm_cache.json
 ai-copilot/.venv/
 ai-copilot/data/
 ai-copilot/.env
+
+# ai-copilot：演示脚本生成的临时图（每次运行都会重生成）
+ai-copilot/samples/fixtures/booking_degraded.png

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>批量导入 · 资料采集</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 18px;
+         display:flex;gap:12px;align-items:center}
+  header h1{font-size:15px;margin:0}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  main{max-width:1000px;margin:0 auto;padding:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .body{padding:14px}
+  input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit}
+  button{font:inherit;font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer;margin-right:8px}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .bar{height:8px;background:#eef1f4;border-radius:5px;overflow:hidden;margin:10px 0}
+  .bar i{display:block;height:100%;background:var(--ok);width:0}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc}
+  .st{padding:2px 8px;border-radius:999px;font-size:11.5px}
+  .st-pending{background:#eef1f4;color:var(--muted)}
+  .st-processing{background:#e8f0fb;color:var(--brand)}
+  .st-extracted{background:#e6f4ea;color:var(--ok)}
+  .st-failed{background:#fde8e8;color:var(--err)}
+  .kpi{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:100px;background:#fafbfc;border:1px solid var(--line);
+           border-radius:8px;padding:8px 10px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>批量导入 · 资料采集</h1>
+  <a href="/">← 返回工作台</a>
+</header>
+
+<main>
+  <div class="card">
+    <h2>① 新建批次</h2>
+    <div class="body">
+      <div class="row">
+        <input type="text" id="name" placeholder="批次名，例如：宏运-2026-10-档案室抽样" style="flex:1" />
+        <button class="primary" id="btnCreate">创建</button>
+      </div>
+      <div id="batches" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>② 上传第一批文件</h2>
+    <div class="body">
+      <div class="row">
+        <input type="file" id="files" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.csv" />
+        <button id="btnUpload">上传</button>
+        <span id="batchLabel" style="color:var(--muted);font-size:12px">未选择批次</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="progressCard" style="display:none">
+    <h2>③ 处理进度</h2>
+    <div class="body">
+      <div class="kpi" id="kpi"></div>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="row">
+        <button class="primary" id="btnProcess">开始处理</button>
+        <button id="btnRetry">重试失败</button>
+        <span id="procNote" style="color:var(--muted);font-size:12px"></span>
+      </div>
+      <div style="margin-top:12px"><table id="items"></table></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let CUR = null, TIMER = null;
+
+async function j(url, opt){ const r = await fetch(url, opt); return r.json(); }
+
+async function loadBatches(){
+  const d = await j('/api/batches');
+  $('#batches').innerHTML = d.items.length
+    ? d.items.map(b=>`<div class="row" style="padding:6px 0;border-bottom:1px solid #f0f2f5">
+        <b style="flex:1">${b.name}</b>
+        <span style="color:var(--muted);font-size:12px">${b.done}/${b.total} 已识别 · 失败 ${b.failed}</span>
+        <button data-id="${b.id}" class="pick">选择</button></div>`).join('')
+    : '<span style="color:var(--muted);font-size:12px">还没有批次</span>';
+  document.querySelectorAll('.pick').forEach(btn=>btn.onclick=()=>selectBatch(btn.dataset.id));
+}
+
+async function selectBatch(id){
+  CUR = id;
+  const d = await j('/api/batches/' + id);
+  $('#batchLabel').textContent = '当前批次：' + d.name;
+  $('#progressCard').style.display = 'block';
+  render(d);
+  if (TIMER) clearInterval(TIMER);
+  TIMER = setInterval(refresh, 1500);
+}
+
+async function refresh(){ if(!CUR) return; render(await j('/api/batches/' + CUR)); }
+
+function render(d){
+  const c = d.counts || {};
+  $('#kpi').innerHTML = `
+    <div><b>${d.items.length}</b><span>总数</span></div>
+    <div><b>${c.extracted||0}</b><span>已识别</span></div>
+    <div><b>${c.pending||0}</b><span>待处理</span></div>
+    <div><b style="color:${(c.failed||0)?'var(--err)':'inherit'}">${c.failed||0}</b><span>失败</span></div>
+    <div><b>${(d.progress*100).toFixed(0)}%</b><span>完成度</span></div>`;
+  $('#bar').style.width = (d.progress*100).toFixed(1) + '%';
+  $('#procNote').textContent = d.running ? '处理中…' : (d.progress>=1 ? '已完成' : '未开始');
+  $('#btnProcess').disabled = d.running;
+  $('#items').innerHTML = '<tr><th>文件</th><th>状态</th><th>单号</th><th>错误</th></tr>' +
+    d.items.map(i=>`<tr>
+      <td>${i.filename}</td>
+      <td><span class="st st-${i.status}">${i.status}</span></td>
+      <td class="mono">${i.run_id||''}</td>
+      <td style="color:var(--err);font-size:11.5px">${i.error||''}</td>
+    </tr>`).join('');
+}
+
+$('#btnCreate').onclick = async () => {
+  const name = $('#name').value.trim();
+  if(!name){ alert('填个批次名'); return; }
+  const b = await j('/api/batches', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})});
+  $('#name').value = '';
+  await loadBatches();
+  selectBatch(b.id);
+};
+
+$('#btnUpload').onclick = async () => {
+  if(!CUR){ alert('先选一个批次'); return; }
+  const fs = $('#files').files;
+  if(!fs.length){ alert('选文件'); return; }
+  const fd = new FormData();
+  for (const f of fs) fd.append('files', f);
+  $('#btnUpload').disabled = true;
+  try{
+    const r = await j(`/api/batches/${CUR}/upload`, {method:'POST', body: fd});
+    alert(`已上传 ${r.count} 个文件`);
+    refresh();
+  } finally { $('#btnUpload').disabled = false; $('#files').value=''; }
+};
+
+$('#btnProcess').onclick = async () => {
+  if(!CUR) return;
+  await j(`/api/batches/${CUR}/process?use_llm=false&mask=true`, {method:'POST'});
+  refresh();
+};
+
+$('#btnRetry').onclick = async () => {
+  if(!CUR) return;
+  const r = await j(`/api/batches/${CUR}/retry`, {method:'POST'});
+  alert(`重新排队 ${r.requeued} 个`);
+  refresh();
+};
+
+loadBatches();
+</script>
+</body>
+</html>

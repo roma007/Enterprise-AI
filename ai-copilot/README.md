@@ -290,6 +290,8 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **改单反查（B1）**：没写原单号时按箱号/客户+近 3 天找原单，多候选不猜 | `app/store.py` `find_amend_candidates` | `/api/extract` 的 `amend.candidates` |
 | **多票夹改单（B2）**：`原单 XX 有变` 也作为切分起点，拆完逐票判改单 | `app/splitter.py` + `/api/split` | `/api/split` |
 | **并发幂等（B3）**：同内容重复提交幂等返回，不同内容 409 | `app/store.py` `AlreadyConfirmed` | `/api/confirm` |
+| **脱敏（B4）**：公司/人名/手机/身份证/报关号自动替换，映射表持久化 | `app/masking.py` | `/api/mask` |
+| **批量导入（B5）**：一次传 N 份，后台处理，进度与失败重试 | `app/batchproc.py` | `/batch`、`/api/batches/*` |
 | **时间修复**：OCR 丢失分隔符（`2026110718:00`）也能解析 | `app/rules.py` `parse_datetime` | 单元验证 |
 | **人工兜底队列**：需复核但未确认的单 | `app/store.py` `queue` | `/api/queue` |
 | 模型网关（UA / 会话头 / 失败降级 / JSON 模式兼容） | `app/llm.py` | OpenCode 网关实测 |

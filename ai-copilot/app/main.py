@@ -252,6 +252,11 @@ def h5_page():
     return FileResponse(ROOT / "static" / "h5.html")
 
 
+@app.get("/batch")
+def batch_page():
+    return FileResponse(ROOT / "static" / "batch.html")
+
+
 @app.get("/api/wecom/callback", response_class=PlainTextResponse)
 def wecom_verify(msg_signature: str = "", timestamp: str = "", nonce: str = "",
                  echostr: str = ""):
@@ -399,6 +404,82 @@ def api_learn_queue(status: str = "pending", limit: int = 100):
 def api_learn_export(limit: int = 2000):
     """导出成评测集格式，可直接追加到 samples/ 后重跑评测。"""
     return learn_export(limit)
+
+
+@app.post("/api/mask")
+def api_mask(req: ExtractReq):
+    """P0：脱敏预览。同一实体在多次调用中映射到同一代号。"""
+    from .masking import MaskMap, fingerprint, mask_text
+
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="内容为空")
+    mm = MaskMap()
+    masked, stats = mask_text(req.text, mm)
+    mm.save()
+    return {"masked": masked, "stats": stats, "fingerprint": fingerprint(req.text)}
+
+
+@app.post("/api/batches")
+def api_create_batch(req: dict):
+    from .batchproc import new_batch
+
+    return new_batch(req.get("name", ""), req.get("note", ""))
+
+
+@app.get("/api/batches")
+def api_list_batches():
+    from .store import list_batches
+
+    return {"items": list_batches()}
+
+
+@app.get("/api/batches/{batch_id}")
+def api_batch_detail(batch_id: str):
+    from .batchproc import detail
+
+    d = detail(batch_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="批次不存在")
+    return d
+
+
+@app.post("/api/batches/{batch_id}/upload")
+async def api_batch_upload(batch_id: str, files: list[UploadFile] = File(...)):
+    """P1：一次上传多个文件。"""
+    from .batchproc import save_upload
+    from .store import get_batch
+
+    if not get_batch(batch_id):
+        raise HTTPException(status_code=404, detail="批次不存在")
+    if len(files) > 200:
+        raise HTTPException(status_code=413, detail="单次最多 200 个文件")
+
+    saved = []
+    for f in files:
+        data = await f.read()
+        if len(data) > MAX_UPLOAD:
+            raise HTTPException(status_code=413, detail=f"{f.filename} 超过 10MB")
+        saved.append(save_upload(batch_id, f.filename or "unnamed", data))
+    return {"count": len(saved), "items": saved}
+
+
+@app.post("/api/batches/{batch_id}/process")
+def api_batch_process(batch_id: str, use_llm: bool = False, mask: bool = True):
+    """启动后台处理；重复点击不会重复跑。"""
+    from .batchproc import start_processing
+    from .store import get_batch
+
+    if not get_batch(batch_id):
+        raise HTTPException(status_code=404, detail="批次不存在")
+    started = start_processing(batch_id, use_llm=use_llm, do_mask=mask)
+    return {"started": started, "note": "" if started else "该批次已在处理中"}
+
+
+@app.post("/api/batches/{batch_id}/retry")
+def api_batch_retry(batch_id: str):
+    from .batchproc import retry_failed
+
+    return {"requeued": retry_failed(batch_id)}
 
 
 @app.get("/api/queue")

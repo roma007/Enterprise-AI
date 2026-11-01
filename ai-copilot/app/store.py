@@ -61,6 +61,24 @@ CREATE TABLE IF NOT EXISTS learn_queue (
     labeled_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_learn_status ON learn_queue(status);
+CREATE TABLE IF NOT EXISTS batches (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    note        TEXT,
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS batch_items (
+    id          TEXT PRIMARY KEY,
+    batch_id    TEXT NOT NULL,
+    filename    TEXT NOT NULL,
+    path        TEXT,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    run_id      TEXT,
+    error       TEXT,
+    note        TEXT,
+    updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_batch_items ON batch_items(batch_id, status);
 """
 
 # 增量列：老库自动补，不用重建
@@ -505,6 +523,73 @@ def find_amend_candidates(fields: dict, days: int = 3, limit: int = 5) -> list[d
 
     out.sort(key=lambda x: (-x["score"], x["ts"]))
     return out[:limit]
+
+
+def create_batch(name: str, note: str = "") -> dict:
+    batch_id = uuid.uuid4().hex[:12]
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO batches (id, name, note, created_at) VALUES (?,?,?,?)",
+            (batch_id, name, note, _now()),
+        )
+    return {"id": batch_id, "name": name, "note": note}
+
+
+def add_batch_items(batch_id: str, filenames: list[str]) -> list[dict]:
+    out = []
+    with _conn() as conn:
+        for fn in filenames:
+            item_id = uuid.uuid4().hex[:12]
+            conn.execute(
+                "INSERT INTO batch_items (id, batch_id, filename, status, updated_at)"
+                " VALUES (?,?,?,'pending',?)",
+                (item_id, batch_id, fn, _now()),
+            )
+            out.append({"id": item_id, "filename": fn})
+    return out
+
+
+def update_item(item_id: str, status: str, **fields) -> None:
+    allowed = {"run_id", "error", "path", "note"}
+    sets = ["status=?", "updated_at=?"]
+    vals: list = [status, _now()]
+    for k, v in fields.items():
+        if k in allowed:
+            sets.append(f"{k}=?")
+            vals.append(v)
+    vals.append(item_id)
+    with _conn() as conn:
+        conn.execute(f"UPDATE batch_items SET {', '.join(sets)} WHERE id=?", vals)
+
+
+def batch_items(batch_id: str, status: str | None = None) -> list[dict]:
+    sql = "SELECT * FROM batch_items WHERE batch_id=?"
+    args: list = [batch_id]
+    if status:
+        sql += " AND status=?"
+        args.append(status)
+    sql += " ORDER BY rowid"
+    with _conn() as conn:
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
+def get_batch(batch_id: str) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM batches WHERE id=?", (batch_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_batches(limit: int = 50) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT b.id, b.name, b.created_at,"
+            " (SELECT COUNT(*) FROM batch_items i WHERE i.batch_id=b.id) total,"
+            " (SELECT COUNT(*) FROM batch_items i WHERE i.batch_id=b.id AND i.status='extracted') done,"
+            " (SELECT COUNT(*) FROM batch_items i WHERE i.batch_id=b.id AND i.status='failed') failed"
+            " FROM batches b ORDER BY b.created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def audit(run_id: str) -> dict:

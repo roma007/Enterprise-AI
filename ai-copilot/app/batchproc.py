@@ -50,18 +50,19 @@ def save_upload(batch_id: str, filename: str, data: bytes) -> dict:
     return {"id": item["id"], "filename": filename, "size": len(data)}
 
 
-def start_processing(batch_id: str, use_llm: bool = False, do_mask: bool = True) -> bool:
+def start_processing(batch_id: str, use_llm: bool = False, do_mask: bool = True,
+                     actor: str = "") -> bool:
     """启动后台处理。返回 False 表示该批次已在处理中。"""
     with _lock:
         if batch_id in _running:
             return False
         _running.add(batch_id)
-    t = threading.Thread(target=_run, args=(batch_id, use_llm, do_mask), daemon=True)
+    t = threading.Thread(target=_run, args=(batch_id, use_llm, do_mask, actor), daemon=True)
     t.start()
     return True
 
 
-def _run(batch_id: str, use_llm: bool, do_mask: bool) -> None:
+def _run(batch_id: str, use_llm: bool, do_mask: bool, actor: str = "") -> None:
     mm = MaskMap()
     batch = get_batch(batch_id) or {}
     kind = batch.get("kind") or "booking"
@@ -93,7 +94,7 @@ def _run(batch_id: str, use_llm: bool, do_mask: bool) -> None:
                         fv.value = masked_fields.get(k) or fv.value
                     mm.save()
 
-                run_id = save_run(store_text, draft, kind=kind)
+                run_id = save_run(store_text, draft, kind=kind, actor=actor)
                 update_item(item["id"], "extracted", run_id=run_id,
                             note=f"指纹 {fingerprint(res.text)}")
                 time.sleep(0.05)

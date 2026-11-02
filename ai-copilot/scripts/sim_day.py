@@ -15,15 +15,16 @@ from __future__ import annotations
 
 import json
 import sys
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.evalrun import load_samples  # noqa: E402
+from scripts._session import get_json, opener_for, post_json  # noqa: E402
 
 BASE = "http://127.0.0.1:8790"
+OP = opener_for(BASE)
 HANDLE_MS = {"auto": 9_000, "single": 34_000, "double": 62_000, "blocked": 110_000}
 
 MULTI = """1. 客户：宏远国际货代  单号：HY-1105  箱型：40HQ  箱号：CSQU3054383  提箱地：北仑二期堆场  卸货地：宁波北仑春晓工业园3号仓  截港：2026-12-07 18:00
@@ -38,13 +39,11 @@ AMEND = """原单 HY2026110501 有变：
 
 
 def post(path: str, body: dict) -> dict:
-    req = urllib.request.Request(BASE + path, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(req, timeout=120))
+    return post_json(OP, BASE + path, body)
 
 
 def get(path: str) -> dict:
-    return json.load(urllib.request.urlopen(BASE + path, timeout=60))
+    return get_json(OP, BASE + path)
 
 
 def main() -> None:

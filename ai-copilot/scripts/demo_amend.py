@@ -6,15 +6,16 @@
 """
 from __future__ import annotations
 
-import json
 import sys
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from scripts._session import get_json, opener_for, post_json  # noqa: E402
+
 BASE = "http://127.0.0.1:8790"
+OP = opener_for(BASE)
 
 ORIGINAL = """客户：宏远国际货代
 委托单号：HY-1105
@@ -34,9 +35,7 @@ AMEND = """原单 HY-1105 有变：
 
 
 def post(path: str, body: dict) -> dict:
-    req = urllib.request.Request(BASE + path, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(req, timeout=60))
+    return post_json(OP, BASE + path, body)
 
 
 def main() -> None:

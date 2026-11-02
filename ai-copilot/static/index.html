@@ -86,6 +86,9 @@
   <span class="sub">原文 → 草稿 → 规则挑错 → 人工确认 → 留痕</span>
   <span id="engineBadge" class="badge">检测引擎中…</span>
   <span style="flex:1"></span>
+  <span class="badge" id="userChip" style="display:none"></span>
+  <a href="/users" id="userLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">用户</a>
+  <a href="#" id="logoutLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">退出</a>
   <button class="ghost" id="btnMetrics" style="padding:4px 12px;font-size:12px">运行指标</button>
   <a href="/api/report.md" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none">月报 ↗</a>
 </header>
@@ -162,7 +165,27 @@ function toast(msg){
   clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 
+async function loadMe(){
+  try{
+    const me = await (await fetch('/api/me')).json();
+    if(!me || !me.id) return;
+    const chip = $('#userChip');
+    chip.textContent = (me.name || me.email) + ' · ' + (me.role_label || me.role);
+    chip.style.display = '';
+    $('#logoutLink').style.display = '';
+    if(me.role === 'admin'){
+      $('#userLink').style.display = '';
+    }
+    $('#logoutLink').onclick = async e => {
+      e.preventDefault();
+      await fetch('/api/auth/logout', {method:'POST'});
+      location.href = '/login';
+    };
+  }catch(e){}
+}
+
 async function boot(){
+  loadMe();
   const meta = await (await fetch('/api/meta')).json();
   META = meta;
   const b = $('#engineBadge');

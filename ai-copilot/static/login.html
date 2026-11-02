@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>登录 · 托书 AI 录入</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);
+       color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  .card{width:360px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:26px 24px;box-shadow:0 6px 24px rgba(20,40,70,.06)}
+  h1{font-size:16px;margin:0 0 4px}
+  p.sub{color:var(--muted);font-size:12px;margin:0 0 18px}
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
+  input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;font:inherit;outline:none}
+  input:focus{border-color:var(--brand)}
+  button{width:100%;margin-top:18px;padding:11px;border-radius:8px;border:1px solid var(--brand);
+         background:var(--brand);color:#fff;font:inherit;font-size:14px;cursor:pointer}
+  button:disabled{opacity:.6}
+  .err{margin-top:12px;padding:9px 11px;border-radius:8px;background:#fde8e8;color:var(--err);font-size:12.5px;display:none}
+  .foot{margin-top:16px;font-size:11.5px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<form class="card" id="f">
+  <h1>托书 AI 录入</h1>
+  <p class="sub">请使用管理员分配的账号登录</p>
+
+  <label>邮箱</label>
+  <input id="email" type="text" autocomplete="username" placeholder="admin@local" />
+  <label>密码</label>
+  <input id="password" type="password" autocomplete="current-password" placeholder="至少 10 位" />
+
+  <button id="btn" type="submit">登录</button>
+  <div class="err" id="err"></div>
+  <div class="foot">首次启动时，初始密码会打印在服务端控制台</div>
+</form>
+
+<script>
+const $ = s => document.querySelector(s);
+$('#f').onsubmit = async e => {
+  e.preventDefault();
+  const email = $('#email').value.trim();
+  const password = $('#password').value;
+  if(!email || !password){ show('请填写邮箱和密码'); return; }
+  $('#btn').disabled = true; $('#btn').textContent = '登录中…';
+  try{
+    const r = await fetch('/api/auth/login', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email, password})});
+    if(!r.ok){
+      const t = await r.text();
+      let msg = '登录失败';
+      try { msg = JSON.parse(t).detail || msg; } catch(e){}
+      show(msg); return;
+    }
+    const next = new URLSearchParams(location.search).get('next') || '/';
+    location.href = next;
+  } finally { $('#btn').disabled = false; $('#btn').textContent = '登录'; }
+};
+function show(m){ const e = $('#err'); e.textContent = m; e.style.display = 'block'; }
+</script>
+</body>
+</html>

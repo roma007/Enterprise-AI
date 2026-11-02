@@ -80,6 +80,27 @@ CREATE TABLE IF NOT EXISTS batch_items (
     updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_batch_items ON batch_items(batch_id, status);
+CREATE TABLE IF NOT EXISTS users (
+    id          TEXT PRIMARY KEY,
+    email       TEXT NOT NULL UNIQUE,
+    name        TEXT,
+    role        TEXT NOT NULL DEFAULT 'viewer',
+    pw_hash     TEXT NOT NULL,
+    pw_salt     TEXT NOT NULL,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL,
+    last_login  TEXT
+);
+CREATE TABLE IF NOT EXISTS user_sessions (
+    jti         TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    revoked     INTEGER NOT NULL DEFAULT 0,
+    ua          TEXT,
+    ip          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
 """
 
 # 增量列：老库自动补，不用重建
@@ -98,6 +119,8 @@ _EXTRA_COLUMNS = (
     ("runs", "kind", "TEXT DEFAULT 'booking'"),
     ("learn_queue", "corrected", "INTEGER DEFAULT 0"),
     ("batches", "kind", "TEXT DEFAULT 'booking'"),
+    ("runs", "actor", "TEXT DEFAULT ''"),
+    ("runs", "confirmed_by", "TEXT DEFAULT ''"),
 )
 
 
@@ -120,7 +143,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def save_run(raw: str, draft: Draft, kind: str = "booking") -> str:
+def save_run(raw: str, draft: Draft, kind: str = "booking", actor: str = "") -> str:
     run_id = uuid.uuid4().hex[:12]
     text_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     fields_json = json.dumps(
@@ -132,7 +155,7 @@ def save_run(raw: str, draft: Draft, kind: str = "booking") -> str:
         conn.execute(
             "INSERT INTO runs (id, ts, engine, text_hash, chars, elapsed_ms, tokens,"
             " errors, warns, review_level, model, prompt_ver, pipeline_ver,"
-            " raw_text, fields_json, kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " raw_text, fields_json, kind, actor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 run_id,
                 _now(),
@@ -150,6 +173,7 @@ def save_run(raw: str, draft: Draft, kind: str = "booking") -> str:
                 raw,
                 fields_json,
                 kind,
+                actor,
             ),
         )
         # 入口捕获过同一份原文 → 关联，用于算绕过率
@@ -195,6 +219,7 @@ def save_feedback(
     auto: dict[str, str],
     final: dict[str, str],
     handle_ms: int | None = None,
+    actor: str = "",
 ) -> dict:
     changed = {k: (auto.get(k, ""), v) for k, v in final.items() if (auto.get(k, "") or "") != (v or "")}
     ts = _now()
@@ -224,9 +249,9 @@ def save_feedback(
             raise AlreadyConfirmed(run_id, int(row["version"] or 1))
 
         conn.execute(
-            "UPDATE runs SET confirmed=1, handle_ms=?, forced=?,"
+            "UPDATE runs SET confirmed=1, handle_ms=?, forced=?, confirmed_by=?,"
             " version=COALESCE(version,0)+1 WHERE id=?",
-            (handle_ms, 1 if level == "blocked" else 0, run_id),
+            (handle_ms, 1 if level == "blocked" else 0, actor, run_id),
         )
         for key, (a, f) in changed.items():
             conn.execute(
@@ -651,6 +676,108 @@ def confirmed_waybills(limit: int = 5000) -> list[dict]:
             "freight": (f.get("freight") or {}).get("value") or "",
         })
     return out
+
+
+# ---------------- 用户与会话（A1） ----------------
+
+def create_user(email: str, name: str, role: str, pw_hash: str, pw_salt: str) -> str:
+    uid = uuid.uuid4().hex[:12]
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO users (id, email, name, role, pw_hash, pw_salt, active, created_at)"
+            " VALUES (?,?,?,?,?,?,1,?)",
+            (uid, email.strip().lower(), name, role, pw_hash, pw_salt, _now()),
+        )
+    return uid
+
+
+def get_user_by_email(email: str) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email.strip().lower(),)).fetchone()
+    return dict(row) if row else None
+
+
+def get_user(uid: str) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_users() -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, email, name, role, active, created_at, last_login"
+            " FROM users ORDER BY created_at"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_user(uid: str, **fields) -> None:
+    allowed = {"name", "role", "active"}
+    sets, vals = [], []
+    for k, v in fields.items():
+        if k in allowed and v is not None:
+            sets.append(f"{k}=?")
+            vals.append(v)
+    if not sets:
+        return
+    vals.append(uid)
+    with _conn() as conn:
+        conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id=?", vals)
+
+
+def set_password(uid: str, pw_hash: str, pw_salt: str) -> None:
+    with _conn() as conn:
+        conn.execute("UPDATE users SET pw_hash=?, pw_salt=? WHERE id=?", (pw_hash, pw_salt, uid))
+
+
+def touch_login(uid: str) -> None:
+    with _conn() as conn:
+        conn.execute("UPDATE users SET last_login=? WHERE id=?", (_now(), uid))
+
+
+def count_users() -> int:
+    with _conn() as conn:
+        return conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
+
+
+def create_session(jti: str, user_id: str, expires_at: int, ua: str = "", ip: str = "") -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO user_sessions (jti, user_id, created_at, expires_at, ua, ip)"
+            " VALUES (?,?,?,?,?,?)",
+            (jti, user_id, _now(), expires_at, ua[:200], ip[:64]),
+        )
+
+
+def session_valid(jti: str) -> bool:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT revoked, expires_at FROM user_sessions WHERE jti=?", (jti,)
+        ).fetchone()
+    if not row:
+        return False
+    import time as _t
+    return not row["revoked"] and row["expires_at"] > int(_t.time())
+
+
+def revoke_session(jti: str) -> None:
+    with _conn() as conn:
+        conn.execute("UPDATE user_sessions SET revoked=1 WHERE jti=?", (jti,))
+
+
+def revoke_user_sessions(user_id: str, except_jti: str = "") -> int:
+    with _conn() as conn:
+        if except_jti:
+            cur = conn.execute(
+                "UPDATE user_sessions SET revoked=1 WHERE user_id=? AND jti<>? AND revoked=0",
+                (user_id, except_jti),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE user_sessions SET revoked=1 WHERE user_id=? AND revoked=0", (user_id,)
+            )
+    return cur.rowcount
 
 
 def audit(run_id: str) -> dict:

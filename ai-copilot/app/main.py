@@ -8,7 +8,14 @@ from __future__ import annotations
 import json
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+import os
+import secrets
+
+from fastapi.responses import (
+    FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
+)
+
+from . import auth
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -20,9 +27,12 @@ from .evalrun import SAMPLE_PATH, run_all
 from .extract import extract
 from .schema import BLOCKING_KEYS, FIELD_KEYS, LABELS, SPECS
 from .store import (
-    AlreadyConfirmed, audit, audit_csv, dump_feedback, find_amend_candidates,
-    find_by_booking_no, init_db, learn_export, learn_queue, learn_stats, metrics,
-    queue, recent, record_inbound, report_md, risk_sim, save_feedback, save_run, stats,
+    AlreadyConfirmed, audit, audit_csv, count_users, create_session, create_user,
+    dump_feedback, find_amend_candidates, find_by_booking_no, get_user,
+    get_user_by_email, init_db, learn_export, learn_queue, learn_stats, list_users,
+    metrics, queue, recent, record_inbound, report_md, revoke_session,
+    revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
+    set_password, stats, touch_login, update_user,
 )
 
 MAX_UPLOAD = 10 * 1024 * 1024  # 10 MB
@@ -34,6 +44,20 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    if count_users() == 0:
+        email = os.getenv("ADMIN_EMAIL", "admin@local").strip() or "admin@local"
+        pw = os.getenv("ADMIN_PASSWORD", "").strip()
+        generated = not pw
+        if generated:
+            pw = secrets.token_urlsafe(9)
+        h, salt = auth.hash_password(pw)
+        create_user(email, "系统管理员", "admin", h, salt)
+        if generated:
+            print("=" * 58)
+            print(f"[引导] 初始管理员：{email}")
+            print(f"[引导] 初始密码：{pw}")
+            print("[引导] 只显示一次，请立即登录并修改")
+            print("=" * 58)
 
 
 class InboundReq(BaseModel):
@@ -51,6 +75,156 @@ class ConfirmReq(BaseModel):
     auto: dict[str, str] = {}
     final: dict[str, str] = {}
     handle_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if auth.is_public(path):
+        return await call_next(request)
+
+    token = ""
+    head = request.headers.get("authorization", "")
+    if head.lower().startswith("bearer "):
+        token = head[7:].strip()
+    if not token:
+        token = request.cookies.get("sid", "")
+
+    payload = auth.verify(token) if token else None
+    user = None
+    if payload and session_valid(payload.get("jti", "")):
+        u = get_user(payload.get("uid", ""))
+        if u and u.get("active"):
+            user = u
+
+    if not user:
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "未登录或会话已失效"}, status_code=401)
+        return RedirectResponse("/login")
+
+    ok, why = auth.allowed(user["role"], request.method, path)
+    if not ok:
+        return JSONResponse({"detail": why}, status_code=403)
+
+    request.state.user = user
+    request.state.jti = payload.get("jti", "")
+    return await call_next(request)
+
+
+def _uid(request: Request) -> str:
+    u = getattr(request.state, "user", None) or {}
+    return u.get("id", "")
+
+
+@app.get("/users")
+def users_page():
+    return FileResponse(ROOT / "static" / "users.html")
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(ROOT / "static" / "login.html")
+
+
+class LoginReq(BaseModel):
+    email: str = Field(min_length=3, max_length=120)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/auth/login")
+def api_login(req: LoginReq, request: Request):
+    u = get_user_by_email(req.email)
+    if not u or not u.get("active") or not auth.verify_password(
+            req.password, u["pw_hash"], u["pw_salt"]):
+        raise HTTPException(status_code=401, detail="邮箱或密码不正确")
+
+    payload = auth.new_payload(u["id"])
+    create_session(payload["jti"], u["id"], payload["exp"],
+                   request.headers.get("user-agent", ""),
+                   request.client.host if request.client else "")
+    touch_login(u["id"])
+    resp = JSONResponse({
+        "ok": True,
+        "user": {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]},
+    })
+    resp.set_cookie("sid", auth.sign(payload), httponly=True, samesite="lax",
+                    max_age=auth.TOKEN_TTL, path="/")
+    return resp
+
+
+@app.post("/api/auth/logout")
+def api_logout(request: Request):
+    jti = getattr(request.state, "jti", "")
+    if jti:
+        revoke_session(jti)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("sid", path="/")
+    return resp
+
+
+@app.get("/api/me")
+def api_me(request: Request):
+    u = request.state.user
+    return {"id": u["id"], "email": u["email"], "name": u["name"],
+            "role": u["role"], "role_label": auth.ROLE_LABEL.get(u["role"], u["role"])}
+
+
+class UserReq(BaseModel):
+    email: str = Field(min_length=3, max_length=120)
+    name: str = ""
+    role: str = "viewer"
+    password: str = Field(min_length=10, max_length=200)
+
+
+@app.get("/api/users")
+def api_users():
+    return {"items": list_users(), "roles": [
+        {"key": r, "label": auth.ROLE_LABEL[r]} for r in auth.ROLES]}
+
+
+@app.post("/api/users")
+def api_user_create(req: UserReq):
+    if req.role not in auth.ROLES:
+        raise HTTPException(status_code=400, detail="角色不合法")
+    ok, why = auth.password_ok(req.password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=why)
+    if get_user_by_email(req.email):
+        raise HTTPException(status_code=409, detail="该邮箱已存在")
+    h, salt = auth.hash_password(req.password)
+    uid = create_user(req.email, req.name, req.role, h, salt)
+    return {"id": uid, "email": req.email.strip().lower(), "role": req.role}
+
+
+@app.patch("/api/users/{uid}")
+def api_user_update(uid: str, req: dict, request: Request):
+    if uid == request.state.user["id"] and req.get("role"):
+        raise HTTPException(status_code=400, detail="不能修改自己的角色")
+    if req.get("role") and req["role"] not in auth.ROLES:
+        raise HTTPException(status_code=400, detail="角色不合法")
+    update_user(uid, **{k: req.get(k) for k in ("name", "role", "active") if k in req})
+    if req.get("active") is False:
+        revoke_user_sessions(uid)
+    return {"ok": True}
+
+
+class PasswordReq(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=10, max_length=200)
+
+
+@app.post("/api/auth/password")
+def api_password(req: PasswordReq, request: Request):
+    u = request.state.user
+    if not auth.verify_password(req.old_password, u["pw_hash"], u["pw_salt"]):
+        raise HTTPException(status_code=400, detail="原密码不正确")
+    ok, why = auth.password_ok(req.new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=why)
+    h, salt = auth.hash_password(req.new_password)
+    set_password(u["id"], h, salt)
+    revoke_user_sessions(u["id"], except_jti=getattr(request.state, "jti", ""))
+    return {"ok": True, "note": "其他设备已强制下线"}
 
 
 @app.get("/")
@@ -164,7 +338,7 @@ def _resolve_amend(text: str, draft):
 
 
 @app.post("/api/extract")
-def api_extract(req: ExtractReq):
+def api_extract(req: ExtractReq, request: Request):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="托书内容为空")
     draft = extract(req.text, allow_llm=req.use_llm)
@@ -179,12 +353,12 @@ def api_extract(req: ExtractReq):
         # 不吞异常：改单解析失败要能被看见，否则会静默当新单处理
         extra["amend"] = {"error": f"{type(exc).__name__}: {exc}", "diff": []}
 
-    run_id = save_run(req.text, draft)
+    run_id = save_run(req.text, draft, actor=_uid(request))
     return _draft_response(draft, run_id, extra)
 
 
 @app.post("/api/split")
-def api_split(req: ExtractReq):
+def api_split(req: ExtractReq, request: Request):
     """D8：把一条消息里的多票拆开，逐票解析。"""
     from .splitter import split_tickets
 
@@ -202,13 +376,13 @@ def api_split(req: ExtractReq):
                 extra["amend"] = info
         except Exception as exc:  # noqa: BLE001
             extra["amend"] = {"error": f"{type(exc).__name__}: {exc}", "diff": []}
-        rid = save_run(seg, d)
+        rid = save_run(seg, d, actor=_uid(request))
         tickets.append(_draft_response(d, rid, extra))
     return {"count": len(tickets), "tickets": tickets}
 
 
 @app.post("/api/extract/upload")
-async def api_upload(file: UploadFile = File(...), use_llm: bool = True):
+async def api_upload(request: Request, file: UploadFile = File(...), use_llm: bool = True):
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="文件为空")
@@ -224,7 +398,7 @@ async def api_upload(file: UploadFile = File(...), use_llm: bool = True):
         raise HTTPException(status_code=422, detail="未能从文件中识别出文字，请检查清晰度或改用粘贴文本")
 
     draft = extract(res.text, allow_llm=use_llm)
-    run_id = save_run(res.text, draft)
+    run_id = save_run(res.text, draft, actor=_uid(request))
     return _draft_response(draft, run_id, {
         "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
         "raw_text": res.text,
@@ -232,9 +406,9 @@ async def api_upload(file: UploadFile = File(...), use_llm: bool = True):
 
 
 @app.post("/api/confirm")
-def api_confirm(req: ConfirmReq):
+def api_confirm(req: ConfirmReq, request: Request):
     try:
-        return save_feedback(req.run_id, req.auto, req.final, req.handle_ms)
+        return save_feedback(req.run_id, req.auto, req.final, req.handle_ms, actor=_uid(request))
     except AlreadyConfirmed as exc:
         raise HTTPException(
             status_code=409,
@@ -289,7 +463,7 @@ async def wecom_message(request: Request, msg_signature: str = "", timestamp: st
 
     record_inbound(content, source="wecom")
     draft = extract(content)
-    run_id = save_run(content, draft)
+    run_id = save_run(content, draft, actor="wecom")
     reply = wecom.format_result(draft, run_id)
     return Response(
         content=wecom.build_text_reply(msg["from_user"], msg["to_user"], reply),
@@ -522,14 +696,14 @@ async def api_batch_upload(batch_id: str, files: list[UploadFile] = File(...)):
 
 
 @app.post("/api/batches/{batch_id}/process")
-def api_batch_process(batch_id: str, use_llm: bool = False, mask: bool = True):
+def api_batch_process(batch_id: str, request: Request, use_llm: bool = False, mask: bool = True):
     """启动后台处理；重复点击不会重复跑。"""
     from .batchproc import start_processing
     from .store import get_batch
 
     if not get_batch(batch_id):
         raise HTTPException(status_code=404, detail="批次不存在")
-    started = start_processing(batch_id, use_llm=use_llm, do_mask=mask)
+    started = start_processing(batch_id, use_llm=use_llm, do_mask=mask, actor=_uid(request))
     return {"started": started, "note": "" if started else "该批次已在处理中"}
 
 
@@ -579,19 +753,19 @@ def _invoice_response(draft, run_id: str, extra: dict | None = None) -> dict:
 
 
 @app.post("/api/invoice/extract")
-def api_invoice_extract(req: ExtractReq):
+def api_invoice_extract(req: ExtractReq, request: Request):
     """04b：发票识别。复用托书底座，只换 schema 与校验。"""
     from .invoice import extract_invoice
 
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="发票内容为空")
     draft = extract_invoice(req.text, allow_llm=req.use_llm)
-    run_id = save_run(req.text, draft, kind="invoice")
+    run_id = save_run(req.text, draft, kind="invoice", actor=_uid(request))
     return _invoice_response(draft, run_id)
 
 
 @app.post("/api/invoice/upload")
-async def api_invoice_upload(file: UploadFile = File(...), use_llm: bool = True):
+async def api_invoice_upload(request: Request, file: UploadFile = File(...), use_llm: bool = True):
     from .invoice import extract_invoice
 
     data = await file.read()
@@ -606,7 +780,7 @@ async def api_invoice_upload(file: UploadFile = File(...), use_llm: bool = True)
     if not res.text.strip():
         raise HTTPException(status_code=422, detail="未能从文件中识别出文字")
     draft = extract_invoice(res.text, allow_llm=use_llm)
-    run_id = save_run(res.text, draft, kind="invoice")
+    run_id = save_run(res.text, draft, kind="invoice", actor=_uid(request))
     return _invoice_response(draft, run_id, {
         "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
         "raw_text": res.text,

@@ -31,6 +31,8 @@
 - nginx `-t` 通过；HTTPS 200、HTTP 301、Cookie `Secure`、
   `/metrics` token 保护 4/4 通过
 - smoke 15 项全绿；三样本集回归未变
+- 新增 `docs/验收记录-2026-11-02.md`：31 项 API、13 步演示、
+  回写平台、HTTPS、备份的完整证据与复现命令
 
 ---
 

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>三单匹配 · 订单 / 运单 / 发票</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:14px;align-items:center}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{padding:16px;max-width:1300px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:9px 12px;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:220px;border:0;padding:10px 12px;resize:vertical;
+           font:12.5px/1.6 ui-monospace,Menlo,monospace;outline:none}
+  .bar{display:flex;gap:10px;align-items:center;padding:14px 0;flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .result{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:14px;display:none}
+  .result h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .verdict{padding:14px;font-size:15px;font-weight:600}
+  .v-pass{background:#e6f4ea;color:var(--ok)}
+  .v-review{background:#fdf3e2;color:var(--warn)}
+  .v-blocked{background:#fde8e8;color:var(--err)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600}
+  .tag{padding:2px 9px;border-radius:999px;font-size:11.5px}
+  .t-match{background:#e6f4ea;color:var(--ok)}
+  .t-mismatch{background:#fde8e8;color:var(--err)}
+  .t-unknown{background:#eef1f4;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>三单匹配</h1>
+  <span class="sub">订单 ↔ 运单 ↔ 发票 · 金额与箱号自动核对</span>
+  <a href="/">← 托书</a>
+  <a href="/invoice" style="margin-left:14px">发票</a>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <section class="card">
+      <h2>① 订单（托书）</h2>
+      <textarea id="booking">客户：宁波宏运集卡运输有限公司
+委托单号：HY-1105
+箱型：40HQ
+箱量：2
+箱号：CSQU3054383,TCLU1234568
+运费：2600</textarea>
+    </section>
+    <section class="card">
+      <h2>② 运单（TMS）</h2>
+      <textarea id="waybill">客户：宁波宏运集卡运输有限公司
+箱号：CSQU3054383,TCLU1234568
+运费：2600</textarea>
+    </section>
+    <section class="card">
+      <h2>③ 发票</h2>
+      <textarea id="invoice">购买方名称：宁波宏运集卡运输有限公司
+纳税人识别号：9133020662M3QQRL4D
+金额：2300.88
+税率：13%
+税额：299.12
+价税合计：2600.00</textarea>
+    </section>
+  </div>
+
+  <div class="bar">
+    <button class="primary" id="btnMatch">开始匹配</button>
+    <button id="btnDemo">跑三种演示</button>
+    <span id="hint" style="color:var(--muted);font-size:12px"></span>
+  </div>
+
+  <section class="result" id="result">
+    <h2>匹配结果</h2>
+    <div class="verdict" id="verdict"></div>
+    <table id="dims"></table>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+
+function renderDim(d){
+  const tag = {match:'一致', mismatch:'不符', unknown:'无法比对'}[d.result] || d.result;
+  return `<tr><td>${d.label}</td>
+    <td><span class="tag t-${d.result}">${tag}</span></td>
+    <td>${d.detail||''}</td></tr>`;
+}
+
+function show(r){
+  const v = {pass:'✅ 三单一致，可以付款', review:'🟡 有软性差异，需人工确认',
+             blocked:'🔴 存在硬性不符，不能付款'}[r.overall] || r.overall;
+  $('#result').style.display='block';
+  $('#verdict').className = 'verdict v-' + r.overall;
+  $('#verdict').textContent = v;
+  $('#dims').innerHTML = '<tr><th>维度</th><th>结果</th><th>说明</th></tr>' +
+    r.dimensions.map(renderDim).join('');
+}
+
+$('#btnMatch').onclick = async () => {
+  const body = {
+    booking_text: $('#booking').value,
+    waybill_text: $('#waybill').value,
+    invoice_text: $('#invoice').value
+  };
+  $('#btnMatch').disabled = true; $('#hint').textContent = '匹配中…';
+  try{
+    const r = await fetch('/api/threeway/match', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!r.ok){ toast('失败：' + (await r.text()).slice(0,80)); return; }
+    show(await r.json());
+  } finally { $('#btnMatch').disabled=false; $('#hint').textContent=''; }
+};
+
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/threeway/demo')).json();
+  const name = Object.keys(d)[0];
+  show(d[name]);
+  toast('演示：' + Object.entries(d).map(([k,v])=>`${k}=${v.overall}`).join(' · '));
+};
+</script>
+</body>
+</html>

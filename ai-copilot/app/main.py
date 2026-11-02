@@ -618,6 +618,69 @@ def invoice_page():
     return FileResponse(ROOT / "static" / "invoice.html")
 
 
+@app.post("/api/threeway/match")
+def api_threeway(req: dict):
+    """三单匹配：订单 ↔ 运单 ↔ 发票。
+
+    入参可直接传结构化字段；也可传原文（booking_text / invoice_text），服务端先抽取。
+    """
+    from .invoice import extract_invoice
+    from .threeway import match, verdict_text
+
+    booking = dict(req.get("booking") or {})
+    waybill = dict(req.get("waybill") or {})
+    invoice = dict(req.get("invoice") or {})
+
+    if req.get("booking_text"):
+        d = extract(req["booking_text"], allow_llm=bool(req.get("use_llm", False)))
+        booking = {k: (v.value or "") for k, v in d.fields.items()}
+    if req.get("invoice_text"):
+        d = extract_invoice(req["invoice_text"], allow_llm=bool(req.get("use_llm", False)))
+        invoice = {k: (v.value or "") for k, v in d.fields.items()}
+    if req.get("waybill_text"):
+        d = extract(req["waybill_text"], allow_llm=bool(req.get("use_llm", False)))
+        waybill = {k: (v.value or "") for k, v in d.fields.items()}
+
+    if not booking and not waybill and not invoice:
+        raise HTTPException(status_code=400, detail="至少提供一方数据")
+
+    result = match(booking, waybill, invoice)
+    result["verdict"] = verdict_text(result)
+    return result
+
+
+@app.get("/api/threeway/demo")
+def api_threeway_demo():
+    """跑三种情况：一致 / 金额不符 / 箱号不符。"""
+    from .threeway import match, verdict_text
+
+    base_booking = {"client": "宁波宏运集卡运输有限公司", "container_no": "CSQU3054383,TCLU1234568",
+                    "container_qty": "2", "freight": "2600"}
+    base_waybill = {"client": "宁波宏运集卡运输有限公司", "container_no": "CSQU3054383,TCLU1234568",
+                    "freight": "2600", "amount": "2600"}
+    base_invoice = {"buyer_name": "宁波宏运集卡运输有限公司", "total_amount": "2600.00",
+                    "amount": "2300.88", "tax_amount": "299.12"}
+
+    cases = {
+        "正常一致": (base_booking, base_waybill, base_invoice),
+        "金额不符": (base_booking, {**base_waybill, "freight": "2400"},
+                 {**base_invoice, "total_amount": "2600.00"}),
+        "箱号不符": (base_booking, {**base_waybill, "container_no": "CSQU3054383"},
+                 base_invoice),
+    }
+    out = {}
+    for name, (b, w, i) in cases.items():
+        r = match(b, w, i)
+        out[name] = {"overall": r["overall"], "verdict": verdict_text(r),
+                     "dimensions": r["dimensions"]}
+    return out
+
+
+@app.get("/threeway")
+def threeway_page():
+    return FileResponse(ROOT / "static" / "threeway.html")
+
+
 @app.get("/api/queue")
 def api_queue(limit: int = 50):
     """人工兜底队列：需复核但未确认的单。"""

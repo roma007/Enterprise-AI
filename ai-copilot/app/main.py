@@ -1,15 +1,16 @@
 """会客 demo 服务。
 
-刻意只做一件事：托书原文 → 结构化草稿 → 规则挑错 → 人工确认 → 留痕。
-没有登录、没有权限、没有多租户 —— 演示阶段加这些只会拖慢交付。
+一件事：托书原文 → 结构化草稿 → 规则挑错 → 人工确认 → 留痕。
+登录与角色见 app/auth.py；阈值见 app/thresholds.py；原件存储见 app/storage.py。
 """
 from __future__ import annotations
 
 import json
-
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 import os
 import secrets
+from pathlib import Path
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 
 from fastapi.responses import (
     FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
@@ -75,6 +76,12 @@ class ConfirmReq(BaseModel):
     auto: dict[str, str] = {}
     final: dict[str, str] = {}
     handle_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+
+
+@app.exception_handler(storage.StorageError)
+async def _storage_error(request: Request, exc: storage.StorageError):
+    """存储后端不可用（缺 boto3 / 配置错）时给可读提示，不抛 500 堆栈。"""
+    return JSONResponse({"detail": str(exc)}, status_code=503)
 
 
 @app.middleware("http")
@@ -823,16 +830,29 @@ async def api_invoice_upload(request: Request, file: UploadFile = File(...), use
 
 @app.get("/api/files/{rel:path}")
 def api_file(rel: str):
-    """回读原件（A4）：审计时用来看"系统当时看到的到底是什么"。"""
-    p = storage.resolve(rel)
-    if not p:
+    """回读原件（A4）：审计时用来看"系统当时看到的到底是什么"。
+
+    local 后端直接交给 FileResponse（支持 Range）；S3 后端由服务端代理读取，
+    不让浏览器直连对象存储，私有化部署时客户端网络往往到不了存储端点。
+    """
+    try:
+        obj = storage.open_for_read(rel)
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if obj is None:
         raise HTTPException(status_code=404, detail="原件不存在")
-    return FileResponse(p)
+    if isinstance(obj, Path):
+        return FileResponse(obj)
+    data, media_type = obj
+    return Response(content=data, media_type=media_type)
 
 
 @app.get("/api/storage")
 def api_storage():
-    return storage.usage()
+    try:
+        return {**storage.usage(), "health": storage.health()}
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @app.post("/api/batches/{batch_id}/cancel")

@@ -8,3 +8,6 @@ python-multipart>=0.0.9
 pillow>=10.0
 pymupdf>=1.24
 rapidocr-onnxruntime>=1.3
+
+# 对象存储（可选）：只有 STORAGE_BACKEND=s3 时需要
+# boto3>=1.34

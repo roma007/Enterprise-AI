@@ -5,6 +5,34 @@
 
 ---
 
+## [0.20.0] · 2026-11-02 · 对象存储抽象（A6）
+
+### 新增
+- `app/storage.py` 拆成两套后端，对外接口不变：
+  · `local`：`data/uploads/<scope>/<日期>/<随机名>.<ext>`
+  · `s3`：AWS S3 / MinIO / 阿里云 OSS / 腾讯云 COS（S3 兼容）
+- `STORAGE_BACKEND` / `STORAGE_DIR` / `S3_BUCKET` / `S3_PREFIX` /
+  `S3_ENDPOINT_URL` / `S3_REGION` 环境变量
+- `GET /api/storage` 增加 `health`：local 看目录是否存在，s3 走 `head_bucket`
+- `scripts/test_storage.py`：两条后端路径的自检
+
+### 设计取舍
+- **boto3 是可选依赖**：单机客户不该为 10MB 依赖买单；
+  `STORAGE_BACKEND=s3` 但没装 boto3 时，上传返回 **503 +「pip install boto3」**，
+  不是启动成功、上传时才 500
+- **S3 读取由服务端代理**，不返回预签名 URL：私有化部署时客户端网络
+  往往到不了存储端点；代价是文件进内存，托书/发票体量可接受
+- **数据库里只存相对路径**，换后端不用迁移 `runs.source_file`
+- S3 key 由服务端生成，不接受用户输入，避免覆盖他人对象
+
+### 实测
+- local：回读逐字节一致、穿越 404、usage/health 正常
+- s3（内存假客户端）：key 前缀、ContentType、读回、分页统计、head_bucket 全通过
+- s3 未装 boto3：上传与 `/api/storage` 均 503，提示明确
+- smoke 8 项全绿；三样本集回归未变
+
+---
+
 ## [0.19.0] · 2026-11-02 · 存原图与批量取消（A4 + A5）
 
 ### 新增

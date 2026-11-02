@@ -73,6 +73,16 @@ if [ "$authed" = "1" ]; then
   fi
 fi
 
+# 存储后端自检（不依赖服务，直接跑脚本）
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
+  if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_storage.py >/dev/null 2>&1); then
+    chk "存储后端自检（local + s3 假客户端）" 1
+  else
+    chk "存储后端自检（local + s3 假客户端）" 0
+  fi
+fi
+
 rm -f "$COOKIE"
 echo
 if [ "$fail" = "0" ]; then echo "全部通过，可以去见客户。"; else echo "有失败项，先修再出门。"; exit 1; fi

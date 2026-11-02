@@ -312,6 +312,8 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **学习队列界面（B1）**：逐条校对成金标，导出 JSONL 直接进评测集 | `static/learn.html` | `/learn`、`/api/learn/item/{id}` |
 | **企微安全模式（B3）**：AES-CBC 加解密 + msg_signature，官方向量验证 | `app/wecom_crypto.py` | 配 `WECOM_ENCODING_AES_KEY` 启用 |
 | **回写交付平台（B4）**：评测结果生成 POC 运行记录，发件箱重试 | `app/delivery.py` | `/api/delivery/*`（仅管理员）、`POST /api/hooks/copilot/eval` |
+| **地址校验（B5）**：错别字、区县/港区冲突、提卸同址 | `app/address_check.py` | 解析时自动执行，进 `checks` |
+| **异常费用识别（B6）**：重复收费、算术不符、未知费用、同批离群 | `app/fees.py` | `/fees`、`POST /api/fees/check`（财务/管理员） |
 | **时间修复**：OCR 丢失分隔符（`2026110718:00`）也能解析 | `app/rules.py` `parse_datetime` | 单元验证 |
 | **人工兜底队列**：需复核但未确认的单 | `app/store.py` `queue` | `/api/queue` |
 | 模型网关（UA / 会话头 / 失败降级 / JSON 模式兼容） | `app/llm.py` | OpenCode 网关实测 |

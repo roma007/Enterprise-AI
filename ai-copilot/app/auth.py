@@ -117,7 +117,7 @@ def new_payload(user_id: str) -> dict:
 # 这些前缀下的写操作只给指定角色
 FINANCE_PREFIXES = (
     "/api/invoice", "/api/threeway", "/api/reconcile",
-    "/api/aging", "/api/settlement",
+    "/api/aging", "/api/settlement", "/api/fees",
 )
 OPERATOR_PREFIXES = (
     "/api/extract", "/api/split", "/api/batches",

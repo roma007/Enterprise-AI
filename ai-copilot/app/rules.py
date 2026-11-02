@@ -15,6 +15,7 @@ import re
 from datetime import datetime
 
 from . import thresholds as th
+from .address_check import check_addresses
 from .schema import Check, Draft, FieldValue, SPEC_MAP, BLOCKING_KEYS
 
 # ---------- ISO 6346 ----------
@@ -184,6 +185,9 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
             level="warn", code="W_PHONE", field="factory_phone",
             message=f"电话 {phone} 格式可疑",
         ))
+
+    # 6.5 地址校验（B5）：错别字、区县与城市冲突、港区与城市冲突、提卸同址
+    checks.extend(check_addresses(val("pickup_addr"), val("delivery_addr")))
 
     # 7. 截港时间（本行业最贵的错误）
     closing = parse_datetime(val("closing_time"), now)

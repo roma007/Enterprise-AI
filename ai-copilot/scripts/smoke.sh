@@ -82,6 +82,18 @@ if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     chk "存储后端自检（local + s3 假客户端）" 0
   fi
 
+  if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_address.py >/dev/null 2>&1); then
+    chk "地址校验自检（B5）" 1
+  else
+    chk "地址校验自检（B5）" 0
+  fi
+
+  if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_fees.py >/dev/null 2>&1); then
+    chk "异常费用自检（B6）" 1
+  else
+    chk "异常费用自检（B6）" 0
+  fi
+
   if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_delivery.py >/dev/null 2>&1); then
     chk "回写发件箱自检（幂等 + 重试）" 1
   else

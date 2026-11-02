@@ -1364,6 +1364,44 @@ def api_delivery_flush():
     return delivery.flush()
 
 
+@app.post("/api/fees/check")
+def api_fees_check(req: dict):
+    """异常费用识别（B6，财务/管理员）。
+
+    入参二选一：
+      {"text": "CSV/制表符费用明细"}  或  {"rows": [{booking_no, fee_name, amount, ...}]}
+    """
+    from .fees import check, parse_fee_text
+
+    rows = req.get("rows")
+    if rows is None:
+        text = (req.get("text") or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="请提供 text 或 rows")
+        try:
+            rows = parse_fee_text(text)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not rows:
+            raise HTTPException(status_code=400, detail="没有解析到费用行")
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows 必须是数组")
+    return check(rows)
+
+
+@app.get("/api/fees/dict")
+def api_fees_dict():
+    from .fees import fee_dict
+
+    items = sorted(fee_dict())
+    return {"items": items, "count": len(items)}
+
+
+@app.get("/fees")
+def fees_page():
+    return FileResponse(ROOT / "static" / "fees.html")
+
+
 @app.get("/api/stats")
 def api_stats():
     return {"summary": stats(), "recent": recent(10)}

@@ -18,6 +18,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import db
 from .config import VERSION, settings
 
 _started = time.time()
@@ -98,12 +99,21 @@ def render() -> str:
     lines += _family("copilot_ocr_ready", [(None, ocr_ready)], kind="gauge",
                      help_text="OCR 依赖是否可用")
 
-    db = settings.db_path
-    lines += _family("copilot_db_size_bytes", [
-        ({"kind": "main"}, _size(db)),
-        ({"kind": "wal"}, _size(Path(str(db) + "-wal"))),
-        ({"kind": "shm"}, _size(Path(str(db) + "-shm"))),
-    ], kind="gauge", help_text="数据库文件大小")
+    if db.BACKEND == "postgres":
+        from .store import _conn
+        with _conn() as conn:
+            size = conn.execute(
+                "SELECT pg_database_size(current_database()) AS n"
+            ).fetchone()["n"]
+        lines += _family("copilot_db_size_bytes", [({"kind": "postgres"}, size)],
+                         kind="gauge", help_text="数据库大小")
+    else:
+        path = settings.db_path
+        lines += _family("copilot_db_size_bytes", [
+            ({"kind": "main"}, _size(path)),
+            ({"kind": "wal"}, _size(Path(str(path) + "-wal"))),
+            ({"kind": "shm"}, _size(Path(str(path) + "-shm"))),
+        ], kind="gauge", help_text="数据库文件大小")
 
     lines += _family("copilot_runs_total", [(None, counts["runs"])],
                      help_text="解析记录总数")

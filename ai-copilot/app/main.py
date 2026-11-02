@@ -17,7 +17,7 @@ from fastapi.responses import (
     FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
 )
 
-from . import auth, delivery, storage
+from . import auth, db, delivery, storage
 from . import metrics as prom
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -38,6 +38,7 @@ from .store import (
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
     clear_login_failures, login_locked, record_login_failure, ops_counts,
+    list_jobs,
     confirmed_recent, revisions, undo_confirm, NotConfirmed, VersionMismatch,
 )
 
@@ -50,6 +51,8 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    from .batchproc import start_worker as start_batch_worker
+    start_batch_worker()
     delivery.start_worker()
     if count_users() == 0:
         email = os.getenv("ADMIN_EMAIL", "admin@local").strip() or "admin@local"
@@ -344,7 +347,8 @@ def health():
     try:
         from .store import _conn
         with _conn() as conn:
-            journal = conn.execute("PRAGMA journal_mode").fetchone()[0]
+            if db.BACKEND == "sqlite":
+                journal = conn.execute("PRAGMA journal_mode").fetchone()[0]
             conn.execute("SELECT 1").fetchone()
     except Exception:  # noqa: BLE001
         db_ok = False
@@ -354,7 +358,7 @@ def health():
         "llm_enabled": settings.llm_enabled,
         "model": settings.model if settings.llm_enabled else "rule-based-v1",
         "ocr": ocr.available(),
-        "db": {"ok": db_ok, "journal_mode": journal},
+        "db": {"ok": db_ok, "backend": db.BACKEND, "journal_mode": journal},
         "storage": storage.health(),
     }
 
@@ -1504,6 +1508,14 @@ def api_fees_dict():
 @app.get("/fees")
 def fees_page():
     return FileResponse(ROOT / "static" / "fees.html")
+
+
+@app.get("/api/admin/jobs")
+def api_admin_jobs(limit: int = 100):
+    """多实例任务队列（D7），仅管理员。"""
+    from .batchproc import WORKER_ID
+    return {"worker_backend": db.BACKEND, "worker_id": WORKER_ID,
+            "items": list_jobs(limit)}
 
 
 @app.get("/api/stats")

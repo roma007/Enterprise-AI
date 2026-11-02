@@ -16,6 +16,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+os.environ.pop("DATABASE_URL", None)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # 必须在 import app.* 之前指定独立数据库，避免污染 data/copilot.db

@@ -28,12 +28,13 @@ import json
 import os
 import threading
 import time
+import uuid
 from urllib.parse import urljoin
 
 import httpx
 
 from .config import settings
-from .store import outbox_add, outbox_mark, outbox_pending, outbox_status
+from .store import outbox_add, outbox_claim, outbox_mark, outbox_status
 
 PLATFORM_URL = os.getenv("DELIVERY_PLATFORM_URL", "").strip().rstrip("/")
 HOOK_TOKEN = os.getenv("DELIVERY_HOOK_TOKEN", "").strip()
@@ -176,7 +177,8 @@ def flush(limit: int = 20) -> dict:
 
     sent = failed = retry = 0
     details = []
-    for row in outbox_pending(limit):
+    worker = f"delivery-{uuid.uuid4().hex[:6]}"
+    for row in outbox_claim(worker, limit):
         try:
             payload = json.loads(row["payload_json"])
         except json.JSONDecodeError:

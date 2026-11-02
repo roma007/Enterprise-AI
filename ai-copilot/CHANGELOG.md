@@ -5,6 +5,38 @@
 
 ---
 
+## [0.28.0] · 2026-11-02 · PostgreSQL 与多实例（C4 / D7）
+
+### C4 PostgreSQL 双后端
+- `app/db.py`：`DATABASE_URL` 切换 SQLite / PostgreSQL，统一连接/事务/占位符
+- 兼容处理：`?`→`%s`、`INSERT OR IGNORE/REPLACE`→`ON CONFLICT`、`rowid`→`ctid`
+- `init_db()` PG 分支：advisory lock 串行化 DDL，多实例同时启动不死锁
+- `scripts/migrate_to_pg.py`：dry-run、幂等 upsert、依赖顺序、行数校验、
+  阈值文件迁移；复制 12 张表
+- 修正 PG 差异：`MAX(a,b)`→`CASE`、`AVG` 的 Decimal 转 float
+
+### D7 多实例任务队列
+- `jobs` 表：`pending/running/done/failed` + `worker` + `lease_until` + `params_json`
+- 每个实例一个 worker，抢到任务才处理；租约过期自动被其他实例接手
+- 批次项逐条抢占，避免两个实例重复处理同一条
+- 取消改 `batches.cancel_requested`，跨实例生效
+- 被接手时（attempts>1）强制回收 `processing` 项，避免卡死
+- 回写发件箱改为行级抢占，多实例不会重复发送
+- PG 阈值存 `app_settings`，多实例 2 秒内同步
+- `GET /api/admin/jobs` 查看任务与 worker
+
+### 实测（真实 PostgreSQL 16）
+- 迁移：259 runs / 150 batch_items / 56 sessions 等 12 张表行数全部一致
+- PG 单实例：31 项 API 验收全通过
+- 双实例：2 个批次分给 2 个 worker，各 15/15 完成
+- 跨实例取消：处理中 2 条 → 取消 → 3 条后停，97 pending；续跑 100/100
+- 进程被杀：租约 10s，另一实例 11.8s 接手，attempts=2，120/120 完成
+- 并发抢占：6 个 worker 只有 1 个抢到；发件箱 3 条无重复领取
+- 5 个实例同时 init_db 无死锁
+- SQLite 回归：smoke 15 项全绿；三样本集 100%/98.7%/100%
+
+---
+
 ## [0.27.0] · 2026-11-02 · 监控告警与 HTTPS（D4 / D5）
 
 ### D4 Prometheus 指标

@@ -126,7 +126,7 @@ FINANCE_PREFIXES = (
 OPERATOR_PREFIXES = (
     "/api/extract", "/api/split", "/api/batches",
 )
-ADMIN_ONLY_PREFIXES = ("/api/users", "/api/settings", "/api/delivery")
+ADMIN_ONLY_PREFIXES = ("/api/users", "/api/settings", "/api/delivery", "/api/admin")
 
 # 无需登录即可访问
 PUBLIC_PATHS = {

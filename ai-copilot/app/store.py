@@ -12,8 +12,10 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 import uuid
-from contextlib import contextmanager
+
+from . import db
 from datetime import datetime, timedelta, timezone
 
 from .config import settings
@@ -126,9 +128,32 @@ CREATE TABLE IF NOT EXISTS delivery_outbox (
     attempts        INTEGER NOT NULL DEFAULT 0,
     last_error      TEXT,
     response_json   TEXT,
-    sent_at         TEXT
+    sent_at         TEXT,
+    worker          TEXT,
+    lease_until     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON delivery_outbox(status, created_at);
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT,
+    updated_by  TEXT
+);
+CREATE TABLE IF NOT EXISTS jobs (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    ref_id      TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    worker      TEXT,
+    lease_until INTEGER,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    last_error  TEXT,
+    params_json TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE (kind, ref_id)
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_claim ON jobs(status, lease_until, created_at);
 CREATE TABLE IF NOT EXISTS login_attempts (
     key           TEXT PRIMARY KEY,
     fails         INTEGER NOT NULL DEFAULT 0,
@@ -154,36 +179,21 @@ _EXTRA_COLUMNS = (
     ("learn_queue", "corrected", "INTEGER DEFAULT 0"),
     ("learn_queue", "labeled_by", "TEXT DEFAULT ''"),
     ("batches", "kind", "TEXT DEFAULT 'booking'"),
+    ("batches", "cancel_requested", "INTEGER DEFAULT 0"),
+    ("batches", "status", "TEXT DEFAULT 'idle'"),
+    ("jobs", "params_json", "TEXT"),
+    ("delivery_outbox", "worker", "TEXT"),
+    ("delivery_outbox", "lease_until", "INTEGER"),
     ("runs", "actor", "TEXT DEFAULT ''"),
     ("runs", "confirmed_by", "TEXT DEFAULT ''"),
     ("runs", "source_file", "TEXT DEFAULT ''"),
 )
 
 
-@contextmanager
-def _conn():
-    """每次操作一个连接，用完关闭。
-
-    为什么必须关：WAL 模式下长连接会持有读快照，阻止 checkpoint，
-    `-wal` 文件会一直长。之前用 `with sqlite3.connect()` 只提交不关闭，
-    靠 GC 回收，批量处理时容易积累。
-    """
-    conn = sqlite3.connect(settings.db_path, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+_conn = db.connect
 
 
-def _cleanup_orphans(conn: sqlite3.Connection) -> int:
+def _cleanup_orphans(conn) -> int:
     """清掉历史孤儿行（外键启用前产生的）。返回删除条数。"""
     total = 0
     for sql in (
@@ -198,17 +208,31 @@ def _cleanup_orphans(conn: sqlite3.Connection) -> int:
 
 
 def init_db() -> None:
-    # journal_mode 是持久属性，设一次即可；必须在写事务之前设置
-    with _conn() as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
+    if db.BACKEND == "sqlite":
+        # journal_mode 是持久属性，设一次即可；必须在写事务之前设置
+        with _conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
 
     with _conn() as conn:
+        if db.BACKEND == "postgres":
+            # 多实例同时启动时串行化 DDL，避免 ALTER TABLE 互相等锁死锁
+            conn.execute("SELECT pg_advisory_xact_lock(727242)")
         conn.executescript(_SCHEMA)
-        for table, col, decl in _EXTRA_COLUMNS:
-            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
-            if col not in cols:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        if db.BACKEND == "postgres":
+            for table, col, decl in _EXTRA_COLUMNS:
+                exists = conn.execute(
+                    "SELECT 1 FROM information_schema.columns"
+                    " WHERE table_schema='public' AND table_name=?"
+                    " AND column_name=?", (table, col)
+                ).fetchone()
+                if not exists:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        else:
+            for table, col, decl in _EXTRA_COLUMNS:
+                cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+                if col not in cols:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
         removed = _cleanup_orphans(conn)
         if removed:
             print(f"[db] 清理孤儿行 {removed} 条")
@@ -396,7 +420,7 @@ def revisions(run_id: str, limit: int = 100) -> list[dict]:
             "SELECT v.id, v.ts, v.actor, v.action, v.version, v.before_json,"
             " v.after_json, v.note, u.name AS actor_name, u.email AS actor_email"
             " FROM run_revisions v LEFT JOIN users u ON u.id = v.actor"
-            " WHERE v.run_id=? ORDER BY v.ts DESC, v.rowid DESC LIMIT ?",
+            f" WHERE v.run_id=? ORDER BY v.ts DESC, v.{db.ROW_ORDER} DESC LIMIT ?",
             (run_id, limit),
         ).fetchall()
     out = []
@@ -422,7 +446,7 @@ def confirmed_recent(limit: int = 100) -> list[dict]:
             " r.confirmed_by, substr(r.raw_text,1,80) AS preview,"
             " u.name AS actor_name, u.email AS actor_email"
             " FROM runs r LEFT JOIN users u ON u.id = r.confirmed_by"
-            " WHERE r.confirmed=1 ORDER BY r.ts DESC, r.rowid DESC LIMIT ?",
+            f" WHERE r.confirmed=1 ORDER BY r.ts DESC, r.{db.ROW_ORDER} DESC LIMIT ?",
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
@@ -520,8 +544,9 @@ def ops_counts() -> dict:
     with _conn() as conn:
         def scalar(sql: str, args=()):
             try:
-                return conn.execute(sql, args).fetchone()[0] or 0
-            except sqlite3.Error:
+                row = conn.execute(sql, args).fetchone()
+                return (next(iter(row.values())) if row else 0) or 0
+            except Exception:  # noqa: BLE001
                 return 0
 
         out["runs"] = scalar("SELECT COUNT(*) FROM runs")
@@ -541,7 +566,7 @@ def ops_counts() -> dict:
         out["users_active"] = scalar("SELECT COUNT(*) FROM users WHERE active=1")
         out["sessions_active"] = scalar(
             "SELECT COUNT(*) FROM user_sessions WHERE revoked=0 AND expires_at > ?",
-            (int(__import__("time").time()),),
+            (int(time.time()),),
         )
     return out
 
@@ -566,9 +591,10 @@ def metrics(baseline_sec: float = 180.0) -> dict:
             "SELECT COUNT(*) n, COALESCE(SUM(changed),0) ch FROM feedback"
         ).fetchone()
         saved = conn.execute(
-            "SELECT COALESCE(SUM(MAX(0, ? - handle_ms / 1000.0)),0) s"
+            "SELECT COALESCE(SUM(CASE WHEN handle_ms / 1000.0 < ?"
+            " THEN ? - handle_ms / 1000.0 ELSE 0 END),0) s"
             " FROM runs WHERE handle_ms IS NOT NULL",
-            (baseline_sec,),
+            (baseline_sec, baseline_sec),
         ).fetchone()
         daily = conn.execute(
             "SELECT substr(ts,1,10) d, COUNT(*) n, COALESCE(SUM(confirmed),0) c"
@@ -605,8 +631,8 @@ def metrics(baseline_sec: float = 180.0) -> dict:
         "tickets_parsed": n,
         "tickets_confirmed": confirmed,
         "tokens": r["tokens"],
-        "avg_parse_ms": round(r["avg_ms"], 1),
-        "avg_handle_sec": round((r["avg_handle"] or 0) / 1000.0, 1) if confirmed else 0,
+        "avg_parse_ms": round(float(r["avg_ms"] or 0), 1),
+        "avg_handle_sec": round(float(r["avg_handle"] or 0) / 1000.0, 1) if confirmed else 0,
         "review_levels": {
             "auto": r["auto_n"], "single": r["single_n"],
             "double": r["double_n"], "blocked": r["blocked_n"],
@@ -615,7 +641,7 @@ def metrics(baseline_sec: float = 180.0) -> dict:
         "forced_n": r["forced_n"],
         "correction_rate": correction_rate,
         "baseline_manual_sec": baseline_sec,
-        "saved_hours": round((saved["s"] or 0) / 3600.0, 2),
+        "saved_hours": round(float(saved["s"] or 0) / 3600.0, 2),
         "inbound_count": in_n,
         "inbound_confirmed": in_done,
         "bypass_rate": bypass_rate,
@@ -671,8 +697,8 @@ def enqueue_learn(run_id: str, reason: str) -> None:
     """把"可疑样本"放进标注池。可疑 = 需复核 / 有阻断 / 靠容错抽出来的。"""
     with _conn() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO learn_queue (id, run_id, ts, reason, status)"
-            " VALUES (?,?,?,?,'pending')",
+            "INSERT INTO learn_queue (id, run_id, ts, reason, status)"
+            " VALUES (?,?,?,?,'pending') ON CONFLICT (id) DO NOTHING",
             (run_id, run_id, _now(), reason),
         )
 
@@ -707,9 +733,12 @@ def label_run(run_id: str, gold: dict[str, str], reason: str = "confirmed",
         )
         if cur.rowcount == 0:
             conn.execute(
-                "INSERT OR REPLACE INTO learn_queue"
+                "INSERT INTO learn_queue"
                 " (id, run_id, ts, reason, status, gold_json, labeled_at,"
-                " corrected, labeled_by) VALUES (?,?,?,?,'labeled',?,?,?,?)",
+                " corrected, labeled_by) VALUES (?,?,?,?,'labeled',?,?,?,?)"
+                " ON CONFLICT (id) DO UPDATE SET status='labeled',"
+                " gold_json=EXCLUDED.gold_json, labeled_at=EXCLUDED.labeled_at,"
+                " corrected=EXCLUDED.corrected, labeled_by=EXCLUDED.labeled_by",
                 (run_id, run_id, ts, reason, gold_json, ts,
                  1 if corrected else 0, actor),
             )
@@ -962,7 +991,7 @@ def batch_items(batch_id: str, status: str | None = None) -> list[dict]:
     if status:
         sql += " AND status=?"
         args.append(status)
-    sql += " ORDER BY rowid"
+    sql += f" ORDER BY {db.ROW_ORDER}"
     with _conn() as conn:
         return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
@@ -1203,6 +1232,124 @@ def revoke_user_sessions(user_id: str, except_jti: str = "") -> int:
     return cur.rowcount
 
 
+# ---------------- 多实例任务队列（D7） ----------------
+
+def enqueue_job(kind: str, ref_id: str, params: dict | None = None) -> dict | None:
+    """入队（幂等）。已有活跃任务时返回 None，避免重复跑。"""
+    now = _now()
+    epoch = int(time.time())
+    params_json = json.dumps(params or {}, ensure_ascii=False)
+    with _conn() as conn:
+        row = conn.execute(
+            "INSERT INTO jobs (id, kind, ref_id, status, created_at, updated_at,"
+            " params_json) VALUES (?,?,?,'pending',?,?,?)"
+            " ON CONFLICT (kind, ref_id) DO UPDATE SET"
+            " status='pending', worker=NULL, lease_until=NULL,"
+            " last_error=NULL, params_json=EXCLUDED.params_json, updated_at=?"
+            " WHERE jobs.status IN ('pending','done','failed')"
+            " OR (jobs.status='running' AND jobs.lease_until < ?)"
+            " RETURNING *",
+            (uuid.uuid4().hex[:12], kind, ref_id, now, now, params_json, now, epoch),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def claim_job(worker: str, lease_seconds: int = 90) -> dict | None:
+    """抢占一个任务。两个实例同时抢，只有一个 rowcount=1。"""
+    now = int(time.time())
+    until = now + lease_seconds
+    ts = _now()
+    for _ in range(3):
+        with _conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM jobs WHERE status='pending'"
+                " OR (status='running' AND lease_until < ?)"
+                " ORDER BY created_at LIMIT 1", (now,)
+            ).fetchone()
+            if not row:
+                return None
+            cur = conn.execute(
+                "UPDATE jobs SET status='running', worker=?, lease_until=?,"
+                " attempts=attempts+1, updated_at=?"
+                " WHERE id=? AND (status='pending'"
+                " OR (status='running' AND lease_until < ?))",
+                (worker, until, ts, row["id"], now),
+            )
+            if cur.rowcount:
+                return dict(conn.execute(
+                    "SELECT * FROM jobs WHERE id=?", (row["id"],)
+                ).fetchone())
+    return None
+
+
+def renew_job(job_id: str, worker: str, lease_seconds: int = 90) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE jobs SET lease_until=?, updated_at=?"
+            " WHERE id=? AND worker=? AND status='running'",
+            (int(time.time()) + lease_seconds, _now(), job_id, worker),
+        )
+
+
+def finish_job(job_id: str, worker: str, status: str = "done",
+               error: str = "") -> None:
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE jobs SET status=?, lease_until=NULL, last_error=?, updated_at=?"
+            " WHERE id=? AND worker=?",
+            (status, error[:1000], _now(), job_id, worker),
+        )
+
+
+def job_active(kind: str, ref_id: str) -> bool:
+    now = int(time.time())
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM jobs WHERE kind=? AND ref_id=?"
+            " AND (status='pending' OR (status='running' AND lease_until >= ?))",
+            (kind, ref_id, now),
+        ).fetchone()
+    return bool(row)
+
+
+def get_job(kind: str, ref_id: str) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM jobs WHERE kind=? AND ref_id=?", (kind, ref_id)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_jobs(limit: int = 100) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, kind, ref_id, status, worker, lease_until, attempts,"
+            " last_error, created_at, updated_at FROM jobs"
+            " ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_batch_status(batch_id: str, status: str,
+                     cancel_requested: int | None = None) -> None:
+    sets = ["status=?"]
+    args: list = [status]
+    if cancel_requested is not None:
+        sets.append("cancel_requested=?")
+        args.append(cancel_requested)
+    args.append(batch_id)
+    with _conn() as conn:
+        conn.execute(f"UPDATE batches SET {', '.join(sets)} WHERE id=?", args)
+
+
+def batch_cancel_requested(batch_id: str) -> bool:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT cancel_requested FROM batches WHERE id=?", (batch_id,)
+        ).fetchone()
+    return bool(row and row["cancel_requested"])
+
+
 # ---------------- 回写交付平台（B4） ----------------
 
 def outbox_add(idempotency_key: str, payload: dict, experiment_id: str = "",
@@ -1236,6 +1383,33 @@ def outbox_add(idempotency_key: str, payload: dict, experiment_id: str = "",
     return dict(row), True
 
 
+def outbox_claim(worker: str, limit: int = 20,
+                 lease_seconds: int = 120) -> list[dict]:
+    """抢占待发送项（多实例安全）。"""
+    now = int(time.time())
+    until = now + lease_seconds
+    claimed: list[dict] = []
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id FROM delivery_outbox"
+            " WHERE status='pending' OR (status='sending' AND lease_until < ?)"
+            " ORDER BY created_at LIMIT ?", (now, limit)
+        ).fetchall()
+        for row in rows:
+            cur = conn.execute(
+                "UPDATE delivery_outbox SET status='sending', worker=?, lease_until=?"
+                " WHERE id=? AND (status='pending'"
+                " OR (status='sending' AND lease_until < ?))",
+                (worker, until, row["id"], now),
+            )
+            if cur.rowcount:
+                got = conn.execute(
+                    "SELECT * FROM delivery_outbox WHERE id=?", (row["id"],)
+                ).fetchone()
+                claimed.append(dict(got))
+    return claimed
+
+
 def outbox_pending(limit: int = 20) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
@@ -1251,7 +1425,8 @@ def outbox_mark(oid: str, status: str, error: str = "",
         conn.execute(
             "UPDATE delivery_outbox SET status=?, attempts=attempts+1,"
             " last_error=?, response_json=COALESCE(?, response_json),"
-            " sent_at=CASE WHEN ?='sent' THEN ? ELSE sent_at END WHERE id=?",
+            " sent_at=CASE WHEN ?='sent' THEN ? ELSE sent_at END,"
+            " worker=NULL, lease_until=NULL WHERE id=?",
             (status, error[:1000], json.dumps(response, ensure_ascii=False)
              if response is not None else None, status, _now(), oid),
         )
@@ -1267,7 +1442,7 @@ def outbox_status(limit: int = 20) -> dict:
             " attempts, last_error, sent_at FROM delivery_outbox"
             " ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
-    counts = {"pending": 0, "sent": 0, "failed": 0}
+    counts = {"pending": 0, "sending": 0, "sent": 0, "failed": 0}
     for r in rows:
         counts[r["status"]] = r["n"]
     return {"counts": counts, "recent": [dict(r) for r in recent]}

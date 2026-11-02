@@ -65,7 +65,10 @@ def login(email: str, password: str):
 print("1. 健康与指标")
 code, h = call(opener(), "GET", "/api/health")
 chk("health 200", code == 200)
-chk("数据库 WAL", h.get("db", {}).get("journal_mode") == "wal", str(h.get("db")))
+dbinfo = h.get("db", {})
+chk("数据库可用（SQLite WAL / PostgreSQL）",
+    dbinfo.get("backend") == "postgres" or dbinfo.get("journal_mode") == "wal",
+    str(dbinfo))
 chk("存储健康", h.get("storage", {}).get("ok") is True)
 code, m = call(opener(), "GET", "/metrics", raw=True)
 chk("metrics 200", code == 200)

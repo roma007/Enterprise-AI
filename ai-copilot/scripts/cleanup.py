@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import sys
 import time
@@ -50,69 +51,86 @@ def main() -> int:
 
     plan = [
         ("过期会话",
-         "SELECT COUNT(*) FROM user_sessions WHERE expires_at < ? OR created_at < ?",
+         "SELECT COUNT(*) AS n FROM user_sessions WHERE expires_at < ? OR created_at < ?",
          "DELETE FROM user_sessions WHERE expires_at < ? OR created_at < ?",
          (epoch, cutoff)),
         ("已结束发件箱",
-         "SELECT COUNT(*) FROM delivery_outbox"
-         " WHERE status IN ('sent','failed') AND created_at < ?",
+         "SELECT COUNT(*) AS n FROM delivery_outbox"
+         " WHERE status IN ('sent','failed','sending') AND created_at < ?",
          "DELETE FROM delivery_outbox"
-         " WHERE status IN ('sent','failed') AND created_at < ?",
+         " WHERE status IN ('sent','failed','sending') AND created_at < ?",
          (cutoff,)),
         ("登录失败记录",
-         "SELECT COUNT(*) FROM login_attempts WHERE first_at < ?",
+         "SELECT COUNT(*) AS n FROM login_attempts WHERE first_at < ?",
          "DELETE FROM login_attempts WHERE first_at < ?",
          (cutoff,)),
     ]
     if runs_cutoff:
         plan.extend([
             ("解析明细 feedback",
-             "SELECT COUNT(*) FROM feedback WHERE run_id IN"
+             "SELECT COUNT(*) AS n FROM feedback WHERE run_id IN"
              " (SELECT id FROM runs WHERE ts < ?)",
              "DELETE FROM feedback WHERE run_id IN"
              " (SELECT id FROM runs WHERE ts < ?)", (runs_cutoff,)),
             ("修订流水 run_revisions",
-             "SELECT COUNT(*) FROM run_revisions WHERE run_id IN"
+             "SELECT COUNT(*) AS n FROM run_revisions WHERE run_id IN"
              " (SELECT id FROM runs WHERE ts < ?)",
              "DELETE FROM run_revisions WHERE run_id IN"
              " (SELECT id FROM runs WHERE ts < ?)", (runs_cutoff,)),
             ("学习队列 learn_queue",
-             "SELECT COUNT(*) FROM learn_queue WHERE run_id IN"
+             "SELECT COUNT(*) AS n FROM learn_queue WHERE run_id IN"
              " (SELECT id FROM runs WHERE ts < ?)",
              "DELETE FROM learn_queue WHERE run_id IN"
              " (SELECT id FROM runs WHERE ts < ?)", (runs_cutoff,)),
             ("解析记录 runs",
-             "SELECT COUNT(*) FROM runs WHERE ts < ?",
+             "SELECT COUNT(*) AS n FROM runs WHERE ts < ?",
              "DELETE FROM runs WHERE ts < ?", (runs_cutoff,)),
         ])
 
-    conn = sqlite3.connect(db)
-    try:
-        print(f"数据库：{db}")
+    def run(conn) -> tuple[int, bool]:
+        print(f"数据库：{'PostgreSQL' if pg else db}")
         print(f"保留期：{args.days} 天" + (f" ｜ 解析记录 {args.runs_days} 天" if runs_cutoff else ""))
         print(f"模式：{'执行' if args.apply else 'dry-run（只统计）'}")
         print()
-
         total = 0
         for name, count_sql, _delete_sql, params in plan:
-            n = conn.execute(count_sql, params).fetchone()[0]
+            n = conn.execute(count_sql, params).fetchone()["n"]
             total += n
             print(f"  {name:22} {n:>6}")
         print(f"  {'合计':22} {total:>6}")
-
         if not args.apply:
             print("\n未改动数据。确认无误后加 --apply 执行。")
-            return 0
+            return total, False
         if total == 0:
             print("\n没有需要清理的数据。")
-            return 0
+            return total, False
+        for _, _count_sql, delete_sql, params in plan:
+            conn.execute(delete_sql, params)
+        return total, True
 
-        with conn:
-            for _, _count_sql, delete_sql, params in plan:
-                conn.execute(delete_sql, params)
-        conn.execute("VACUUM")
-        print(f"\n✓ 已清理 {total} 行，并执行 VACUUM。")
-        print("  建议随后执行一次 `make backup` 留档。")
+    pg = (os.getenv("DATABASE_URL", "") or "").startswith(("postgres://", "postgresql://"))
+    if pg:
+        sys.path.insert(0, str(ROOT))
+        from app import db as _db
+        with _db.connect() as conn:
+            total, changed = run(conn)
+        if changed:
+            import psycopg
+            with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as ac:
+                ac.execute("VACUUM")
+            print(f"\n✓ 已清理 {total} 行，并执行 VACUUM。")
+            print("  建议随后执行一次 `pg_dump` 留档。")
+        return 0
+
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    try:
+        total, changed = run(conn)
+        if changed:
+            conn.commit()
+            conn.execute("VACUUM")
+            print(f"\n✓ 已清理 {total} 行，并执行 VACUUM。")
+            print("  建议随后执行一次 `make backup` 留档。")
         return 0
     finally:
         conn.close()

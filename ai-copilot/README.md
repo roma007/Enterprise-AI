@@ -315,6 +315,8 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **回写交付平台（B4）**：评测结果生成 POC 运行记录，发件箱重试 | `app/delivery.py` | `/api/delivery/*`（仅管理员）、`POST /api/hooks/copilot/eval` |
 | **地址校验（B5）**：错别字、区县/港区冲突、提卸同址 | `app/address_check.py` | 解析时自动执行，进 `checks` |
 | **异常费用识别（B6）**：重复收费、算术不符、未知费用、同批离群 | `app/fees.py` | `/fees`、`POST /api/fees/check`（财务/管理员） |
+| **PostgreSQL 双后端（C4）**：`DATABASE_URL` 切换，迁移脚本带校验 | `app/db.py` | `make pg-migrate[-apply]` |
+| **多实例任务队列（D7）**：`jobs` 表 + 租约，跨实例取消生效 | `app/batchproc.py` | `WORKER_POLL_SECONDS`、`/api/admin/jobs` |
 | **时间修复**：OCR 丢失分隔符（`2026110718:00`）也能解析 | `app/rules.py` `parse_datetime` | 单元验证 |
 | **人工兜底队列**：需复核但未确认的单 | `app/store.py` `queue` | `/api/queue` |
 | 模型网关（UA / 会话头 / 失败降级 / JSON 模式兼容） | `app/llm.py` | OpenCode 网关实测 |
@@ -328,12 +330,10 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 
 | 缺口 | 影响 | 计划任务 | 目标 |
 |---|---|---|---|
-| SQLite 单文件 | 已开 WAL；多实例/HA 仍受限 | 触发时迁 PostgreSQL | C4，2.5–3 天 |
 | 无 TMS / 财务软件写回 | 确认后只能导出 CSV | 需客户接口文档 | C2，5–10 天 |
-| 无多租户 | 只支持单客户单实例 | 决定做 SaaS 时补 | C3，3 天 |
+| 无多租户 | 只支持单客户（可多实例） | 决定做 SaaS 时补 | C3，3 天 |
 | 成本归集 / 单车毛利 | 缺油卡/路桥/维修数据源 | 等客户数据 | C1，2–3 天 |
 | 在途事件抽取 | 费用结构异常已做，事件未做 | 需聊天/司机上报数据 | 2 天 |
-| 多实例任务队列 | 批次运行状态在进程内，多副本会重复跑 | 与 PostgreSQL 一起做 | D7，1–2 天 |
 | 真实客户样本 | 评测数字不可对外 | **G2 门禁** | W4 |
 
 ### 8.3 已知会让准确率掉下来的情况

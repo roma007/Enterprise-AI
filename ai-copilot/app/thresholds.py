@@ -18,15 +18,19 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import db
 from .config import ROOT
 
 PATH = ROOT / "data" / "settings.json"
 _lock = threading.Lock()
 _cache: dict | None = None
 _cache_mtime: float = -1.0
+_cache_at: float = 0.0
+_DB_TTL = 2.0  # PG 多实例：最多 2 秒看到别的实例的修改
 
 
 SPECS: list[dict] = [
@@ -82,9 +86,36 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _db_load() -> dict:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT value, updated_at, updated_by FROM app_settings"
+            " WHERE key='thresholds'"
+        ).fetchone()
+    if not row:
+        return {}
+    try:
+        data = json.loads(row["value"])
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    data["updated_at"] = row["updated_at"] or ""
+    data["updated_by"] = row["updated_by"] or ""
+    return data
+
+
 def _load() -> dict:
-    """读文件（带 mtime 缓存）。文件不存在时返回空覆盖。"""
-    global _cache, _cache_mtime
+    """读阈值。SQLite 走文件 + mtime；PostgreSQL 走 app_settings + 2 秒缓存。"""
+    global _cache, _cache_mtime, _cache_at
+    if db.BACKEND == "postgres":
+        now = time.time()
+        if _cache is not None and now - _cache_at < _DB_TTL:
+            return _cache
+        _cache = _db_load()
+        _cache_at = now
+        return _cache
+
     try:
         mtime = PATH.stat().st_mtime
     except FileNotFoundError:
@@ -105,7 +136,22 @@ def _load() -> dict:
 
 
 def _write(payload: dict) -> None:
-    global _cache, _cache_mtime
+    global _cache, _cache_mtime, _cache_at
+    if db.BACKEND == "postgres":
+        with db.connect() as conn:
+            conn.execute(
+                "INSERT INTO app_settings (key, value, updated_at, updated_by)"
+                " VALUES ('thresholds',?,?,?)"
+                " ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,"
+                " updated_at=EXCLUDED.updated_at,"
+                " updated_by=EXCLUDED.updated_by",
+                (json.dumps(payload, ensure_ascii=False),
+                 payload.get("updated_at", ""), payload.get("updated_by", "")),
+            )
+        _cache = payload
+        _cache_at = time.time()
+        return
+
     PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")

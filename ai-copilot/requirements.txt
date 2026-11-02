@@ -14,3 +14,6 @@ rapidocr-onnxruntime>=1.3
 
 # 企业微信安全模式（可选）：只有配置 WECOM_ENCODING_AES_KEY 时需要
 # cryptography>=42
+
+# PostgreSQL（可选）：DATABASE_URL 指向 postgres 时需要
+# psycopg[binary]>=3.2

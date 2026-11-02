@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+os.environ.pop("DATABASE_URL", None)
 TMP = Path(tempfile.mkdtemp(prefix="hardening-"))
 DB = TMP / "test.db"
 os.environ["DB_PATH"] = str(DB)

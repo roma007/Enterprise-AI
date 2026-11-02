@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply verify-https
+.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply verify-https pg-migrate pg-migrate-apply pg-test
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -55,6 +55,18 @@ cleanup-apply:
 # 用真实 nginx + 自签证书验证 HTTPS 反向代理（需要本机有 nginx/openssl）
 verify-https:
 	./scripts/test_https_proxy.sh
+
+# SQLite → PostgreSQL（默认 dry-run；PG_URL 可覆盖）
+PG_URL ?= postgres://127.0.0.1:5432/ai_copilot
+pg-migrate:
+	PYTHONPATH=. $(PY) scripts/migrate_to_pg.py --pg "$(PG_URL)"
+
+pg-migrate-apply:
+	PYTHONPATH=. $(PY) scripts/migrate_to_pg.py --pg "$(PG_URL)" --apply
+
+# PostgreSQL / 多实例自检（需要 PG_TEST_URL 指向测试库）
+pg-test:
+	PG_TEST_URL="$(PG_TEST_URL)" PYTHONPATH=. $(PY) scripts/test_pg_db.py
 
 # 模拟一整天：入口 → 解析 → 分级 → 确认 → 指标 → 风险 → 拆分 → 改单
 simday:

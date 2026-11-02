@@ -7,9 +7,11 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
+os.environ.pop("DATABASE_URL", None)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import metrics  # noqa: E402

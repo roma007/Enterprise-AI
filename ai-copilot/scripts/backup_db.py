@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -43,6 +44,12 @@ def main() -> int:
     ap.add_argument("--dir", default=str(ROOT / "backups"))
     ap.add_argument("--keep", type=int, default=14, help="保留最近 N 份（0 = 不清理）")
     args = ap.parse_args()
+
+    if (os.getenv("DATABASE_URL", "") or "").startswith(("postgres://", "postgresql://")) \
+            and "--db" not in sys.argv:
+        print("当前 DATABASE_URL 指向 PostgreSQL，请使用 pg_dump：")
+        print('  pg_dump -Fc "$DATABASE_URL" > backups/copilot-$(date +%F).dump')
+        return 2
 
     src = Path(args.db)
     if not src.exists():

@@ -55,6 +55,7 @@
         <input type="text" id="name" placeholder="批次名，例如：宏运-2026-10-档案室抽样" style="flex:1" />
         <button class="primary" id="btnCreate">创建</button>
       </div>
+      <div id="globalFailed" style="margin-top:10px"></div>
       <div id="batches" style="margin-top:12px"></div>
     </div>
   </div>
@@ -100,6 +101,24 @@ async function loadBatches(){
         <button data-id="${b.id}" class="pick">选择</button></div>`).join('')
     : '<span style="color:var(--muted);font-size:12px">还没有批次</span>';
   document.querySelectorAll('.pick').forEach(btn=>btn.onclick=()=>selectBatch(btn.dataset.id));
+  loadGlobalFailed();
+}
+
+async function loadGlobalFailed(){
+  const f = await j('/api/batches/failed');
+  $('#globalFailed').innerHTML = f.count
+    ? `<div style="padding:8px 10px;border-radius:8px;background:#fde8e8;border:1px solid #f5c2c2;
+         color:var(--err);font-size:12.5px;display:flex;align-items:center;gap:10px">
+         <span style="flex:1">跨批次失败 <b>${f.count}</b> 条（${f.items.slice(0,3).map(x=>x.filename).join('、')}${f.count>3?'…':''}）</span>
+         <button id="btnRetryAll" style="background:#fff">一键重排</button>
+       </div>`
+    : '';
+  const b = document.querySelector('#btnRetryAll');
+  if (b) b.onclick = async () => {
+    const r = await j('/api/batches/retry-all', {method:'POST'});
+    alert(`已重排 ${r.requeued} 条，回到对应批次点“开始处理”即可`);
+    loadGlobalFailed(); loadBatches();
+  };
 }
 
 async function selectBatch(id){

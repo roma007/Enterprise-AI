@@ -292,6 +292,8 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **并发幂等（B3）**：同内容重复提交幂等返回，不同内容 409 | `app/store.py` `AlreadyConfirmed` | `/api/confirm` |
 | **脱敏（B4）**：公司/人名/手机/身份证/报关号自动替换，映射表持久化 | `app/masking.py` | `/api/mask` |
 | **批量导入（B5）**：一次传 N 份，后台处理，进度与失败重试 | `app/batchproc.py` | `/batch`、`/api/batches/*` |
+| **分层抽样（B6）**：月份×客户×格式分层，输出可打印清单 | `app/sampling.py` | `/api/sampling/*`、`make sample` |
+| **跨批次失败队列（B7）**：失败项集中可见、一键重排 | `app/store.py` `failed_items` | `/api/batches/failed`、`retry-all` |
 | **时间修复**：OCR 丢失分隔符（`2026110718:00`）也能解析 | `app/rules.py` `parse_datetime` | 单元验证 |
 | **人工兜底队列**：需复核但未确认的单 | `app/store.py` `queue` | `/api/queue` |
 | 模型网关（UA / 会话头 / 失败降级 / JSON 模式兼容） | `app/llm.py` | OpenCode 网关实测 |

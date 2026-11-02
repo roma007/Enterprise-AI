@@ -433,6 +433,64 @@ def api_list_batches():
     return {"items": list_batches()}
 
 
+@app.post("/api/sampling/plan")
+def api_sampling_plan(req: dict):
+    """B6：按 月份 × 客户 × 格式 分层抽样。"""
+    from .sampling import plan
+
+    items = req.get("items") or []
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=400, detail="items 不能为空")
+    keys = tuple(req.get("keys") or ("month", "client", "format"))
+    res = plan(items, int(req.get("target", 200)), keys, int(req.get("seed", 7)))
+    return res
+
+
+@app.post("/api/sampling/manifest.csv", response_class=PlainTextResponse)
+def api_sampling_manifest(req: dict):
+    """B6：生成可打印的抽样清单（档案室照着勾）。"""
+    from .sampling import manifest_csv, plan
+
+    items = req.get("items") or []
+    if not items:
+        raise HTTPException(status_code=400, detail="items 不能为空")
+    keys = tuple(req.get("keys") or ("month", "client", "format"))
+    res = plan(items, int(req.get("target", 200)), keys, int(req.get("seed", 7)))
+    return manifest_csv(res["selected"], keys)
+
+
+@app.get("/api/sampling/demo")
+def api_sampling_demo(target: int = 40):
+    """演示：造一份档案室台账，抽样并给出覆盖情况。"""
+    from .sampling import demo_inventory, plan
+
+    inv = demo_inventory()
+    res = plan(inv, target)
+    return {
+        "inventory": len(inv),
+        "stats": res["stats"],
+        "warnings": res["warnings"],
+        "sample": res["selected"][:5],
+    }
+
+
+@app.get("/api/batches/failed")
+def api_batch_failed(limit: int = 500):
+    """B7：跨批次失败队列。"""
+    from .store import failed_items
+
+    items = failed_items(limit)
+    return {"count": len(items), "items": items}
+
+
+@app.post("/api/batches/retry-all")
+def api_batch_retry_all(batch_id: str | None = None):
+    """B7：一键把失败项重新排队（可只针对某个批次）。"""
+    from .store import requeue_failed
+
+    return {"requeued": requeue_failed(batch_id)}
+
+
 @app.get("/api/batches/{batch_id}")
 def api_batch_detail(batch_id: str):
     from .batchproc import detail

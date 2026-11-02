@@ -592,6 +592,36 @@ def list_batches(limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def failed_items(limit: int = 500) -> list[dict]:
+    """B7：跨批次的失败队列，避免要一个批次一个批次去翻。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT i.id, i.batch_id, b.name AS batch_name, i.filename, i.error, i.updated_at"
+            " FROM batch_items i LEFT JOIN batches b ON b.id = i.batch_id"
+            " WHERE i.status='failed' ORDER BY i.updated_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def requeue_failed(batch_id: str | None = None) -> int:
+    """把失败项重新排回 pending。batch_id 为空时处理全部批次。"""
+    with _conn() as conn:
+        if batch_id:
+            cur = conn.execute(
+                "UPDATE batch_items SET status='pending', error=NULL, updated_at=?"
+                " WHERE status='failed' AND batch_id=?",
+                (_now(), batch_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE batch_items SET status='pending', error=NULL, updated_at=?"
+                " WHERE status='failed'",
+                (_now(),),
+            )
+    return cur.rowcount
+
+
 def audit(run_id: str) -> dict:
     """C2：还原一张单的完整链路——谁、何时、用什么版本、改了什么。"""
     with _conn() as conn:

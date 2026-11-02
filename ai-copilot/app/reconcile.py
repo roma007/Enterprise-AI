@@ -20,7 +20,9 @@ import io
 import re
 from decimal import Decimal, InvalidOperation
 
-MATCH_TOLERANCE = Decimal("0.01")
+from . import thresholds as th
+
+# 容差运行时可调（A3）
 
 
 def _dec(v) -> Decimal | None:
@@ -115,7 +117,9 @@ def parse_statement(text: str) -> dict:
 # ---------- 对账 ----------
 
 def reconcile(statement_rows: list[dict], waybills: list[dict],
-              tolerance: Decimal = MATCH_TOLERANCE) -> dict:
+              tolerance: Decimal | None = None) -> dict:
+    if tolerance is None:
+        tolerance = Decimal(str(th.get("reconcile.tolerance")))
     by_no: dict[str, dict] = {}
     by_box: dict[str, dict] = {}
     for w in waybills:

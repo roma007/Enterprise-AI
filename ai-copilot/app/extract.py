@@ -38,7 +38,7 @@ RULE_AUTHORITATIVE = {
 # 依据：28 份样本实验，fill_only 在两个集合上都不低于纯规则；
 #       llm_wins / floor 在调优集上最多掉 3.7 个百分点。见 README §四。
 MERGE_POLICY = __import__("os").getenv("MERGE_POLICY", "fill_only").strip().lower()
-RULE_FLOOR = float(__import__("os").getenv("MERGE_RULE_FLOOR", "0.85"))
+from . import thresholds as _th  # noqa: E402
 
 # 管线版本：规则逻辑或合并策略变了就 +1，审计时用来定位"当时跑的哪一版"
 PIPELINE_VERSION = "0.5.0"
@@ -510,7 +510,7 @@ def extract(text: str, mode: str = "merged", allow_llm: bool = True) -> Draft:
                         continue
                     # 2) floor 策略下，规则够自信就不让模型覆盖
                     if MERGE_POLICY == "floor" and rule_fv and rule_fv.value \
-                            and rule_fv.confidence >= RULE_FLOOR:
+                            and rule_fv.confidence >= _th.get("booking.rule_floor"):
                         continue
                 rule_fields[key] = fv
             draft.fields = rule_fields

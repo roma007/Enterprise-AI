@@ -18,6 +18,7 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
+from . import thresholds as th
 from .config import settings
 from .llm import chat_json, mask, parse_json_loose
 from .schema import Check, Draft, FieldValue
@@ -287,13 +288,15 @@ def run_checks(f: dict[str, FieldValue]) -> list[Check]:
 def decide_level(checks: list[Check], f: dict[str, FieldValue]) -> str:
     if any(c.level == "error" for c in checks):
         return "blocked"
+    low_floor = th.get("invoice.low_conf_floor")
+    auto_floor = th.get("invoice.risk_auto_floor")
     watch = ("invoice_no", "buyer_tax_id", "total_amount")
     confs = [f[k].confidence for k in watch if k in f and f[k].value]
-    if confs and min(confs) < 0.8:
+    if confs and min(confs) < low_floor:
         return "double"
     if any(c.level == "warn" for c in checks):
         return "single"
-    return "auto" if confs and min(confs) >= 0.9 else "single"
+    return "auto" if confs and min(confs) >= auto_floor else "single"
 
 
 # ---------- 主入口 ----------

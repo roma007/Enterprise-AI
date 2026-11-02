@@ -116,6 +116,36 @@ def _uid(request: Request) -> str:
     return u.get("id", "")
 
 
+@app.get("/api/settings")
+def api_settings_get():
+    from . import thresholds as th
+    return th.snapshot()
+
+
+@app.put("/api/settings")
+def api_settings_put(req: dict, request: Request):
+    from . import thresholds as th
+    values = req.get("values") or {}
+    if not isinstance(values, dict) or not values:
+        raise HTTPException(status_code=400, detail="values 不能为空")
+    try:
+        return th.set_many(values, actor=_uid(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/settings/reset")
+def api_settings_reset(req: dict, request: Request):
+    from . import thresholds as th
+    keys = req.get("keys") or None
+    return th.reset(keys, actor=_uid(request))
+
+
+@app.get("/settings")
+def settings_page():
+    return FileResponse(ROOT / "static" / "settings.html")
+
+
 @app.get("/users")
 def users_page():
     return FileResponse(ROOT / "static" / "users.html")

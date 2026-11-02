@@ -18,7 +18,9 @@ import io
 import re
 from decimal import Decimal, InvalidOperation
 
-TOLERANCE = Decimal("1.00")   # 1 元内视为一致
+from . import thresholds as th
+
+# 容差运行时可调（A3）
 
 _RATE_HINTS = {
     "carrier": ("车队", "承运商", "外协", "供应商"),
@@ -107,7 +109,9 @@ def _key(carrier: str, route: str = "", ctype: str = "") -> tuple[str, str, str]
     return ((carrier or "").strip(), (route or "").strip(), (ctype or "").strip().upper())
 
 
-def settle(rates: list[dict], bills: list[dict], tolerance: Decimal = TOLERANCE) -> dict:
+def settle(rates: list[dict], bills: list[dict], tolerance: Decimal | None = None) -> dict:
+    if tolerance is None:
+        tolerance = Decimal(str(th.get("settlement.tolerance")))
     exact: dict[tuple, Decimal] = {}
     by_carrier_route: dict[tuple, Decimal] = {}
     by_carrier: dict[tuple, Decimal] = {}

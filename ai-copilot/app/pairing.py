@@ -17,8 +17,9 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-AUTO_ACCEPT = 0.90
-REVIEW_MIN = 0.60
+from . import thresholds as th
+
+# 阈值运行时可调（A3）
 
 
 def _norm(s: str | None) -> str:
@@ -81,13 +82,15 @@ def pair(papers: list[dict], tms: list[dict]) -> dict:
             if s > 0:
                 candidates.append((s, i, j, why))
 
+    auto_accept = th.get("pairing.auto_accept")
+    review_min = th.get("pairing.review_min")
     candidates.sort(key=lambda x: (-x[0], x[1], x[2]))
 
     used_p: set[int] = set()
     used_t: set[int] = set()
     matched = []
     for s, i, j, why in candidates:
-        if i in used_p or j in used_t or s < REVIEW_MIN:
+        if i in used_p or j in used_t or s < review_min:
             continue
         used_p.add(i)
         used_t.add(j)
@@ -96,7 +99,7 @@ def pair(papers: list[dict], tms: list[dict]) -> dict:
             "tms_id": tms[j].get("id", j),
             "score": round(s, 2),
             "reason": why,
-            "action": "accept" if s >= AUTO_ACCEPT else "review",
+            "action": "accept" if s >= auto_accept else "review",
         })
 
     by_reason: dict[str, int] = {}

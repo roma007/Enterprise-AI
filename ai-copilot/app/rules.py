@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from . import thresholds as th
 from .schema import Check, Draft, FieldValue, SPEC_MAP, BLOCKING_KEYS
 
 # ---------- ISO 6346 ----------
@@ -225,8 +226,7 @@ RISK_KEYS = (
     "container_no", "container_type", "container_qty",
     "closing_time", "factory_phone",
 )
-RISK_AUTO_FLOOR = 0.90
-LOW_CONF_FLOOR = 0.80
+# 阈值改为运行时可调，见 app/thresholds.py（A3）
 
 
 def decide_review_level(draft: Draft) -> str:
@@ -245,16 +245,19 @@ def decide_review_level(draft: Draft) -> str:
 
     # 低置信度只看"必填字段 + 风险字段"：备注、品名这类选填项写得含糊，
     # 不该把整张单拉进双人复核。
+    low_floor = th.get("booking.low_conf_floor")
+    auto_floor = th.get("booking.risk_auto_floor")
+
     watch = set(BLOCKING_KEYS) | set(RISK_KEYS)
     low = [draft.fields[k].confidence for k in watch
            if k in draft.fields and draft.fields[k].value]
-    if low and min(low) < LOW_CONF_FLOOR:
+    if low and min(low) < low_floor:
         return "double"
 
     warns = any(c.level == "warn" for c in draft.checks)
     risk = [draft.fields[k].confidence for k in RISK_KEYS if k in draft.fields and draft.fields[k].value]
 
-    if not warns and risk and min(risk) >= RISK_AUTO_FLOOR:
+    if not warns and risk and min(risk) >= auto_floor:
         return "auto"
     return "single"
 

@@ -305,6 +305,8 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **用户管理（A1）**：建用户、改角色、停用（停用即踢下线） | `app/main.py` | `/users`（仅管理员） |
 | **操作者记录（A2）**：每次解析与确认记录 `actor` / `confirmed_by` | `app/store.py` | 审计与回写的基础 |
 | **阈值可配置（A3）**：9 项阈值存 JSON，改完立即生效 | `app/thresholds.py` | `/settings`（仅管理员） |
+| **原件留存（A4）**：单张上传的原图/PDF 落盘，可回读 | `app/storage.py` | `runs.source_file`、`GET /api/files/{rel}` |
+| **批量可取消（A5）**：处理中可中断，未处理项保持 pending | `app/batchproc.py` | `POST /api/batches/{id}/cancel` |
 | **时间修复**：OCR 丢失分隔符（`2026110718:00`）也能解析 | `app/rules.py` `parse_datetime` | 单元验证 |
 | **人工兜底队列**：需复核但未确认的单 | `app/store.py` `queue` | `/api/queue` |
 | 模型网关（UA / 会话头 / 失败降级 / JSON 模式兼容） | `app/llm.py` | OpenCode 网关实测 |

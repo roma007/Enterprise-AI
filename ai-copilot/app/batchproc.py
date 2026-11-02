@@ -31,6 +31,7 @@ from .store import (
 BATCH_DIR = ROOT / "data" / "batches"
 _lock = threading.Lock()
 _running: set[str] = set()
+_cancel: set[str] = set()
 
 
 def new_batch(name: str, note: str = "", kind: str = "booking") -> dict:
@@ -68,6 +69,9 @@ def _run(batch_id: str, use_llm: bool, do_mask: bool, actor: str = "") -> None:
     kind = batch.get("kind") or "booking"
     try:
         for item in batch_items(batch_id, status="pending"):
+            if batch_id in _cancel:
+                print(f"[batch] {batch_id} 已请求取消，停止处理")
+                break
             path = Path(item["path"] or "")
             try:
                 if not path.exists():
@@ -105,10 +109,20 @@ def _run(batch_id: str, use_llm: bool, do_mask: bool, actor: str = "") -> None:
     finally:
         with _lock:
             _running.discard(batch_id)
+            _cancel.discard(batch_id)
 
 
 def is_running(batch_id: str) -> bool:
     return batch_id in _running
+
+
+def cancel(batch_id: str) -> bool:
+    """请求取消：处理完当前这一条就停，剩下的保持 pending，可随时续跑。"""
+    with _lock:
+        if batch_id not in _running:
+            return False
+        _cancel.add(batch_id)
+    return True
 
 
 def detail(batch_id: str) -> dict:

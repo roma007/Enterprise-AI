@@ -15,7 +15,7 @@ from fastapi.responses import (
     FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
 )
 
-from . import auth
+from . import auth, storage
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -427,11 +427,13 @@ async def api_upload(request: Request, file: UploadFile = File(...), use_llm: bo
     if not res.text.strip():
         raise HTTPException(status_code=422, detail="未能从文件中识别出文字，请检查清晰度或改用粘贴文本")
 
+    stored = storage.save(data, file.filename or "", "booking")
     draft = extract(res.text, allow_llm=use_llm)
-    run_id = save_run(res.text, draft, actor=_uid(request))
+    run_id = save_run(res.text, draft, actor=_uid(request), source_file=stored)
     return _draft_response(draft, run_id, {
         "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
         "raw_text": res.text,
+        "source_file": stored,
     })
 
 
@@ -809,12 +811,39 @@ async def api_invoice_upload(request: Request, file: UploadFile = File(...), use
         raise HTTPException(status_code=503, detail=f"OCR 不可用：{exc}")
     if not res.text.strip():
         raise HTTPException(status_code=422, detail="未能从文件中识别出文字")
+    stored = storage.save(data, file.filename or "", "invoice")
     draft = extract_invoice(res.text, allow_llm=use_llm)
-    run_id = save_run(res.text, draft, kind="invoice", actor=_uid(request))
+    run_id = save_run(res.text, draft, kind="invoice", actor=_uid(request), source_file=stored)
     return _invoice_response(draft, run_id, {
         "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
         "raw_text": res.text,
+        "source_file": stored,
     })
+
+
+@app.get("/api/files/{rel:path}")
+def api_file(rel: str):
+    """回读原件（A4）：审计时用来看"系统当时看到的到底是什么"。"""
+    p = storage.resolve(rel)
+    if not p:
+        raise HTTPException(status_code=404, detail="原件不存在")
+    return FileResponse(p)
+
+
+@app.get("/api/storage")
+def api_storage():
+    return storage.usage()
+
+
+@app.post("/api/batches/{batch_id}/cancel")
+def api_batch_cancel(batch_id: str):
+    from .batchproc import cancel
+    from .store import get_batch
+
+    if not get_batch(batch_id):
+        raise HTTPException(status_code=404, detail="批次不存在")
+    stopped = cancel(batch_id)
+    return {"canceled": stopped, "note": "" if stopped else "该批次当前没有在跑"}
 
 
 @app.get("/invoice")

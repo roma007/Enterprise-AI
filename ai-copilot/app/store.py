@@ -121,6 +121,7 @@ _EXTRA_COLUMNS = (
     ("batches", "kind", "TEXT DEFAULT 'booking'"),
     ("runs", "actor", "TEXT DEFAULT ''"),
     ("runs", "confirmed_by", "TEXT DEFAULT ''"),
+    ("runs", "source_file", "TEXT DEFAULT ''"),
 )
 
 
@@ -143,7 +144,8 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def save_run(raw: str, draft: Draft, kind: str = "booking", actor: str = "") -> str:
+def save_run(raw: str, draft: Draft, kind: str = "booking", actor: str = "",
+             source_file: str = "") -> str:
     run_id = uuid.uuid4().hex[:12]
     text_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     fields_json = json.dumps(
@@ -155,7 +157,8 @@ def save_run(raw: str, draft: Draft, kind: str = "booking", actor: str = "") -> 
         conn.execute(
             "INSERT INTO runs (id, ts, engine, text_hash, chars, elapsed_ms, tokens,"
             " errors, warns, review_level, model, prompt_ver, pipeline_ver,"
-            " raw_text, fields_json, kind, actor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " raw_text, fields_json, kind, actor, source_file)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 run_id,
                 _now(),
@@ -174,6 +177,7 @@ def save_run(raw: str, draft: Draft, kind: str = "booking", actor: str = "") -> 
                 fields_json,
                 kind,
                 actor,
+                source_file,
             ),
         )
         # 入口捕获过同一份原文 → 关联，用于算绕过率

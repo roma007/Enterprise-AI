@@ -82,6 +82,7 @@
       <div class="bar"><i id="bar"></i></div>
       <div class="row">
         <button class="primary" id="btnProcess">开始处理</button>
+        <button id="btnCancel">取消</button>
         <button id="btnRetry">重试失败</button>
         <span id="procNote" style="color:var(--muted);font-size:12px"></span>
       </div>
@@ -149,6 +150,7 @@ function render(d){
   $('#bar').style.width = (d.progress*100).toFixed(1) + '%';
   $('#procNote').textContent = d.running ? '处理中…' : (d.progress>=1 ? '已完成' : '未开始');
   $('#btnProcess').disabled = d.running;
+  $('#btnCancel').disabled = !d.running;
   $('#items').innerHTML = '<tr><th>文件</th><th>状态</th><th>单号</th><th>错误</th></tr>' +
     d.items.map(i=>`<tr>
       <td>${i.filename}</td>
@@ -185,6 +187,13 @@ $('#btnUpload').onclick = async () => {
 $('#btnProcess').onclick = async () => {
   if(!CUR) return;
   await j(`/api/batches/${CUR}/process?use_llm=false&mask=true`, {method:'POST'});
+  refresh();
+};
+
+$('#btnCancel').onclick = async () => {
+  if(!CUR) return;
+  const r = await j(`/api/batches/${CUR}/cancel`, {method:'POST'});
+  toast(r.canceled ? '已请求取消，处理完当前这条就停' : r.note);
   refresh();
 };
 

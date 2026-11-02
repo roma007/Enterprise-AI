@@ -423,7 +423,7 @@ def api_mask(req: ExtractReq):
 def api_create_batch(req: dict):
     from .batchproc import new_batch
 
-    return new_batch(req.get("name", ""), req.get("note", ""))
+    return new_batch(req.get("name", ""), req.get("note", ""), req.get("kind", "booking"))
 
 
 @app.get("/api/batches")

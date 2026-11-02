@@ -22,6 +22,7 @@ from pathlib import Path
 from . import ocr
 from .config import ROOT
 from .extract import extract
+from .invoice import extract_invoice
 from .masking import MaskMap, fingerprint, mask_fields, mask_text
 from .store import (
     add_batch_items, batch_items, create_batch, get_batch, update_item, save_run,
@@ -32,8 +33,8 @@ _lock = threading.Lock()
 _running: set[str] = set()
 
 
-def new_batch(name: str, note: str = "") -> dict:
-    return create_batch(name.strip() or "未命名批次", note)
+def new_batch(name: str, note: str = "", kind: str = "booking") -> dict:
+    return create_batch(name.strip() or "未命名批次", note, kind)
 
 
 def save_upload(batch_id: str, filename: str, data: bytes) -> dict:
@@ -62,6 +63,8 @@ def start_processing(batch_id: str, use_llm: bool = False, do_mask: bool = True)
 
 def _run(batch_id: str, use_llm: bool, do_mask: bool) -> None:
     mm = MaskMap()
+    batch = get_batch(batch_id) or {}
+    kind = batch.get("kind") or "booking"
     try:
         for item in batch_items(batch_id, status="pending"):
             path = Path(item["path"] or "")
@@ -76,7 +79,10 @@ def _run(batch_id: str, use_llm: bool, do_mask: bool) -> None:
                     update_item(item["id"], "failed", error="未识别出文字")
                     continue
 
-                draft = extract(res.text, allow_llm=use_llm)
+                if kind == "invoice":
+                    draft = extract_invoice(res.text, allow_llm=use_llm)
+                else:
+                    draft = extract(res.text, allow_llm=use_llm)
 
                 store_text = res.text
                 if do_mask:
@@ -87,7 +93,7 @@ def _run(batch_id: str, use_llm: bool, do_mask: bool) -> None:
                         fv.value = masked_fields.get(k) or fv.value
                     mm.save()
 
-                run_id = save_run(store_text, draft)
+                run_id = save_run(store_text, draft, kind=kind)
                 update_item(item["id"], "extracted", run_id=run_id,
                             note=f"指纹 {fingerprint(res.text)}")
                 time.sleep(0.05)

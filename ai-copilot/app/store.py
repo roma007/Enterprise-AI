@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS batches (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
     note        TEXT,
+    kind        TEXT DEFAULT 'booking',
     created_at  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS batch_items (
@@ -96,6 +97,7 @@ _EXTRA_COLUMNS = (
     ("runs", "version", "INTEGER DEFAULT 0"),
     ("runs", "kind", "TEXT DEFAULT 'booking'"),
     ("learn_queue", "corrected", "INTEGER DEFAULT 0"),
+    ("batches", "kind", "TEXT DEFAULT 'booking'"),
 )
 
 
@@ -527,14 +529,15 @@ def find_amend_candidates(fields: dict, days: int = 3, limit: int = 5) -> list[d
     return out[:limit]
 
 
-def create_batch(name: str, note: str = "") -> dict:
+def create_batch(name: str, note: str = "", kind: str = "booking") -> dict:
     batch_id = uuid.uuid4().hex[:12]
+    kind = kind if kind in {"booking", "invoice"} else "booking"
     with _conn() as conn:
         conn.execute(
-            "INSERT INTO batches (id, name, note, created_at) VALUES (?,?,?,?)",
-            (batch_id, name, note, _now()),
+            "INSERT INTO batches (id, name, note, kind, created_at) VALUES (?,?,?,?,?)",
+            (batch_id, name, note, kind, _now()),
         )
-    return {"id": batch_id, "name": name, "note": note}
+    return {"id": batch_id, "name": name, "note": note, "kind": kind}
 
 
 def add_batch_items(batch_id: str, filenames: list[str]) -> list[dict]:
@@ -584,7 +587,7 @@ def get_batch(batch_id: str) -> dict | None:
 def list_batches(limit: int = 50) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
-            "SELECT b.id, b.name, b.created_at,"
+            "SELECT b.id, b.name, COALESCE(b.kind,'booking') kind, b.created_at,"
             " (SELECT COUNT(*) FROM batch_items i WHERE i.batch_id=b.id) total,"
             " (SELECT COUNT(*) FROM batch_items i WHERE i.batch_id=b.id AND i.status='extracted') done,"
             " (SELECT COUNT(*) FROM batch_items i WHERE i.batch_id=b.id AND i.status='failed') failed"

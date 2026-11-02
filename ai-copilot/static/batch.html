@@ -53,6 +53,10 @@
     <div class="body">
       <div class="row">
         <input type="text" id="name" placeholder="批次名，例如：宏运-2026-10-档案室抽样" style="flex:1" />
+        <select id="kind" style="padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit">
+          <option value="booking">托书</option>
+          <option value="invoice">发票</option>
+        </select>
         <button class="primary" id="btnCreate">创建</button>
       </div>
       <div id="globalFailed" style="margin-top:10px"></div>
@@ -97,6 +101,7 @@ async function loadBatches(){
   $('#batches').innerHTML = d.items.length
     ? d.items.map(b=>`<div class="row" style="padding:6px 0;border-bottom:1px solid #f0f2f5">
         <b style="flex:1">${b.name}</b>
+        <span style="padding:1px 8px;border-radius:999px;font-size:11px;background:${b.kind==='invoice'?'#e8f0fb':'#eef1f4'};color:${b.kind==='invoice'?'#1f4e79':'#6b7684'}">${b.kind==='invoice'?'发票':'托书'}</span>
         <span style="color:var(--muted);font-size:12px">${b.done}/${b.total} 已识别 · 失败 ${b.failed}</span>
         <button data-id="${b.id}" class="pick">选择</button></div>`).join('')
     : '<span style="color:var(--muted);font-size:12px">还没有批次</span>';
@@ -157,7 +162,7 @@ $('#btnCreate').onclick = async () => {
   const name = $('#name').value.trim();
   if(!name){ alert('填个批次名'); return; }
   const b = await j('/api/batches', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name})});
+    body: JSON.stringify({name, kind: $('#kind').value})});
   $('#name').value = '';
   await loadBatches();
   selectBatch(b.id);

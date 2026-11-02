@@ -297,6 +297,7 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **发票识别（04b）**：税号校验位、金额勾稽、税率合法性；规则够好自动跳过模型 | `app/invoice.py` | `/invoice`、`/api/invoice/*` |
 | **三单匹配**：订单↔运单↔发票，箱号/金额/客户/箱量四维核对 | `app/threeway.py` | `/threeway`、`/api/threeway/*` |
 | **账单级自动对账**：对账单 ↔ 系统运单双向比对，四类差异定位 | `app/reconcile.py` | `/reconcile`、`/api/reconcile/*` |
+| **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
 | **时间修复**：OCR 丢失分隔符（`2026110718:00`）也能解析 | `app/rules.py` `parse_datetime` | 单元验证 |
 | **人工兜底队列**：需复核但未确认的单 | `app/store.py` `queue` | `/api/queue` |
 | 模型网关（UA / 会话头 / 失败降级 / JSON 模式兼容） | `app/llm.py` | OpenCode 网关实测 |

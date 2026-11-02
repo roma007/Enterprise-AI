@@ -540,6 +540,84 @@ def api_batch_retry(batch_id: str):
     return {"requeued": retry_failed(batch_id)}
 
 
+@app.get("/api/invoice/meta")
+def api_invoice_meta():
+    from .invoice import INVOICE_SPECS
+
+    return {
+        "fields": [
+            {"key": s.key, "label": s.label, "blocking": s.blocking, "placeholder": s.example}
+            for s in INVOICE_SPECS
+        ],
+        "llm_enabled": settings.llm_enabled,
+        "model": settings.model if settings.llm_enabled else "rule-based-v1",
+    }
+
+
+def _invoice_response(draft, run_id: str, extra: dict | None = None) -> dict:
+    from .invoice import INV_LABELS
+
+    body = {
+        "run_id": run_id,
+        "kind": "invoice",
+        "engine": draft.engine,
+        "elapsed_ms": draft.elapsed_ms,
+        "tokens": draft.tokens,
+        "note": draft.note,
+        "review_level": draft.review_level,
+        "blocking": any(c.level == "error" for c in draft.checks),
+        "fields": {
+            k: {"value": v.value, "confidence": v.confidence, "source": v.source,
+                "label": INV_LABELS.get(k, k)}
+            for k, v in draft.fields.items()
+        },
+        "checks": [c.model_dump() for c in draft.checks],
+    }
+    if extra:
+        body.update(extra)
+    return body
+
+
+@app.post("/api/invoice/extract")
+def api_invoice_extract(req: ExtractReq):
+    """04b：发票识别。复用托书底座，只换 schema 与校验。"""
+    from .invoice import extract_invoice
+
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="发票内容为空")
+    draft = extract_invoice(req.text, allow_llm=req.use_llm)
+    run_id = save_run(req.text, draft, kind="invoice")
+    return _invoice_response(draft, run_id)
+
+
+@app.post("/api/invoice/upload")
+async def api_invoice_upload(file: UploadFile = File(...), use_llm: bool = True):
+    from .invoice import extract_invoice
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="文件超过 10MB")
+    try:
+        res = ocr.extract(file.filename or "", data)
+    except ocr.OcrUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"OCR 不可用：{exc}")
+    if not res.text.strip():
+        raise HTTPException(status_code=422, detail="未能从文件中识别出文字")
+    draft = extract_invoice(res.text, allow_llm=use_llm)
+    run_id = save_run(res.text, draft, kind="invoice")
+    return _invoice_response(draft, run_id, {
+        "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
+        "raw_text": res.text,
+    })
+
+
+@app.get("/invoice")
+def invoice_page():
+    return FileResponse(ROOT / "static" / "invoice.html")
+
+
 @app.get("/api/queue")
 def api_queue(limit: int = 50):
     """人工兜底队列：需复核但未确认的单。"""

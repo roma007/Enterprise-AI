@@ -94,6 +94,7 @@ _EXTRA_COLUMNS = (
     ("runs", "fields_json", "TEXT"),
     ("runs", "inbound_id", "TEXT"),
     ("runs", "version", "INTEGER DEFAULT 0"),
+    ("runs", "kind", "TEXT DEFAULT 'booking'"),
     ("learn_queue", "corrected", "INTEGER DEFAULT 0"),
 )
 
@@ -117,7 +118,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def save_run(raw: str, draft: Draft) -> str:
+def save_run(raw: str, draft: Draft, kind: str = "booking") -> str:
     run_id = uuid.uuid4().hex[:12]
     text_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     fields_json = json.dumps(
@@ -129,7 +130,7 @@ def save_run(raw: str, draft: Draft) -> str:
         conn.execute(
             "INSERT INTO runs (id, ts, engine, text_hash, chars, elapsed_ms, tokens,"
             " errors, warns, review_level, model, prompt_ver, pipeline_ver,"
-            " raw_text, fields_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " raw_text, fields_json, kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 run_id,
                 _now(),
@@ -146,6 +147,7 @@ def save_run(raw: str, draft: Draft) -> str:
                 draft.pipeline_version,
                 raw,
                 fields_json,
+                kind,
             ),
         )
         # 入口捕获过同一份原文 → 关联，用于算绕过率

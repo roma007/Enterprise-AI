@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>发票识别 · 04b</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--brand2:#2d7dd2;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:14px;align-items:center;position:sticky;top:0;z-index:9}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  main{display:grid;grid-template-columns:minmax(340px,40%) 1fr;gap:16px;padding:16px;align-items:start}
+  @media(max-width:980px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);
+           color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  textarea{width:100%;min-height:320px;border:0;padding:14px;font:13px/1.6 ui-monospace,Menlo,monospace;
+           resize:vertical;outline:none;border-radius:0 0 10px 10px}
+  .row{display:flex;gap:8px;padding:10px 14px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line)}
+  button{font:inherit;font-size:13px;padding:8px 14px;border-radius:7px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.5}
+  label.up{font-size:13px;padding:8px 14px;border-radius:7px;border:1px dashed var(--brand2);
+           color:var(--brand2);cursor:pointer;background:#f7fbff}
+  .summary{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;
+           align-items:center;font-size:12px;color:var(--muted)}
+  .pill{padding:2px 9px;border-radius:999px;font-size:12px;background:#eef2f7}
+  .pill.err{background:#fde8e8;color:var(--err)}
+  .pill.warn{background:#fdf3e2;color:var(--warn)}
+  .pill.ok{background:#e6f4ea;color:var(--ok)}
+  .pill.lv-auto{background:#e6f4ea;color:var(--ok);font-weight:600}
+  .pill.lv-single{background:#e8f0fb;color:var(--brand2);font-weight:600}
+  .pill.lv-double{background:#fdf3e2;color:var(--warn);font-weight:600}
+  .pill.lv-blocked{background:#fde8e8;color:var(--err);font-weight:600}
+  .banner{margin:12px 14px 0;padding:10px 12px;border-radius:8px;background:#fde8e8;
+          border:1px solid #f5c2c2;color:var(--err);font-size:13px}
+  .fields{padding:6px 0 12px}
+  .frow{display:grid;grid-template-columns:130px 1fr 56px;gap:10px;align-items:center;padding:6px 14px}
+  .frow label{font-size:12px;color:var(--muted);text-align:right}
+  .frow label b{color:var(--err)}
+  .frow input{width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px}
+  .frow input.err{border-color:var(--err);background:#fffafa}
+  .frow input.warn{border-color:#e2c089;background:#fffdf8}
+  .checks{padding:4px 14px 12px}
+  .check{display:flex;gap:8px;padding:5px 0;font-size:12.5px;border-bottom:1px dashed #eef0f3}
+  .check:last-child{border-bottom:0}
+  .dot{width:7px;height:7px;border-radius:50%;margin-top:6px;flex:0 0 auto}
+  .dot.error{background:var(--err)} .dot.warn{background:var(--warn)}
+  .empty{padding:60px 20px;text-align:center;color:var(--muted);font-size:13px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>发票识别与校验</h1>
+  <span class="sub">复用托书底座 · 只换 schema 与校验规则</span>
+  <a href="/">← 托书工作台</a>
+</header>
+
+<main>
+  <section class="card">
+    <h2><span>① 发票内容</span><span style="font-weight:400">粘贴票面文字，或上传图片/PDF</span></h2>
+    <textarea id="raw" placeholder="把发票上的文字贴进来，或直接上传发票图片"></textarea>
+    <div class="row">
+      <button class="primary" id="btnParse">识别</button>
+      <label class="up" id="upLabel" for="file">上传图片 / PDF</label>
+      <input id="file" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.txt" hidden />
+      <button class="ghost" id="btnClear">清空</button>
+      <span id="info" style="color:var(--muted);font-size:12px"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span>② 结构化结果</span><button id="btnEval" style="padding:3px 10px;font-size:12px">看样例</button></h2>
+    <div id="summary" class="summary" style="display:none"></div>
+    <div id="banner"></div>
+    <div id="checks" class="checks" style="display:none"></div>
+    <div id="fields" class="fields"><div class="empty">左侧粘贴发票内容，点“识别”。</div></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+let META=null, LAST=null, T0=0;
+const LV = {auto:'自动通过', single:'单人确认', double:'双人复核', blocked:'存在阻断'};
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+
+const SAMPLE = `增值税专用发票
+发票代码：033002100311
+发票号码：12345678
+开票日期：2026-10-28
+购买方名称：宁波宏运集卡运输有限公司
+纳税人识别号：9133020662M3QQRL4D
+销售方名称：宁波北仑中石化加油站
+纳税人识别号：91330200TF3NLDC9HT
+货物或应税劳务：0# 柴油
+金额：1234.56
+税率：13%
+税额：160.49
+价税合计：1395.05
+校验码：12345678901234567890`;
+
+async function boot(){
+  META = await (await fetch('/api/invoice/meta')).json();
+  if(!META.llm_enabled) $('#info').textContent = '规则引擎';
+}
+
+async function parse(){
+  const text = $('#raw').value.trim();
+  if(!text){ toast('请先粘贴发票内容'); return; }
+  $('#btnParse').disabled = true;
+  try{
+    const r = await fetch('/api/invoice/extract', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, use_llm:true})});
+    if(!r.ok){ toast('识别失败：'+(await r.text()).slice(0,80)); return; }
+    render(await r.json());
+  } finally { $('#btnParse').disabled = false; }
+}
+
+async function upload(f){
+  if(!f) return;
+  const fd = new FormData(); fd.append('file', f); fd.append('use_llm','true');
+  $('#upLabel').textContent = '识别中…';
+  try{
+    const r = await fetch('/api/invoice/upload', {method:'POST', body:fd});
+    if(!r.ok){ toast('识别失败：'+(await r.text()).slice(0,80)); return; }
+    const d = await r.json();
+    if(d.raw_text) $('#raw').value = d.raw_text;
+    render(d);
+  } finally { $('#upLabel').textContent='上传图片 / PDF'; $('#file').value=''; }
+}
+
+function levelOf(key){
+  const cs=(LAST.checks||[]).filter(c=>c.field===key);
+  if(cs.some(c=>c.level==='error')) return 'err';
+  if(cs.some(c=>c.level==='warn')) return 'warn';
+  return '';
+}
+
+function render(d){
+  LAST=d; T0=Date.now();
+  const errs=d.checks.filter(c=>c.level==='error').length;
+  const warns=d.checks.filter(c=>c.level==='warn').length;
+  const filled=Object.values(d.fields).filter(f=>f.value).length;
+  $('#summary').style.display='flex';
+  $('#summary').innerHTML=`
+    <span class="pill lv-${d.review_level}">${LV[d.review_level]||d.review_level}</span>
+    <span class="pill ${errs?'err':'ok'}">${errs} 项阻断</span>
+    <span class="pill ${warns?'warn':'ok'}">${warns} 项提醒</span>
+    <span class="pill ok">已抽 ${filled} 字段</span>
+    <span>${d.elapsed_ms} ms</span>
+    <span>${d.tokens?d.tokens+' tokens':''}</span>
+    <span>${d.engine}</span>`;
+  $('#info').textContent = 'run ' + d.run_id;
+
+  const hard = d.checks.filter(c=>c.level==='error');
+  $('#banner').innerHTML = hard.length
+    ? `<div class="banner"><b>${hard[0].message}</b>${hard.length>1?`<div style="margin-top:4px;font-size:12px">另有 ${hard.length-1} 项</div>`:''}</div>`
+    : '';
+
+  const cbox=$('#checks');
+  if(d.checks.length){
+    cbox.style.display='block';
+    cbox.innerHTML = d.checks.map(c=>`<div class="check"><span class="dot ${c.level}"></span>
+      <span style="flex:1">${c.message}</span>
+      <span style="color:#9aa4b0;font-size:11px">${c.code}</span></div>`).join('');
+  } else cbox.style.display='none';
+
+  $('#fields').innerHTML = META.fields.map(f=>{
+    const got=d.fields[f.key]||{value:'',confidence:0};
+    const lv=levelOf(f.key);
+    const pct=Math.round((got.confidence||0)*100);
+    return `<div class="frow">
+      <label>${f.label}${f.blocking?' <b>*</b>':''}</label>
+      <input data-key="${f.key}" class="${lv}" value="${(got.value||'').replace(/"/g,'&quot;')}"
+             placeholder="${f.placeholder||''}" />
+      <span style="font-size:11px;color:var(--muted);text-align:right">${got.value?pct+'%':'—'}</span>
+    </div>`;
+  }).join('');
+}
+
+$('#btnParse').onclick = parse;
+$('#file').onchange = e => upload(e.target.files[0]);
+$('#btnClear').onclick = () => { $('#raw').value=''; $('#fields').innerHTML='<div class="empty">左侧粘贴发票内容，点“识别”。</div>'; $('#summary').style.display='none'; $('#banner').innerHTML=''; $('#checks').style.display='none'; };
+$('#btnEval').onclick = () => { $('#raw').value = SAMPLE; parse(); };
+boot();
+</script>
+</body>
+</html>

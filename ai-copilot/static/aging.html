@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>账龄与催收</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:14px;align-items:center}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{padding:16px;max-width:1200px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:180px;border:0;padding:12px;resize:vertical;
+           font:12.5px/1.6 ui-monospace,Menlo,monospace;outline:none;border-radius:0 0 10px 10px}
+  .bar{display:flex;gap:10px;align-items:center;padding:0 14px 14px;flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:120px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:19px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600}
+  .tag{padding:2px 9px;border-radius:999px;font-size:11.5px}
+  .l-正常{background:#e6f4ea;color:var(--ok)}
+  .l-提醒{background:#e8f0fb;color:var(--brand)}
+  .l-催收{background:#fdf3e2;color:var(--warn)}
+  .l-重点催收{background:#fde8e8;color:var(--err)}
+  .bucket{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
+  .bucket div{flex:1;min-width:130px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff}
+  .bucket b{display:block;font-size:17px}
+  .bucket span{font-size:11px;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>账龄与催收</h1>
+  <span class="sub">应收台账 → 分档 → 客户风险 → 催收建议</span>
+  <a href="/">← 托书</a>
+  <a href="/invoice" style="margin-left:12px">发票</a>
+  <a href="/threeway" style="margin-left:12px">三单</a>
+  <a href="/reconcile" style="margin-left:12px">对账</a>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 应收台账（CSV / Excel 粘贴 / 空格分隔）</h2>
+    <textarea id="rows">客户,单号,应收,已收,到期日
+宁波宏运集卡运输有限公司,INV-1001,2600,0,2026-11-20
+海通国际物流,INV-2001,5200,0,2026-09-10</textarea>
+    <div class="bar">
+      <button class="primary" id="btnRun">分析</button>
+      <button id="btnDemo">加载演示数据</button>
+      <button id="btnExport">导出</button>
+      <span style="color:var(--muted);font-size:12px" id="hint"></span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 账龄总览</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="bucket" id="buckets"></div>
+  </section>
+
+  <section class="card" id="out2" style="display:none">
+    <h2>③ 客户风险与催收建议</h2>
+    <div style="padding:0 14px 14px"><table id="clients"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let LAST = null, DEMO = null;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+const money = n => Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+
+function render(r){
+  LAST = r;
+  const s = r.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${money(s.total_receivable)}</b><span>应收合计</span></div>
+    <div><b>${money(s.total_outstanding)}</b><span>未收</span></div>
+    <div><b style="color:${s.total_overdue?'var(--err)':'var(--ok)'}">${money(s.total_overdue)}</b><span>逾期未收</span></div>
+    <div><b>${(s.overdue_ratio*100).toFixed(1)}%</b><span>逾期占比</span></div>
+    <div><b>${s.clients}</b><span>客户数</span></div>
+    <div><b style="color:var(--err)">${s.counts['重点催收']}</b><span>重点催收客户</span></div>`;
+  $('#buckets').innerHTML = Object.entries(s.buckets).map(([k,v])=>
+    `<div><b>${money(v)}</b><span>${k}</span></div>`).join('');
+
+  $('#clients').innerHTML = '<tr><th>客户</th><th>笔数</th><th>未收</th><th>逾期未收</th>'
+    + '<th>逾期占比</th><th>最长逾期</th><th>等级</th><th>建议</th></tr>' +
+    r.clients.map(c=>`<tr>
+      <td>${c.client}</td><td>${c.count}</td>
+      <td>${money(c.outstanding)}</td>
+      <td style="color:${c.overdue?'var(--err)':'inherit'}">${money(c.overdue)}</td>
+      <td>${(c.overdue_ratio*100).toFixed(0)}%</td>
+      <td>${c.max_overdue_days} 天</td>
+      <td><span class="tag l-${c.level}">${c.level}</span></td>
+      <td style="color:var(--muted);font-size:12px">${c.advice}</td></tr>`).join('');
+  $('#out').style.display='block'; $('#out2').style.display='block';
+}
+
+$('#btnRun').onclick = async () => {
+  $('#btnRun').disabled = true; $('#hint').textContent='分析中…';
+  try{
+    const r = await fetch('/api/aging', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text: $('#rows').value})});
+    if(!r.ok){ toast('分析失败：'+(await r.text()).slice(0,80)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent=''; }
+};
+
+$('#btnDemo').onclick = async () => {
+  const r = await (await fetch('/api/aging/demo')).json();
+  render(r);
+  $('#rows').value = '（演示数据，直接看下方结果）';
+  toast('演示：6 个客户，覆盖四个账龄档');
+};
+
+$('#btnExport').onclick = async () => {
+  if(!LAST){ toast('先分析一次'); return; }
+  const r = await fetch('/api/aging/export.csv', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({text: $('#rows').value})});
+  const t = await r.text();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], {type:'text/csv;charset=utf-8'}));
+  a.download = '账龄分析.csv'; a.click();
+};
+</script>
+</body>
+</html>

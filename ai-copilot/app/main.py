@@ -758,6 +758,57 @@ def reconcile_page():
     return FileResponse(ROOT / "static" / "reconcile.html")
 
 
+@app.post("/api/aging")
+def api_aging(req: dict):
+    """账龄分析：应收台账 → 分档 + 客户风险 + 催收建议。
+
+    statement_text 传应收台账（CSV/制表符/空格）；也可直接传 rows 数组。
+    as_of 不传则用今天。
+    """
+    from datetime import date as _date
+
+    from .aging import aging, parse_receivables
+
+    rows = req.get("rows")
+    if not rows:
+        text = (req.get("text") or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="应收台账为空")
+        rows = parse_receivables(text)
+    if not rows:
+        raise HTTPException(status_code=422, detail="未能解析出应收记录")
+
+    as_of = None
+    if req.get("as_of"):
+        try:
+            y, m, d = [int(x) for x in str(req["as_of"]).split("-")]
+            as_of = _date(y, m, d)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="as_of 格式应为 YYYY-MM-DD")
+
+    return aging(rows, as_of)
+
+
+@app.post("/api/aging/export.csv", response_class=PlainTextResponse)
+def api_aging_export(req: dict):
+    from .aging import aging, export_csv, parse_receivables
+
+    rows = req.get("rows") or parse_receivables((req.get("text") or "").strip())
+    return export_csv(aging(rows))
+
+
+@app.get("/api/aging/demo")
+def api_aging_demo():
+    from .aging import aging, demo_rows
+
+    return aging(demo_rows())
+
+
+@app.get("/aging")
+def aging_page():
+    return FileResponse(ROOT / "static" / "aging.html")
+
+
 @app.get("/api/queue")
 def api_queue(limit: int = 50):
     """人工兜底队列：需复核但未确认的单。"""

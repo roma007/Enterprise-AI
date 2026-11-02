@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile reset clean
+.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging reset clean
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -64,3 +64,7 @@ threeway:
 # 自动对账演示：13 条对账单 / 11 条运单
 reconcile:
 	@curl -sS http://127.0.0.1:8790/api/reconcile/demo | $(PY) -m json.tool | head -40
+
+# 账龄与催收演示
+aging:
+	@curl -sS http://127.0.0.1:8790/api/aging/demo | $(PY) -m json.tool | head -30

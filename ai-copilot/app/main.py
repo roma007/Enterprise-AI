@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -17,11 +18,12 @@ from fastapi.responses import (
 )
 
 from . import auth, delivery, storage
+from . import metrics as prom
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import ocr, wecom_crypto
-from .config import ROOT, settings
+from .config import ROOT, VERSION, settings
 from .csvio import decode_csv_bytes, export_csv, parse_tms_csv
 from . import wecom
 from .evalrun import SAMPLE_PATH, run_all
@@ -35,7 +37,7 @@ from .store import (
     metrics, queue, recent, record_inbound, report_md, revoke_session,
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
-    clear_login_failures, login_locked, record_login_failure,
+    clear_login_failures, login_locked, record_login_failure, ops_counts,
     confirmed_recent, revisions, undo_confirm, NotConfirmed, VersionMismatch,
 )
 
@@ -120,6 +122,37 @@ async def auth_middleware(request: Request, call_next):
     request.state.user = user
     request.state.jti = payload.get("jti", "")
     return await call_next(request)
+
+
+@app.middleware("http")
+async def observe_middleware(request: Request, call_next):
+    """记录 Prometheus 指标 + 补安全响应头。
+
+    放在 auth 之后注册 = 包在最外层，未登录的 401 也会被计数。
+    """
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        prom.observe(request.method, "unmatched", 500,
+                     (time.perf_counter() - start) * 1000)
+        raise
+
+    if request.url.path != "/metrics":
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or request.url.path
+        prom.observe(request.method, path, response.status_code,
+                     (time.perf_counter() - start) * 1000)
+
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    if proto == "https":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 
 def _uid(request: Request) -> str:
@@ -218,6 +251,7 @@ def api_login(req: LoginReq, request: Request):
         "user": {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]},
     })
     resp.set_cookie("sid", auth.sign(payload), httponly=True, samesite="lax",
+                    secure=settings.cookie_secure,
                     max_age=auth.TOKEN_TTL, path="/")
     return resp
 
@@ -228,7 +262,7 @@ def api_logout(request: Request):
     if jti:
         revoke_session(jti)
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie("sid", path="/")
+    resp.delete_cookie("sid", path="/", secure=settings.cookie_secure)
     return resp
 
 
@@ -304,12 +338,52 @@ def index():
 
 @app.get("/api/health")
 def health():
+    """健康检查：给负载均衡/监控用，不返回任何敏感信息。"""
+    db_ok = True
+    journal = ""
+    try:
+        from .store import _conn
+        with _conn() as conn:
+            journal = conn.execute("PRAGMA journal_mode").fetchone()[0]
+            conn.execute("SELECT 1").fetchone()
+    except Exception:  # noqa: BLE001
+        db_ok = False
     return {
-        "ok": True,
+        "ok": db_ok,
+        "version": VERSION,
         "llm_enabled": settings.llm_enabled,
         "model": settings.model if settings.llm_enabled else "rule-based-v1",
         "ocr": ocr.available(),
+        "db": {"ok": db_ok, "journal_mode": journal},
+        "storage": storage.health(),
     }
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def prometheus(request: Request):
+    """Prometheus 抓取端点。
+
+    - 配了 METRICS_TOKEN：必须带 Bearer 或 ?token=
+    - 没配：只允许本机访问（反代在另一台机器时必须配 token）
+    """
+    expected = os.getenv("METRICS_TOKEN", "").strip()
+    if expected:
+        head = request.headers.get("authorization", "")
+        got = head[7:].strip() if head.lower().startswith("bearer ") else \
+            request.query_params.get("token", "")
+        if not secrets.compare_digest(got, expected):
+            raise HTTPException(status_code=401, detail="metrics token 不正确")
+    else:
+        host = request.client.host if request.client else ""
+        if host not in {"127.0.0.1", "::1", "localhost"}:
+            raise HTTPException(
+                status_code=403,
+                detail="未配置 METRICS_TOKEN 时仅允许本机抓取",
+            )
+    return PlainTextResponse(
+        prom.render(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 def _draft_response(draft, run_id: str, extra: dict | None = None) -> dict:

@@ -1,0 +1,20 @@
+# Prometheus 抓取配置示例（D4）
+#
+# 放进 prometheus.yml 的 scrape_configs 下。
+# 若 ai-copilot 配了 METRICS_TOKEN，取消 authorization 注释并填同一个值。
+
+scrape_configs:
+  - job_name: ai-copilot
+    metrics_path: /metrics
+    scheme: http
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - 127.0.0.1:8790
+        labels:
+          env: prod
+          app: ai-copilot
+    # authorization:
+    #   type: Bearer
+    #   credentials: "REPLACE_WITH_METRICS_TOKEN"

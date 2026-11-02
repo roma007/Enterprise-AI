@@ -6,6 +6,7 @@ import os
 import uuid
 from pathlib import Path
 
+VERSION = "0.27.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -59,6 +60,9 @@ class Settings:
     # 价值口径：人工单票基线秒数、人工小时成本（元）
     baseline_manual_sec: float = float(os.getenv("BASELINE_MANUAL_SEC", "180"))
     hourly_cost: float = float(os.getenv("HOURLY_COST", "45"))
+
+    # HTTPS 部署（D5）：反代终结 TLS 时，Cookie 必须带 Secure
+    cookie_secure: bool = os.getenv("COOKIE_SECURE", "0").strip() not in {"0", "false", "off"}
 
     # 登录失败锁定（D3）：同一 邮箱+IP 在窗口内失败 N 次 → 锁 M 秒
     login_max_failures: int = int(os.getenv("LOGIN_MAX_FAILURES", "5"))

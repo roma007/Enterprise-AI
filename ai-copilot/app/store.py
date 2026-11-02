@@ -512,6 +512,40 @@ def save_feedback(
     }
 
 
+def ops_counts() -> dict:
+    """给 /metrics 用的计数快照。缺表时返回 0，不影响服务。"""
+    out: dict = {"review": {}, "batch": {}, "items": {}, "learn": {},
+                 "outbox": {}, "users_active": 0, "sessions_active": 0,
+                 "runs": 0, "runs_confirmed": 0, "feedback_changed": 0}
+    with _conn() as conn:
+        def scalar(sql: str, args=()):
+            try:
+                return conn.execute(sql, args).fetchone()[0] or 0
+            except sqlite3.Error:
+                return 0
+
+        out["runs"] = scalar("SELECT COUNT(*) FROM runs")
+        out["runs_confirmed"] = scalar("SELECT COUNT(*) FROM runs WHERE confirmed=1")
+        out["feedback_changed"] = scalar("SELECT COUNT(*) FROM feedback WHERE changed=1")
+        for row in conn.execute(
+            "SELECT review_level, COUNT(*) n FROM runs GROUP BY review_level"
+        ):
+            out["review"][row["review_level"] or "unknown"] = row["n"]
+        out["batch"]["total"] = scalar("SELECT COUNT(*) FROM batches")
+        for row in conn.execute("SELECT status, COUNT(*) n FROM batch_items GROUP BY status"):
+            out["items"][row["status"] or "unknown"] = row["n"]
+        for row in conn.execute("SELECT status, COUNT(*) n FROM learn_queue GROUP BY status"):
+            out["learn"][row["status"] or "unknown"] = row["n"]
+        for row in conn.execute("SELECT status, COUNT(*) n FROM delivery_outbox GROUP BY status"):
+            out["outbox"][row["status"] or "unknown"] = row["n"]
+        out["users_active"] = scalar("SELECT COUNT(*) FROM users WHERE active=1")
+        out["sessions_active"] = scalar(
+            "SELECT COUNT(*) FROM user_sessions WHERE revoked=0 AND expires_at > ?",
+            (int(__import__("time").time()),),
+        )
+    return out
+
+
 def metrics(baseline_sec: float = 180.0) -> dict:
     """指标中心：这是第 6 个月老板问"省了多少"时，唯一能拿出来的东西。"""
     with _conn() as conn:

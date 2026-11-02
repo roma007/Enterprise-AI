@@ -1,0 +1,76 @@
+# ai-copilot 告警规则（D4）
+#
+# 放进 prometheus.yml 的 rule_files 下，并接 Alertmanager。
+# 阈值按现场调整；这里给的是"先能用"的保守值。
+
+groups:
+  - name: ai-copilot
+    rules:
+      - alert: CopilotDown
+        expr: up{job="ai-copilot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ai-copilot 无法抓取"
+          description: "Prometheus 连续 2 分钟抓不到 /metrics；检查进程、端口、反代。"
+
+      - alert: CopilotHigh5xxRate
+        expr: |
+          sum(rate(copilot_http_requests_total{job="ai-copilot",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(copilot_http_requests_total{job="ai-copilot"}[5m])), 0.001)
+          > 0.02
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ai-copilot 5xx 比例超过 2%"
+          description: "查看日志与最近一次代码变更；OCR/模型外部依赖故障也会表现为 5xx。"
+
+      - alert: CopilotBatchFailures
+        expr: copilot_batch_items_total{job="ai-copilot",status="failed"} > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "批次失败项超过 10"
+          description: "在 /batch 页面看失败原因；可能是扫描质量或字段模板变化。"
+
+      - alert: CopilotOutboxBacklog
+        expr: copilot_outbox_total{job="ai-copilot",status="pending"} > 20
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "回写交付平台积压超过 20 条"
+          description: "检查 DELIVERY_PLATFORM_URL、token 与平台可用性；发件箱不会丢，但会延迟。"
+
+      - alert: CopilotLoginBruteforce
+        expr: |
+          sum(rate(copilot_http_requests_total{job="ai-copilot",route="/api/auth/login",status="429"}[5m]))
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "登录失败锁定持续触发"
+          description: "可能是撞库；确认来源 IP，必要时在反代层封禁。"
+
+      - alert: CopilotDbTooLarge
+        expr: sum(copilot_db_size_bytes{job="ai-copilot"}) > 5e9
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "ai-copilot 数据库超过 5GB"
+          description: "先跑 scripts/cleanup.py 的 dry-run；再评估是否迁移 PostgreSQL。"
+
+      - alert: CopilotNoTraffic
+        expr: increase(copilot_runs_total{job="ai-copilot"}[1h]) == 0
+        for: 2h
+        labels:
+          severity: info
+        annotations:
+          summary: "2 小时没有新解析"
+          description: "工作时间才有意义；确认是业务空闲还是入口断了。"

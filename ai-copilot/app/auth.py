@@ -133,6 +133,7 @@ PUBLIC_PATHS = {
     "/api/health",
     "/api/auth/login",
     "/api/wecom/callback",      # 用企微自己的签名校验
+    "/metrics",                 # Prometheus 抓取，端点内校验 METRICS_TOKEN
     "/login",
     "/favicon.ico",
 }

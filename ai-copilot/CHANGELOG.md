@@ -5,6 +5,35 @@
 
 ---
 
+## [0.27.0] · 2026-11-02 · 监控告警与 HTTPS（D4 / D5）
+
+### D4 Prometheus 指标
+- `GET /metrics`：存活、版本、请求数/耗时、解析量、分级分布、批次、
+  学习队列、回写发件箱、会话数、数据库大小
+- `METRICS_TOKEN` 保护；不配置时只允许本机抓取
+- HTTP 指标在中间件里采集，未登录的 401 也计数
+- 安全响应头：`X-Content-Type-Options` / `X-Frame-Options` /
+  `Referrer-Policy` / `Permissions-Policy`；HTTPS 时加 HSTS
+- `GET /api/health` 增加版本、数据库 `journal_mode`、存储健康
+- `ops/prometheus-scrape.yml` + `ops/prometheus-alerts.yml`（7 条告警）
+
+### D5 HTTPS / 反向代理
+- `ops/nginx/copilot.conf`：TLS 1.2/1.3、HTTP→HTTPS 301、HSTS、
+  安全头、50MB 上传、300 秒读超时、`X-Forwarded-Proto`
+- `COOKIE_SECURE=true`：登录 Cookie 带 `Secure`
+- `make verify-https`：真实 nginx + 自签证书跑通全链路
+- 运维手册补监控/HTTPS 两节与自检命令
+
+### 实测
+- `/metrics` 返回 200，`copilot_up 1`；业务/HTTP/数据库指标齐全
+- 配 token 后：无 token 401、错 token 401、Bearer 200
+- 安全响应头 4 项齐全；HTTPS 下 HSTS 存在
+- nginx `-t` 通过；HTTPS 200、HTTP 301、Cookie `Secure`、
+  `/metrics` token 保护 4/4 通过
+- smoke 15 项全绿；三样本集回归未变
+
+---
+
 ## [0.26.0] · 2026-11-02 · 单实例上生产加固（D1/D2/D3/D6）
 
 ### D1 WAL + 安全备份

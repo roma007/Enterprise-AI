@@ -839,6 +839,11 @@ def api_settlement_demo():
     return demo_data()
 
 
+@app.get("/demo")
+def demo_page():
+    return FileResponse(ROOT / "static" / "demo.html")
+
+
 @app.get("/settlement")
 def settlement_page():
     return FileResponse(ROOT / "static" / "settlement.html")

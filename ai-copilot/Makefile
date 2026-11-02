@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement reset clean
+.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -72,3 +72,8 @@ aging:
 # 外协结算演示：合同价 vs 车队报账
 settlement:
 	@curl -sS http://127.0.0.1:8790/api/settlement/demo | $(PY) -m json.tool | head -30
+
+# 一键演示页（会客时用）
+demo:
+	@echo "http://127.0.0.1:8790/demo"
+	@open http://127.0.0.1:8790/demo 2>/dev/null || true

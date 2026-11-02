@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>一键演示 · 全链路</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:12px;align-items:center;position:sticky;top:0;z-index:9}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header .sp{flex:1}
+  header a{font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:16px;max-width:1400px;margin:0 auto}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  .steps{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;
+         position:sticky;top:64px;height:fit-content}
+  .step{padding:9px 11px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--muted);
+        display:flex;gap:8px;align-items:flex-start}
+  .step:hover{background:#f7f9fb}
+  .step.on{background:#eef4fa;color:var(--brand);font-weight:600}
+  .step.done{color:var(--ok)}
+  .step .n{width:20px;flex:0 0 20px;text-align:right;font-variant-numeric:tabular-nums}
+  .main{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .hd{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .hd h2{margin:0 0 4px;font-size:16px}
+  .hd .say{color:var(--muted);font-size:13px}
+  .body{padding:16px 18px}
+  .input{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+         font:12.5px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap;max-height:150px;
+         overflow:auto;color:#33404f}
+  .label{font-size:12px;color:var(--muted);margin:14px 0 6px}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+  .kpi div{flex:1;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fafbfc}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600}
+  .tag{padding:2px 8px;border-radius:999px;font-size:11.5px}
+  .t-ok,.t-auto{background:#e6f4ea;color:var(--ok)}
+  .t-single,.t-review{background:#e8f0fb;color:var(--brand)}
+  .t-double,.t-warn{background:#fdf3e2;color:var(--warn)}
+  .t-blocked,.t-err{background:#fde8e8;color:var(--err)}
+  .msg{padding:10px 12px;border-radius:8px;font-size:13px;margin-top:10px}
+  .msg.ok{background:#e6f4ea;color:var(--ok)}
+  .msg.warn{background:#fdf3e2;color:var(--warn)}
+  .msg.err{background:#fde8e8;color:var(--err)}
+  .ft{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--line);align-items:center}
+  button{font:inherit;font-size:13px;padding:9px 18px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>一键演示 · 全链路</h1>
+  <span class="sub">按会客顺序，10 步走完</span>
+  <span class="sp"></span>
+  <a href="/">托书</a><a href="/invoice" style="margin-left:10px">发票</a>
+  <a href="/threeway" style="margin-left:10px">三单</a><a href="/reconcile" style="margin-left:10px">对账</a>
+  <a href="/aging" style="margin-left:10px">账龄</a><a href="/settlement" style="margin-left:10px">外协</a>
+</header>
+
+<div class="wrap">
+  <nav class="steps" id="steps"></nav>
+  <section class="main">
+    <div class="hd">
+      <h2 id="title">准备开始</h2>
+      <div class="say" id="say">点左侧任一步，或直接点「开始」。</div>
+    </div>
+    <div class="body" id="body"><div style="color:var(--muted);font-size:13px">还没有执行。</div></div>
+    <div class="ft">
+      <button class="primary" id="btnRun">执行这一步</button>
+      <button id="btnNext">下一步 →</button>
+      <span class="hint" id="hint"></span>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let CUR = 0, DONE = new Set();
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+const jpost = (p,b) => fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
+const jget = p => fetch(p).then(r=>r.json());
+const money = n => Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+
+/* ---------------- 每一步 ---------------- */
+
+const BOOKING_CHAT = `王总，明天北仑这票麻烦安排下：一个 40HQ，箱号 TCLU1234568，封号 FJ0099123。
+货是塑料粒子，毛重大概 19 吨。装柜地址：北仑小港街道江南路 88 号，送到春晓码头。
+截港时间 11月7日 18点。客户是宁波海通货代，单号 HT-2026-1105。拖车费 2600，报关我来。`;
+
+const BOOKING_PAST = `客户：嘉禾货运
+委托单号：JH-1028
+箱型：40HQ
+箱量：1
+箱号：CSQU3054383
+封号：JH1234567
+提箱地：北仑二期堆场
+卸货地：宁波北仑明州路 500 号
+截港时间：2026-10-28 18:00`;
+
+const BOOKING_BADBOX = `客户：联盛物流
+委托单号：LS-1111
+箱型：40GP
+箱量：1
+箱号：MSCU1234560
+提箱地：北仑三期堆场
+卸货地：宁波奉化
+截港时间：2026-12-05 17:00`;
+
+const MULTI = `1. 客户：宏远国际货代  单号：HY-1105  箱型：40HQ  箱号：CSQU3054383  提箱地：北仑二期堆场  卸货地：宁波北仑春晓工业园3号仓  截港：2026-12-07 18:00
+2. 客户：海通货代  单号：HT-1106  箱型：20GP  箱号：TCLU1234568  提箱地：北仑三期堆场  卸货地：宁波北仑大碶街道  截港：2026-12-08 18:00
+3. 客户：中远物流  单号：ZY-1107  箱型：40HQ  箱号：MSCU7654329  提箱地：穿山港区堆场  卸货地：宁波慈溪浒山街道  截港：2026-12-09 18:00`;
+
+const BASE_BOOKING = `客户：宁波宏运集卡运输有限公司
+委托单号：HY-1105
+箱型：40GP
+箱量：1
+箱号：CSQU3054383
+封号：SL8823101
+提箱地：北仑二期堆场
+卸货地：宁波北仑春晓工业园3号仓
+运费：2600
+截港时间：2026-12-07 18:00`;
+
+const AMEND = `原单 HY-1105 有变：
+1. 箱型改 40HQ
+2. 加一个箱号 MSCU7654329
+3. 截港延到 12月9号 18点
+其他不变`;
+
+const INVOICE = `增值税专用发票
+发票代码：033002100311
+发票号码：12345678
+开票日期：2026-10-28
+购买方名称：宁波宏运集卡运输有限公司
+纳税人识别号：9133020662M3QQRL4D
+销售方名称：宁波北仑中石化加油站
+金额：2300.88
+税率：13%
+税额：299.12
+价税合计：2600.00`;
+
+const steps = [
+  {
+    title: "① 托书解析：微信口语 → 结构化",
+    say: "客户就是这么发的，连字段名都没有。看它能不能读出来。",
+    input: BOOKING_CHAT,
+    async run(){
+      const d = await jpost('/api/extract', {text: BOOKING_CHAT, use_llm: true});
+      const f = d.fields;
+      return {
+        kpi: [
+          ['耗时', d.elapsed_ms + ' ms'],
+          ['引擎', d.engine],
+          ['分级', d.review_level],
+        ],
+        table: {
+          head: ['字段', '值', '置信度'],
+          rows: ['client','booking_no','container_type','container_no','seal_no','closing_time','delivery_addr','gross_weight']
+            .filter(k => f[k] && f[k].value)
+            .map(k => [f[k].label, f[k].value, Math.round(f[k].confidence*100)+'%']),
+        },
+        note: "注意：毛重是从「大概 19 吨」推出来的，不是原文里的数字。"
+      };
+    }
+  },
+  {
+    title: "② 当场拦截：截港已过 & 箱号录错",
+    say: "这两个是集卡行业最贵的错误。看系统会不会拦。",
+    input: BOOKING_PAST + "\n\n---\n\n" + BOOKING_BADBOX,
+    async run(){
+      const a = await jpost('/api/extract', {text: BOOKING_PAST, use_llm: false});
+      const b = await jpost('/api/extract', {text: BOOKING_BADBOX, use_llm: false});
+      const rows = [...a.checks, ...b.checks].filter(c => c.level === 'error')
+        .map(c => [c.code, c.message]);
+      return {
+        kpi: [['拦截项', rows.length + ' 条'], ['分级', a.review_level + ' / ' + b.review_level]],
+        table: {head: ['错误码', '说明'], rows},
+        note: "被阻断的单不能自动通过，必须改完或强行确认并留痕。"
+      };
+    }
+  },
+  {
+    title: "③ 一条消息三票 → 自动拆分",
+    say: "客户经常一条微信发三票，人工会录错。",
+    input: MULTI,
+    async run(){
+      const d = await jpost('/api/split', {text: MULTI, use_llm: false});
+      return {
+        kpi: [['切出票数', d.count]],
+        table: {
+          head: ['票', '客户', '单号', '箱型', '箱号', '截港'],
+          rows: d.tickets.map(t => [t.index, t.fields.client.value, t.fields.booking_no.value,
+            t.fields.container_type.value, t.fields.container_no.value, t.fields.closing_time.value]),
+        },
+        note: "切不开的情况会原样返回，不硬拆。"
+      };
+    }
+  },
+  {
+    title: "④ 改单：只写变更，也能算出差额",
+    say: "客户改单从来不重发整张单，只发一句「有变」。",
+    input: "先确认原单 ↓\n" + BASE_BOOKING + "\n\n再发改单 ↓\n" + AMEND,
+    async run(){
+      const d = await jpost('/api/extract', {text: BASE_BOOKING, use_llm: false});
+      const auto = {}; Object.entries(d.fields).forEach(([k,v]) => auto[k] = v.value || '');
+      await jpost('/api/confirm', {run_id: d.run_id, auto, final: auto, handle_ms: 30000});
+      const a = await jpost('/api/extract', {text: AMEND, use_llm: false});
+      const am = a.amend || {};
+      return {
+        kpi: [['原单', am.base_booking_no || '—'], ['差异项', (am.diff||[]).length + ' 条']],
+        table: {
+          head: ['动作', '字段', '原值', '新值'],
+          rows: (am.diff||[]).map(x => [x.action, x.label, x.old || '（空）', x.new]),
+        },
+        note: "「加一个箱号」走并集，不是覆盖；没提到的字段保持原值。"
+      };
+    }
+  },
+  {
+    title: "⑤ 发票识别与校验",
+    say: "发票最怕金额和税号算错，这两项用算法兜，不靠模型。",
+    input: INVOICE,
+    async run(){
+      const d = await jpost('/api/invoice/extract', {text: INVOICE, use_llm: false});
+      const f = d.fields;
+      return {
+        kpi: [['耗时', d.elapsed_ms + ' ms'], ['分级', d.review_level], ['校验', d.checks.length + ' 项']],
+        table: {
+          head: ['字段', '值'],
+          rows: ['invoice_no','buyer_tax_id','seller_tax_id','amount','tax_rate','tax_amount','total_amount']
+            .filter(k => f[k] && f[k].value)
+            .map(k => [f[k].label, f[k].value]),
+        },
+        note: "税号走 GB 32100 校验位；金额勾稽 金额+税额=价税合计。故意改错一个数就会 blocked。"
+      };
+    }
+  },
+  {
+    title: "⑥ 三单匹配：订单 / 运单 / 发票",
+    say: "财务最花时间的就是把这三张单对上。",
+    input: "订单 / 运单 / 发票 三方比对",
+    async run(){
+      const d = await jpost('/api/threeway/match', {
+        booking_text: BASE_BOOKING,
+        waybill_text: BASE_BOOKING,
+        invoice_text: INVOICE.replace('2600.00','2600.00'),
+      });
+      return {
+        kpi: [['结论', d.verdict || d.overall], ['通过项', d.summary.pass], ['不符', d.summary.mismatch]],
+        table: {
+          head: ['维度', '结果', '说明'],
+          rows: d.dimensions.map(x => [x.label, x.result, x.detail]),
+        },
+      };
+    }
+  },
+  {
+    title: "⑦ 账单级自动对账",
+    say: "客户发一张对账单，几十条，人工要几天。",
+    input: "演示对账单：11 条（10 条正常 + 2 条金额错 + 1 条系统没有 + 1 条客户漏报）",
+    async run(){
+      const d = await jget('/api/reconcile/demo');
+      const s = d.result.summary;
+      return {
+        kpi: [
+          ['一致', s.ok], ['金额不符', s.amount_diff],
+          ['系统无此单', s.missing_in_system], ['客户漏单', s.missing_in_statement],
+          ['差额', money(s.diff_total)],
+        ],
+        table: {
+          head: ['状态', '单号', '对账单', '系统', '差额'],
+          rows: d.result.rows.filter(x => x.status !== 'ok')
+            .map(x => [x.status, x.booking_no, x.statement_amount ?? '—', x.system_amount ?? '—', x.diff ?? '—']),
+        },
+        note: "「客户漏单」是只顺着对账单看永远发现不了的那一类 —— 最容易漏钱。"
+      };
+    }
+  },
+  {
+    title: "⑧ 账龄与催收",
+    say: "老板只问一句：还有多少钱没收，谁欠最久。",
+    input: "演示台账：6 个客户，覆盖四个账龄档",
+    async run(){
+      const d = await jget('/api/aging/demo');
+      const s = d.summary;
+      return {
+        kpi: [
+          ['未收', money(s.total_outstanding)], ['逾期', money(s.total_overdue)],
+          ['逾期占比', (s.overdue_ratio*100).toFixed(1)+'%'],
+          ['重点催收', s.counts['重点催收']],
+        ],
+        table: {
+          head: ['客户', '未收', '最长逾期', '等级', '建议'],
+          rows: d.clients.map(c => [c.client, money(c.outstanding), c.max_overdue_days+' 天', c.level, c.advice]),
+        },
+      };
+    }
+  },
+  {
+    title: "⑨ 外协结算",
+    say: "车队报账有没有多报，一眼看出来。",
+    input: "演示：2 个车队 / 5 条合同价 / 8 笔结算",
+    async run(){
+      const d = await jget('/api/settlement/demo');
+      const s = d.result.summary;
+      return {
+        kpi: [
+          ['一致', s.ok], ['多付', s.overcharge], ['少付', s.undercharge],
+          ['无合同价', s.no_rate], ['差额', money(s.diff_total)],
+        ],
+        table: {
+          head: ['状态', '单号', '应付', '报账', '差额', '查价层级'],
+          rows: d.result.rows.filter(x => x.status !== 'ok')
+            .map(x => [x.status, x.booking_no, x.expected ?? '—', x.claimed ?? '—', x.diff ?? '—', x.price_level || '—']),
+        },
+        note: "「无合同价」要单独处理——它不是多付，是根本没定价。"
+      };
+    }
+  },
+  {
+    title: "⑩ 收尾：指标与风险",
+    say: "客户会问「省了多少」「能不能不要人」。这两个都能算给他看。",
+    input: "运行指标 + 风险模拟",
+    async run(){
+      const m = await jget('/api/metrics');
+      const r = await jget('/api/risk-sim?monthly_tickets=2000&penalty=8300&threshold=0.9');
+      const kpi = [
+        ['解析票数', m.tickets_parsed], ['自动通过率', (m.auto_pass_rate*100).toFixed(0)+'%'],
+        ['平均确认', m.avg_handle_sec + ' s'], ['节省工时', m.saved_hours + ' h'],
+        ['修正率', (m.correction_rate*100).toFixed(1)+'%'],
+      ];
+      const rows = [];
+      if (r.ok) {
+        rows.push(['取消人工后的月损失', money(r.expected_monthly_loss)]);
+        rows.push(['省下的人工', money(r.monthly_review_cost_saved)]);
+        rows.push(['净收益', money(r.net_monthly)]);
+        rows.push(['结论', r.verdict]);
+      } else {
+        rows.push(['风险模拟', r.reason]);
+      }
+      return { kpi, table: {head:['项','值'], rows}, note: "错单率用了 Laplace 平滑：0 错单不等于 0 风险。" };
+    }
+  },
+];
+
+/* ---------------- 渲染 ---------------- */
+
+function renderSteps(){
+  $('#steps').innerHTML = steps.map((s,i)=>{
+    const cls = i===CUR ? 'on' : (DONE.has(i) ? 'done' : '');
+    return `<div class="step ${cls}" data-i="${i}"><span class="n">${i===CUR?'▶':(DONE.has(i)?'✓':i+1)}</span><span>${s.title}</span></div>`;
+  }).join('');
+  document.querySelectorAll('.step').forEach(el=>el.onclick=()=>{ CUR=+el.dataset.i; select(); });
+}
+
+function select(){
+  renderSteps();
+  const s = steps[CUR];
+  $('#title').textContent = s.title;
+  $('#say').textContent = s.say;
+  $('#body').innerHTML = `<div class="label">输入</div><div class="input">${s.input}</div>`;
+  $('#hint').textContent = '';
+  $('#btnRun').disabled = false;
+}
+
+async function runStep(){
+  const s = steps[CUR];
+  $('#btnRun').disabled = true; $('#hint').textContent = '执行中…';
+  try{
+    const r = await s.run();
+    let html = `<div class="label">输入</div><div class="input">${s.input}</div>`;
+    if (r.kpi){
+      html += `<div class="label">结果</div><div class="kpi">` +
+        r.kpi.map(([k,v])=>`<div><b>${v}</b><span>${k}</span></div>`).join('') + `</div>`;
+    }
+    if (r.table && r.table.rows.length){
+      html += `<div class="label">明细</div><table><tr>` +
+        r.table.head.map(h=>`<th>${h}</th>`).join('') + `</tr>` +
+        r.table.rows.map(row=>`<tr>` + row.map(c=>`<td>${c}</td>`).join('') + `</tr>`).join('') +
+        `</table>`;
+    }
+    if (r.note){
+      const lv = /拦|错|不符|多付|漏/.test(r.note) ? 'warn' : 'ok';
+      html += `<div class="msg ${lv}">${r.note}</div>`;
+    }
+    $('#body').innerHTML = html;
+    DONE.add(CUR); renderSteps();
+    $('#hint').textContent = `第 ${CUR+1} / ${steps.length} 步完成`;
+  } catch(e){
+    $('#body').innerHTML = `<div class="msg err">执行失败：${e}</div>`;
+  } finally { $('#btnRun').disabled = false; }
+}
+
+$('#btnRun').onclick = runStep;
+$('#btnNext').onclick = () => { if(CUR < steps.length-1){ CUR++; select(); } else { toast('已经是最后一步'); } };
+document.addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey||e.ctrlKey)) runStep(); });
+
+CUR = 0; select();
+</script>
+</body>
+</html>

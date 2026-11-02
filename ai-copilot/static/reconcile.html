@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>自动对账 · 对账单 ↔ 系统运单</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:14px;align-items:center}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{padding:16px;max-width:1200px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:220px;border:0;padding:12px;resize:vertical;
+           font:12.5px/1.6 ui-monospace,Menlo,monospace;outline:none;border-radius:0 0 10px 10px}
+  .bar{display:flex;gap:10px;align-items:center;padding:0 14px 14px;flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.5}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:110px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:19px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600}
+  .tag{padding:2px 8px;border-radius:999px;font-size:11.5px}
+  .t-ok{background:#e6f4ea;color:var(--ok)}
+  .t-amount_diff{background:#fdf3e2;color:var(--warn)}
+  .t-missing_in_system,.t-missing_in_statement{background:#fde8e8;color:var(--err)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  .hint{color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>自动对账</h1>
+  <span class="sub">客户对账单 ↔ 系统运单 · 双向比对</span>
+  <a href="/">← 托书</a>
+  <a href="/invoice" style="margin-left:12px">发票</a>
+  <a href="/threeway" style="margin-left:12px">三单匹配</a>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 客户对账单（CSV / 制表符 / 空格分隔都行）</h2>
+    <textarea id="stmt">运单号,箱号,金额
+HY-1100,CSQU3054380,2400
+HY-1101,CSQU3054381,2450
+HY-1102,CSQU3054382,2300
+HY-1103,CSQU3054383,2550</textarea>
+    <div class="bar">
+      <button class="primary" id="btnRun">开始对账</button>
+      <button id="btnDemo">加载演示数据</button>
+      <button id="btnExport">导出差异表</button>
+      <span class="hint" id="hint">对账以"已确认的托书"为系统运单；也可用演示数据</span>
+    </div>
+  </section>
+
+  <section class="card" id="result" style="display:none">
+    <h2>② 对账结果</h2>
+    <div class="kpi" id="kpi"></div>
+    <div style="padding:0 14px 14px"><table id="rows"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let LAST = null, DEMO = null;
+const LABEL = {ok:'一致', amount_diff:'金额不符',
+               missing_in_system:'系统无此单', missing_in_statement:'客户漏单'};
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+
+function render(r){
+  LAST = r;
+  const s = r.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${s.statement_lines}</b><span>对账单条数</span></div>
+    <div><b>${s.ok}</b><span>一致</span></div>
+    <div><b style="color:${s.amount_diff?'var(--warn)':'inherit'}">${s.amount_diff}</b><span>金额不符</span></div>
+    <div><b style="color:${s.missing_in_system?'var(--err)':'inherit'}">${s.missing_in_system}</b><span>系统无此单</span></div>
+    <div><b style="color:${s.missing_in_statement?'var(--err)':'inherit'}">${s.missing_in_statement}</b><span>客户漏单</span></div>
+    <div><b>${s.statement_total.toLocaleString()}</b><span>对账总额</span></div>
+    <div><b>${s.system_total.toLocaleString()}</b><span>系统总额</span></div>
+    <div><b style="color:${Math.abs(s.diff_total)>0.01?'var(--err)':'var(--ok)'}">${s.diff_total.toLocaleString()}</b><span>差额</span></div>`;
+  $('#rows').innerHTML = '<tr><th>行</th><th>状态</th><th>单号</th><th>箱号</th><th>对账单</th><th>系统</th><th>差额</th><th>说明</th></tr>' +
+    r.rows.map(x=>`<tr>
+      <td>${x.line||''}</td>
+      <td><span class="tag t-${x.status}">${LABEL[x.status]||x.status}</span></td>
+      <td>${x.booking_no||''}</td><td>${x.container_no||''}</td>
+      <td>${x.statement_amount ?? ''}</td><td>${x.system_amount ?? ''}</td>
+      <td>${x.diff ?? ''}</td><td style="color:var(--muted)">${x.note||''}</td></tr>`).join('');
+  $('#result').style.display='block';
+}
+
+$('#btnRun').onclick = async () => {
+  const body = {statement_text: $('#stmt').value};
+  if (DEMO && DEMO.statement_text === $('#stmt').value) body.waybills = DEMO.waybills;
+  $('#btnRun').disabled = true; $('#hint').textContent = '对账中…';
+  try{
+    const r = await fetch('/api/reconcile', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!r.ok){ toast('对账失败：' + (await r.text()).slice(0,100)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent=''; }
+};
+
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/reconcile/demo')).json();
+  DEMO = d; $('#stmt').value = d.statement_text;
+  render(d.result);
+  toast('演示数据已加载：10 条正常 / 2 条金额错 / 1 条系统没有 / 1 条客户漏报');
+};
+
+$('#btnExport').onclick = async () => {
+  if(!LAST){ toast('先对一次账'); return; }
+  const r = await fetch('/api/reconcile/export.csv', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({statement_text: $('#stmt').value})});
+  const text = await r.text();
+  const blob = new Blob([text], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = '对账差异.csv'; a.click();
+};
+</script>
+</body>
+</html>

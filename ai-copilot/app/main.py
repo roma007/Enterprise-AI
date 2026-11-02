@@ -681,6 +681,83 @@ def threeway_page():
     return FileResponse(ROOT / "static" / "threeway.html")
 
 
+@app.post("/api/reconcile")
+def api_reconcile(req: dict):
+    """账单级自动对账。
+
+    入参：
+      statement_text  对账单原文（CSV/制表符/空格分隔均支持）
+      waybills        系统运单（可选，不传则从已确认的托书里取）
+    """
+    from .reconcile import parse_statement, reconcile
+    from .store import confirmed_waybills
+
+    text = (req.get("statement_text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="对账单内容为空")
+
+    parsed = parse_statement(text)
+    if not parsed["rows"]:
+        raise HTTPException(status_code=422, detail="未能从对账单中解析出数据行")
+
+    waybills = req.get("waybills")
+    if not waybills:
+        waybills = confirmed_waybills()
+    if not waybills:
+        raise HTTPException(status_code=409,
+                            detail="系统里没有已确认的运单，无法对账（请先确认托书，或手动传 waybills）")
+
+    result = reconcile(parsed["rows"], waybills)
+    result["statement_meta"] = {"mode": parsed["mode"], "mapping": parsed["mapping"],
+                                "parsed_rows": len(parsed["rows"])}
+    return result
+
+
+@app.post("/api/reconcile/export.csv", response_class=PlainTextResponse)
+def api_reconcile_export(req: dict):
+    from .reconcile import export_csv
+    from .store import confirmed_waybills
+    from .reconcile import parse_statement, reconcile
+
+    parsed = parse_statement((req.get("statement_text") or "").strip())
+    waybills = req.get("waybills") or confirmed_waybills()
+    return export_csv(reconcile(parsed["rows"], waybills))
+
+
+@app.get("/api/reconcile/demo")
+def api_reconcile_demo():
+    """造一张对账单：10 条正常、2 条金额错、1 条系统没有；系统另有 1 条对账单没报。"""
+    from .reconcile import reconcile
+
+    waybills = []
+    for i in range(10):
+        waybills.append({
+            "booking_no": f"HY-{1100 + i}",
+            "container_no": f"CSQU30543{80 + i:02d}",
+            "client": "宁波宏运集卡运输有限公司",
+            "freight": f"{2400 + i * 50}",
+        })
+    waybills.append({"booking_no": "HY-1199", "container_no": "TCLU1234599",
+                     "client": "宁波宏运集卡运输有限公司", "freight": "2600"})
+
+    rows = [{"booking_no": w["booking_no"], "container_no": w["container_no"],
+             "amount": w["freight"]} for w in waybills[:10]]
+    # 两条金额对不上
+    rows[2]["amount"] = str(int(rows[2]["amount"]) - 150)
+    rows[7]["amount"] = str(int(rows[7]["amount"]) + 80)
+    # 一条系统里没有
+    rows.append({"booking_no": "HY-8888", "container_no": "MSCU9999999", "amount": "2300"})
+
+    lines = ["运单号,箱号,金额"] + [f'{r["booking_no"]},{r["container_no"]},{r["amount"]}' for r in rows]
+    r = reconcile(rows, waybills)
+    return {"statement_text": "\n".join(lines), "result": r}
+
+
+@app.get("/reconcile")
+def reconcile_page():
+    return FileResponse(ROOT / "static" / "reconcile.html")
+
+
 @app.get("/api/queue")
 def api_queue(limit: int = 50):
     """人工兜底队列：需复核但未确认的单。"""

@@ -624,6 +624,32 @@ def requeue_failed(batch_id: str | None = None) -> int:
     return cur.rowcount
 
 
+def confirmed_waybills(limit: int = 5000) -> list[dict]:
+    """对账用：系统里已确认的运单（托书类）。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, fields_json FROM runs"
+            " WHERE confirmed=1 AND COALESCE(kind,'booking')='booking'"
+            " ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            f = json.loads(r["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        out.append({
+            "run_id": r["id"],
+            "ts": r["ts"],
+            "booking_no": (f.get("booking_no") or {}).get("value") or "",
+            "container_no": (f.get("container_no") or {}).get("value") or "",
+            "client": (f.get("client") or {}).get("value") or "",
+            "freight": (f.get("freight") or {}).get("value") or "",
+        })
+    return out
+
+
 def audit(run_id: str) -> dict:
     """C2：还原一张单的完整链路——谁、何时、用什么版本、改了什么。"""
     with _conn() as conn:

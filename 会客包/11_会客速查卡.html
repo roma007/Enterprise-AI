@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>会客速查卡 · 双面打印</title>
+<style>
+  @page { size: A4; margin: 10mm; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9ecef;color:#111;
+       font:11px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC","Heiti SC",sans-serif}
+  .page{width:190mm;min-height:277mm;background:#fff;margin:8mm auto;padding:10mm;
+        box-shadow:0 2px 12px rgba(0,0,0,.15);position:relative}
+  h1{font-size:17px;margin:0 0 2px;letter-spacing:.5px}
+  .sub{font-size:10px;color:#666;margin-bottom:8px}
+  .meta{display:flex;gap:8px;margin:6px 0 10px;font-size:10.5px}
+  .meta span{flex:1;border-bottom:1px dotted #999;padding-bottom:2px;color:#555}
+  h2{font-size:11.5px;margin:12px 0 5px;padding:3px 7px;background:#111;color:#fff;
+     border-radius:3px;display:inline-block;letter-spacing:.4px}
+  table{width:100%;border-collapse:collapse;font-size:10.5px;margin:2px 0}
+  th,td{border:1px solid #bbb;padding:3px 5px;vertical-align:top;text-align:left}
+  th{background:#f2f2f2;font-weight:600}
+  td.t{white-space:nowrap;font-variant-numeric:tabular-nums;width:52px;text-align:center}
+  ul{margin:3px 0 0 16px;padding:0}
+  li{margin:2px 0}
+  .box{border:1px solid #bbb;border-radius:4px;padding:6px 8px;margin:3px 0}
+  .chk{font-family:monospace;font-size:12px;margin-right:4px}
+  .mono{font-family:ui-monospace,Menlo,monospace;font-size:10px;background:#f5f5f5;padding:1px 4px;border-radius:2px}
+  .say{border-left:3px solid #111;padding:3px 8px;margin:4px 0;font-size:10.5px;background:#fafafa}
+  .say b{display:block;font-size:10px;color:#555;margin-bottom:1px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .warn{border:1px solid #111;border-radius:4px;padding:5px 8px;font-size:10.5px}
+  .foot{position:absolute;bottom:6mm;left:10mm;right:10mm;font-size:9px;color:#777;
+        border-top:1px solid #ddd;padding-top:3px;display:flex;justify-content:space-between}
+  .num{display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;
+       background:#111;color:#fff;border-radius:50%;font-size:9px;margin-right:4px}
+  @media print{
+    body{background:#fff}
+    .page{margin:0;box-shadow:none;width:auto;min-height:auto;padding:0}
+    .page + .page{page-break-before:always}
+    h2{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 正面 ============ -->
+<div class="page">
+  <h1>会客速查卡 · 正面</h1>
+  <div class="sub">打印建议：A4 双面 · 短边翻页 · 字号已按 A4 排版，勿缩放</div>
+
+  <div class="meta">
+    <span>客户：</span><span>时间：</span><span>地点：</span><span>到场人：</span>
+  </div>
+
+  <h2>A · 出门前 10 分钟（照做，别跳）</h2>
+  <div class="box">
+    <div class="mono">cd ai-copilot &amp;&amp; make prewarm &amp;&amp; make dev</div>
+    <div class="mono">./scripts/smoke.sh</div>
+    <div style="margin-top:5px">
+      <span class="chk">☐</span>smoke 6 项全绿
+      &nbsp;&nbsp;<span class="chk">☐</span>/demo 能打开、10 步可执行
+      &nbsp;&nbsp;<span class="chk">☐</span>断网试一次（应降级规则引擎）
+    </div>
+    <div style="margin-top:3px">
+      <span class="chk">☐</span>打印：一页纸×3、机会地图×3、提问清单×2（1 份现场写）
+      &nbsp;&nbsp;<span class="chk">☐</span>笔记本电脑充满电
+    </div>
+  </div>
+
+  <h2>B · 45 分钟流程</h2>
+  <table>
+    <tr><th style="width:56px">时间</th><th style="width:96px">做什么</th><th>说什么 / 注意</th></tr>
+    <tr><td class="t">0–5</td><td>开场定调</td><td>"今天不是来推方案的，方案要看你们数据才能写"</td></tr>
+    <tr><td class="t">5–12</td><td>摊开一页纸算账</td><td>三句话 + 那张账表；被打断问"数哪来的"→"行业区间，要你们的数才准"</td></tr>
+    <tr><td class="t">12–27</td><td><b>提问，当面记录</b></td><td>只问事实，不问想法；"答不清楚"是重要信息，也是降级依据</td></tr>
+    <tr><td class="t">27–32</td><td>跑 demo（5 步）</td><td>见 C 区。少说，让他看</td></tr>
+    <tr><td class="t">32–38</td><td>讲依赖关系</td><td>"业务和财务不是两条线，是一条链"</td></tr>
+    <tr><td class="t">38–43</td><td><b>收尾要两样东西</b></td><td>200 份真实托书 + 1 名内部 owner</td></tr>
+    <tr><td class="t">43–45</td><td>锁定下一次</td><td>"3 周后我带用你们数据跑的报告回来"</td></tr>
+  </table>
+
+  <h2>C · 只讲这 5 步（/demo 左侧点）</h2>
+  <table>
+    <tr><th style="width:22px">#</th><th style="width:118px">点哪一步</th><th>说这一句</th></tr>
+    <tr><td class="t">1</td><td>① 托书解析</td><td>"客户就是这么发的，连字段名都没有。"</td></tr>
+    <tr><td class="t">2</td><td>② 当场拦截</td><td>"截港过了、箱号错了，直接拦——这是你们被罚钱的两个来源。"</td></tr>
+    <tr><td class="t">3</td><td>③ 三票拆分</td><td>"一条微信发三票，人工一定录错。"</td></tr>
+    <tr><td class="t">4</td><td>⑤ 发票校验</td><td>"金额和税号用算法兜，不靠模型猜。"</td></tr>
+    <tr><td class="t">5</td><td>⑦ 账单对账</td><td>"你财务 2 个人对 5 天，这个几秒出差异表。"</td></tr>
+  </table>
+  <div class="say"><b>备用（客户追问时再点）</b>
+    ⑥ 三单匹配 · ⑧ 账龄催收 · ⑨ 外协结算 · ⑩ 指标与风险
+  </div>
+
+  <h2>D · 底线（主动说，别等他问）</h2>
+  <div class="box" style="font-size:10.5px">
+    不做：智能调度 · 司机端 · TMS/财务系统对接 · 工具库/低代码 · 登录与多租户 · 编造案例<br/>
+    <b>AI 只出草稿，人确认才算数。</b>所有结论可追溯到原文与版本。
+  </div>
+
+  <div class="foot">
+    <span>会客速查卡 · 正面</span><span>配套：01 一页纸 / 03 提问清单 / 05 会客脚本 / /demo</span>
+  </div>
+</div>
+
+<!-- ============ 背面 ============ -->
+<div class="page">
+  <h1>会客速查卡 · 背面</h1>
+  <div class="sub">话术 · 问答 · 应急</div>
+
+  <h2>E · 三段必背的话</h2>
+  <div class="say"><b>开场（30 秒）</b>
+    "今天我不是来推方案的。我干三件事：把我对你们这行的判断摆出来；问你几个具体问题，我记一下；
+    给你看一个已经做出来的东西，5 分钟。最后我要两样东西，你觉得不合适直接拒绝我。"
+  </div>
+  <div class="say"><b>为什么不能一起做（2 分钟）</b>
+    "财务最痛的三件事——对账、应收、单车毛利，为什么算不清？不是财务不努力，是输入的数据不对。
+    系统里只有结果，没有过程：哪一单、哪台车、为什么亏。过程数据在哪？在微信里，在司机脑子里。
+    所以财务 AI 的上限，由业务数据有多干净决定。"
+  </div>
+  <div class="say"><b>收尾（1 分钟）</b>
+    "今天不谈合同。我要两样：200 份真实托书，脱敏就行，越乱越好；你们内部一个能拍板的人，每周两小时。
+    有这两样，3 周后我带用你们数据跑的报告回来。不行我直接告诉你不行。"
+  </div>
+
+  <h2>F · 必被问到的 6 个问题</h2>
+  <table>
+    <tr><th style="width:120px">他问</th><th>你答</th></tr>
+    <tr><td>准确率多少？</td><td>"自建样本 97–98%，但那不算数。我按客户真实写法重造 3 份，一开始只有 62%。真实数字只能等你们的样本。"</td></tr>
+    <tr><td>做过这行吗？</td><td>"做过集卡和货代的诊断，系统是我第一个做。所以今天不吹经验，只讲能算出来的账。"</td></tr>
+    <tr><td>你们几个人？</td><td>"就我一个加外部合作。所以不接大项目，只接 3 个月见数的小项目。"</td></tr>
+    <tr><td>能不能免费试？</td><td>"可以试方法，不试产品：50 份样本，3 天出初版，不收钱。上线要签合同。"</td></tr>
+    <tr><td>200 份太多了</td><td>"50 份能跑趋势，跑不出置信度。折中：先 50 份三天出初版，你看到效果再补 150 份。"</td></tr>
+    <tr><td>财务先别做？</td><td>"财务可以做，但只做不依赖运单的那个点——发票识别。对账和应收要等运单结构化。"</td></tr>
+  </table>
+
+  <h2>G · 现场出事怎么办</h2>
+  <div class="two">
+    <div class="warn"><b>断网 / 模型挂了</b><br/>
+      不要慌，指右上角引擎："现在是规则引擎，比模型慢得少但更稳。"<br/>
+      结构化托书 18ms 就出结果，照样能演示 ②③ 两步。</div>
+    <div class="warn"><b>上传图片识别不出</b><br/>
+      "这张清晰度不够。真实场景我会先做图像增强再识别，现场先用文字版给你看。"<br/>
+      立刻切回粘贴文本。</div>
+    <div class="warn"><b>客户拿自己的单来试</b><br/>
+      这是好事，接住："正好，我们拿你这张跑一下。"<br/>
+      跑不通就记下来："这条我拿回去补，下次带结果来。"（比硬撑强）</div>
+    <div class="warn"><b>被问"能不能现在就报个价"</b><br/>
+      "报价要看你们单量，现在报是骗你。第一期只报两个点，看完数据给。"</div>
+  </div>
+
+  <h2>H · 会后 24 小时</h2>
+  <div class="box" style="font-size:10.5px">
+    <span class="chk">☐</span>提问清单记录列转文字
+    &nbsp;<span class="chk">☐</span>答案填进 <span class="mono">02_机会地图.md §0.1</span>
+    &nbsp;<span class="chk">☐</span>按评分卡写一句结论（推进/暂缓/不推荐）<br/>
+    <span class="chk">☐</span>24 小时内发确认邮件：只写"听到什么 + 下一步要什么 + 下次什么时候"，
+    <b>不写方案、不写报价、不写"期待合作"</b>
+  </div>
+
+  <div class="foot">
+    <span>会客速查卡 · 背面</span><span>目标不是成交，是拿到样本 + owner</span>
+  </div>
+</div>
+
+</body>
+</html>

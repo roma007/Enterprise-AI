@@ -5,6 +5,53 @@
 
 ---
 
+## [0.24.0] · 2026-11-02 · 回写交付平台（B4）
+
+### 新增
+- 客户侧 `app/delivery.py`：
+  · 跑完评测 → 生成 payload → 入发件箱 → 推送
+  · `delivery_outbox` 表：幂等键、状态、重试次数、错误、平台响应
+  · 后台线程按 `DELIVERY_RETRY_SECONDS` 重试 pending
+  · 4xx 记永久失败（契约/令牌问题，重试没意义），5xx/网络错误继续重试
+  · 永久失败项在下次入队时自动重置为 pending，修好配置即可重发
+- 接口（仅管理员）：
+  · `POST /api/delivery/push`：重跑评测并回写
+  · `POST /api/delivery/flush`：手动重试
+  · `GET /api/delivery/status`：配置、计数、最近 20 条
+- 工作台评测卡新增「回写交付平台」按钮（仅管理员）
+- 交付平台侧 `backend/src/routes/copilot.ts` + 迁移 `0025_copilot_sync.sql`：
+  · `POST /api/hooks/copilot/eval`（共享 token，非用户登录）
+  · 回写直接生成 `poc_runs`，出现在 POC 页面的「运行记录」里
+  · 幂等键查重；事务内 `FOR UPDATE` 保证 `run_no` 不撞
+  · `GET /api/engagements/:id/copilot-syncs` 查看回写历史
+
+### 契约
+```
+POST {平台}/api/hooks/copilot/eval
+x-copilot-token: <共享 token>
+{ idempotency_key, experiment_id, dataset_name, config, metrics, issues, source }
+```
+指标**只来自服务端 `run_all()`**，不接受调用方填数。
+
+### 设计取舍
+- **复用 `poc_runs` 而不是另建指标表**：顾问每天看的 POC 页面直接出现结果，
+  不用再做一个「同步结果」页面
+- **幂等键由内容决定**：同一份结果重复点不会生成第二条 run
+- **发件箱而不是同步阻塞**：平台重启/网络抖动时不丢结果
+- **平台侧不信任客户端指标**：token 只解决"谁能写"，指标仍由客户侧服务端计算
+
+### 实测（本地真实 PostgreSQL + 真实平台进程）
+- 平台首次回写 → `201`，生成 run #1；重复同键 → `200 duplicate`，仍 1 条
+- 错误 token → 401；实验不存在 → 404
+- 客户侧接口回写 → run #2，平台 `poc_runs` 共 2 条
+- 再点一次 → `duplicate=true, run_no=2`，平台仍 2 条
+- 非管理员调 `/api/delivery/*` → 403
+- 平台 500 → 本地 pending，恢复后重试成功；平台 400 → failed，修好后可重新排队
+- `GET /api/engagements/:id/copilot-syncs` 返回 2 条，指标可读
+- smoke 11 项全绿；三样本集回归未变
+
+---
+
 ## [0.23.0] · 2026-11-02 · 企业微信安全模式（B3）
 
 ### 新增

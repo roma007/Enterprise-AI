@@ -114,6 +114,28 @@ npm run dev          # http://127.0.0.1:8788
 
 数据库连接默认 `postgres://127.0.0.1:5432/ai_delivery`，可用 `DATABASE_URL` 覆盖；复制 `.env.example` 为 `.env` 即自动加载。
 
+**ai-copilot 评测回写（B4）**
+
+客户侧 ai-copilot 跑完评测后，把指标推过来，直接在 POC 的「运行记录」里生成一条 `poc_run`。
+
+```env
+COPILOT_HOOK_TOKEN=与客户侧 DELIVERY_HOOK_TOKEN 一致
+```
+
+```
+POST /api/hooks/copilot/eval
+Header: x-copilot-token: <COPILOT_HOOK_TOKEN>
+Body:   { idempotency_key, experiment_id, dataset_name?, config?,
+          metrics, issues?, started_at?, finished_at? }
+```
+
+- 幂等：`idempotency_key` 已存在 → `200 { duplicate: true }`，不会重复建 run。
+- 并发：事务内 `FOR UPDATE` 锁实验，`run_no` 不会撞。
+- 鉴权：不需要用户登录（机器到机器），但必须带共享 token；未配置 token 时返回 503。
+- 查询：`GET /api/engagements/:id/copilot-syncs` 看该项目收到的回写。
+- 原始 payload 存在 `copilot_eval_syncs.payload`，指标口径有争议时可回看。
+
+
 **服务端 PDF**：`GET /api/deliverables/:id/export.pdf` 用无头 Chromium 把打印版 HTML 渲染成 PDF。按顺序查找：`PDF_CHROME_PATH` → 系统 Chrome/Chromium → Playwright 浏览器缓存。找不到浏览器时返回 503 `PDF_ENGINE_UNAVAILABLE`，不影响 Word/HTML 导出。Docker 镜像已安装 Debian `chromium` 与 `fonts-noto-cjk`。
 
 PDF 缓存：按交付物 id / 版本 / 标题 / 客户 / 内容生成 SHA-256 key，默认写入 `backend/.pdf-cache`；命中时返回 `x-pdf-cache: HIT`，`?refresh=1` 强制重渲染并覆盖。`PDF_CACHE_DIR` 可改目录，`PDF_CACHE_TTL_DAYS` 默认 30 天，过期文件异步清理。

@@ -16,7 +16,7 @@ from fastapi.responses import (
     FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
 )
 
-from . import auth, storage
+from . import auth, delivery, storage
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -47,6 +47,7 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    delivery.start_worker()
     if count_users() == 0:
         email = os.getenv("ADMIN_EMAIL", "admin@local").strip() or "admin@local"
         pw = os.getenv("ADMIN_PASSWORD", "").strip()
@@ -1296,6 +1297,71 @@ def api_eval():
         return run_all()
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="缺少 samples/bookings.jsonl")
+
+
+class DeliveryPushReq(BaseModel):
+    experiment_id: str | None = None
+
+
+@app.get("/api/delivery/status")
+def api_delivery_status():
+    """回写配置与发件箱状态（仅管理员）。"""
+    return delivery.status()
+
+
+@app.post("/api/delivery/push")
+def api_delivery_push(req: DeliveryPushReq | None = None):
+    """跑一次评测并回写交付平台（仅管理员）。
+
+    为什么这里重跑评测而不接受前端传来的指标：
+    指标必须来自服务端的评测代码，不能让调用方自己填数。
+    同一份结果有幂等键，重复点不会在平台上生成第二条。
+    """
+    if not delivery.enabled():
+        cfg = delivery.config_status()
+        raise HTTPException(
+            status_code=503,
+            detail="回写未配置，缺少：" + ", ".join(cfg["missing"]),
+        )
+    result = run_all()
+    queued = delivery.enqueue(result, req.experiment_id if req else None)
+
+    # 已经成功发过：不再重发，直接告诉调用方平台上的那条 run
+    if not queued["created"] and queued["status"] == "sent":
+        prev = queued.get("previous") or {}
+        return {
+            "ok": True, "enqueued": False, "sent": 0, "retry": 0, "failed": 0,
+            "run_no": prev.get("run_no"),
+            "duplicate": True,
+            "error": "",
+        }
+
+    flushed = delivery.flush()
+    detail = (flushed.get("details") or [{}])[0]
+    return {
+        "ok": True,
+        "enqueued": queued["created"],
+        "idempotency_key": queued["idempotency_key"],
+        "outbox_id": queued["outbox_id"],
+        "sent": flushed.get("sent", 0),
+        "retry": flushed.get("retry", 0),
+        "failed": flushed.get("failed", 0),
+        "run_no": detail.get("run_no"),
+        "duplicate": detail.get("duplicate", False),
+        "error": detail.get("error", ""),
+    }
+
+
+@app.post("/api/delivery/flush")
+def api_delivery_flush():
+    """手动重试发件箱（仅管理员）。"""
+    if not delivery.enabled():
+        cfg = delivery.config_status()
+        raise HTTPException(
+            status_code=503,
+            detail="回写未配置，缺少：" + ", ".join(cfg["missing"]),
+        )
+    return delivery.flush()
 
 
 @app.get("/api/stats")

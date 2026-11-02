@@ -113,6 +113,20 @@ CREATE TABLE IF NOT EXISTS run_revisions (
     note        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_revisions_run ON run_revisions(run_id, ts);
+CREATE TABLE IF NOT EXISTS delivery_outbox (
+    id              TEXT PRIMARY KEY,
+    created_at      TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    experiment_id   TEXT,
+    dataset_name    TEXT,
+    payload_json    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    last_error      TEXT,
+    response_json   TEXT,
+    sent_at         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_status ON delivery_outbox(status, created_at);
 """
 
 # 增量列：老库自动补，不用重建
@@ -1047,6 +1061,76 @@ def revoke_user_sessions(user_id: str, except_jti: str = "") -> int:
                 "UPDATE user_sessions SET revoked=1 WHERE user_id=? AND revoked=0", (user_id,)
             )
     return cur.rowcount
+
+
+# ---------------- 回写交付平台（B4） ----------------
+
+def outbox_add(idempotency_key: str, payload: dict, experiment_id: str = "",
+               dataset_name: str = "") -> tuple[dict, bool]:
+    """入发件箱。返回 (记录, 是否新建)。同一幂等键只入一次。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM delivery_outbox WHERE idempotency_key=?",
+            (idempotency_key,),
+        ).fetchone()
+        if row:
+            # 永久失败（契约/配置问题）修好后允许重新排队；已发送的保持原样
+            if row["status"] == "failed":
+                conn.execute(
+                    "UPDATE delivery_outbox SET status='pending', last_error=''"
+                    " WHERE id=?", (row["id"],)
+                )
+                row = conn.execute(
+                    "SELECT * FROM delivery_outbox WHERE id=?", (row["id"],)
+                ).fetchone()
+            return dict(row), False
+        oid = uuid.uuid4().hex[:12]
+        conn.execute(
+            "INSERT INTO delivery_outbox (id, created_at, idempotency_key,"
+            " experiment_id, dataset_name, payload_json, status)"
+            " VALUES (?,?,?,?,?,?,'pending')",
+            (oid, _now(), idempotency_key, experiment_id, dataset_name,
+             json.dumps(payload, ensure_ascii=False)),
+        )
+        row = conn.execute("SELECT * FROM delivery_outbox WHERE id=?", (oid,)).fetchone()
+    return dict(row), True
+
+
+def outbox_pending(limit: int = 20) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM delivery_outbox WHERE status='pending'"
+            " ORDER BY created_at LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def outbox_mark(oid: str, status: str, error: str = "",
+                response: dict | None = None) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE delivery_outbox SET status=?, attempts=attempts+1,"
+            " last_error=?, response_json=COALESCE(?, response_json),"
+            " sent_at=CASE WHEN ?='sent' THEN ? ELSE sent_at END WHERE id=?",
+            (status, error[:1000], json.dumps(response, ensure_ascii=False)
+             if response is not None else None, status, _now(), oid),
+        )
+
+
+def outbox_status(limit: int = 20) -> dict:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) n FROM delivery_outbox GROUP BY status"
+        ).fetchall()
+        recent = conn.execute(
+            "SELECT id, created_at, idempotency_key, dataset_name, status,"
+            " attempts, last_error, sent_at FROM delivery_outbox"
+            " ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    counts = {"pending": 0, "sent": 0, "failed": 0}
+    for r in rows:
+        counts[r["status"]] = r["n"]
+    return {"counts": counts, "recent": [dict(r) for r in recent]}
 
 
 def audit(run_id: str) -> dict:

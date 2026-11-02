@@ -141,7 +141,9 @@
 </main>
 
 <section class="card" id="evalCard" style="margin:0 16px 16px;display:none">
-  <h2><span>评测结果</span><span id="evalEngine" style="font-weight:400"></span></h2>
+  <h2><span>评测结果</span><span id="evalEngine" style="font-weight:400"></span>
+    <button class="ghost" id="btnDelivery" style="padding:3px 10px;font-size:12px;margin-left:auto;display:none">回写交付平台</button>
+  </h2>
   <div class="kpi" id="evalKpi"></div>
   <div style="padding:0 14px 10px" id="evalCompare"></div>
   <div style="padding:0 14px 14px"><table id="evalTable"></table></div>
@@ -428,6 +430,7 @@ async function runEval(){
     const r = await (await fetch('/api/eval', {method:'POST'})).json();
     const t = r.tuned, h = r.holdout;
     $('#evalCard').style.display='block';
+    if(ME && ME.role === 'admin') $('#btnDelivery').style.display = '';
     $('#evalEngine').textContent = `${t.engine} · 调优集 ${t.samples} 份 / 留出集 ${h?h.samples:0} 份`;
 
     const kpi = (x, name) => x ? `
@@ -527,7 +530,24 @@ dz.addEventListener('drop', e => {
 });
 $('#btnConfirm').onclick = confirmDraft;
 $('#btnCsv').onclick = exportCsv;
+async function pushDelivery(){
+  const btn = $('#btnDelivery');
+  btn.disabled = true; btn.textContent = '回写中…';
+  try{
+    const res = await fetch('/api/delivery/push', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{}'});
+    const r = await res.json();
+    if(!res.ok){ toast('未回写：' + (r.detail || res.status)); return; }
+    if(r.error){ toast('已入发件箱，稍后重试：' + r.error); return; }
+    toast(r.duplicate
+      ? `平台已有这份结果（幂等），未重复创建`
+      : `已回写到交付平台：POC 运行 #${r.run_no ?? '—'}`);
+  }catch(e){ toast('回写失败：' + e.message); }
+  finally{ btn.disabled = false; btn.textContent = '回写交付平台'; }
+}
+
 $('#btnEval').onclick = runEval;
+$('#btnDelivery').onclick = pushDelivery;
 $('#btnUndo').onclick = undoConfirm;
 $('#btnClear').onclick = ()=>{ $('#raw').value=''; $('#fields').innerHTML='<div class="empty">左侧粘贴托书，点“解析”。</div>'; $('#summary').style.display='none'; $('#banner').innerHTML=''; $('#checks').style.display='none'; $('#confirmRow').style.display='none'; };
 document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter') parse(); });

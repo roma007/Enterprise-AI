@@ -23,6 +23,7 @@ import { s3DocRoutes } from './routes/s3_docs';
 import { systemRoutes } from './routes/system';
 import { exportRoutes } from './routes/export';
 import { importRoutes } from './routes/import';
+import { copilotRoutes } from './routes/copilot';
 import { s1Routes } from './routes/s1';
 import { verifyToken } from './services/auth';
 import { enforceRole } from './services/permissions';
@@ -223,6 +224,7 @@ app.addHook('onRequest', async (req, reply) => {
     path === '/api/openapi.json' ||
     path === '/metrics' ||
     path.startsWith('/api/public/') ||
+    path.startsWith('/api/hooks/') ||
     path.startsWith('/docs');
 
   const header = req.headers.authorization;
@@ -1013,6 +1015,7 @@ app.get('/api/opportunities/:id/roi', async (req, reply) => {
   app.register(systemRoutes);
   app.register(exportRoutes);
   app.register(importRoutes);
+  app.register(copilotRoutes);
 
   return app;
 }

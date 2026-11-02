@@ -30,7 +30,8 @@ from .schema import BLOCKING_KEYS, FIELD_KEYS, LABELS, SPECS
 from .store import (
     AlreadyConfirmed, audit, audit_csv, count_users, create_session, create_user,
     dump_feedback, find_amend_candidates, find_by_booking_no, get_user,
-    get_user_by_email, init_db, learn_export, learn_queue, learn_stats, list_users,
+    get_user_by_email, init_db, ignore_item, label_item, learn_export,
+    learn_item, learn_queue, learn_stats, list_users,
     metrics, queue, recent, record_inbound, report_md, revoke_session,
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
@@ -652,6 +653,66 @@ def api_learn_queue(status: str = "pending", limit: int = 100):
 def api_learn_export(limit: int = 2000):
     """导出成评测集格式，可直接追加到 samples/ 后重跑评测。"""
     return learn_export(limit)
+
+
+@app.get("/api/learn/item/{run_id}")
+def api_learn_item(run_id: str):
+    """标注工作台：原文 + 系统抽取 + 现有金标 + 字段中文名。"""
+    from .invoice import INV_LABELS
+    from .schema import LABELS
+
+    d = learn_item(run_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="未找到该标注项")
+    labels = dict(INV_LABELS) if d.get("kind") == "invoice" else dict(LABELS)
+    order = list(labels)
+    # 兼容历史数据里出现过的字段
+    for k in d.get("fields", {}):
+        if k not in labels:
+            labels[k] = k
+            order.append(k)
+    d["labels"] = labels
+    d["field_order"] = order
+    return d
+
+
+class LabelReq(BaseModel):
+    gold: dict[str, str] = Field(default_factory=dict)
+    note: str = ""
+
+
+@app.post("/api/learn/label/{run_id}")
+def api_learn_label(run_id: str, req: LabelReq, request: Request):
+    if not req.gold:
+        raise HTTPException(status_code=400, detail="金标不能为空")
+    item = learn_item(run_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="未找到该标注项")
+    # 只允许该单真实存在的字段，避免导出评测集时混入脏 key
+    allowed = set(item.get("fields", {}))
+    bad = [k for k in req.gold if k not in allowed]
+    if bad:
+        raise HTTPException(status_code=400, detail=f"未知字段：{', '.join(bad[:5])}")
+    try:
+        return label_item(run_id, req.gold, actor=_uid(request), note=req.note)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/learn/ignore/{run_id}")
+def api_learn_ignore(run_id: str, request: Request, req: dict | None = None):
+    note = (req or {}).get("note", "")
+    try:
+        return ignore_item(run_id, actor=_uid(request), note=note)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.get("/learn")
+def learn_page():
+    return FileResponse(ROOT / "static" / "learn.html")
 
 
 @app.post("/api/mask")

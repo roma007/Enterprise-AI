@@ -87,6 +87,7 @@
   <span id="engineBadge" class="badge">检测引擎中…</span>
   <span style="flex:1"></span>
   <span class="badge" id="userChip" style="display:none"></span>
+  <a href="/learn" id="learnLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">学习队列</a>
   <a href="/history" id="historyLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">历史</a>
   <a href="/users" id="userLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">用户</a>
   <a href="#" id="logoutLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">退出</a>
@@ -176,6 +177,9 @@ async function loadMe(){
     chip.textContent = (me.name || me.email) + ' · ' + (me.role_label || me.role);
     chip.style.display = '';
     $('#logoutLink').style.display = '';
+    if(me.role !== 'viewer'){
+      $('#learnLink').style.display = '';
+    }
     if(me.role === 'admin'){
       $('#userLink').style.display = '';
       $('#historyLink').style.display = '';

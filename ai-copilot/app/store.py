@@ -130,6 +130,7 @@ _EXTRA_COLUMNS = (
     ("runs", "version", "INTEGER DEFAULT 0"),
     ("runs", "kind", "TEXT DEFAULT 'booking'"),
     ("learn_queue", "corrected", "INTEGER DEFAULT 0"),
+    ("learn_queue", "labeled_by", "TEXT DEFAULT ''"),
     ("batches", "kind", "TEXT DEFAULT 'booking'"),
     ("runs", "actor", "TEXT DEFAULT ''"),
     ("runs", "confirmed_by", "TEXT DEFAULT ''"),
@@ -436,7 +437,7 @@ def save_feedback(
 
     total = len(auto)
     # D5：人工确认即产出一条金标；改过的单要单独标记（那才是难例）
-    label_run(run_id, final, corrected=bool(changed))
+    label_run(run_id, final, corrected=bool(changed), actor=actor)
     return {
         "run_id": run_id,
         "review_level": level,
@@ -595,7 +596,7 @@ def learn_reason(draft: Draft) -> str | None:
 
 
 def label_run(run_id: str, gold: dict[str, str], reason: str = "confirmed",
-              corrected: bool = False) -> None:
+              corrected: bool = False, actor: str = "") -> None:
     """人工确认 = 一条金标。这是"越用越准"的唯一来源。
 
     corrected=True 表示人改过——这类才是真正的难例；
@@ -605,25 +606,118 @@ def label_run(run_id: str, gold: dict[str, str], reason: str = "confirmed",
     ts = _now()
     with _conn() as conn:
         cur = conn.execute(
-            "UPDATE learn_queue SET status='labeled', gold_json=?, labeled_at=?, corrected=?"
-            " WHERE id=?",
-            (gold_json, ts, 1 if corrected else 0, run_id),
+            "UPDATE learn_queue SET status='labeled', gold_json=?, labeled_at=?,"
+            " corrected=?, labeled_by=? WHERE id=?",
+            (gold_json, ts, 1 if corrected else 0, actor, run_id),
         )
         if cur.rowcount == 0:
             conn.execute(
                 "INSERT OR REPLACE INTO learn_queue"
-                " (id, run_id, ts, reason, status, gold_json, labeled_at, corrected)"
-                " VALUES (?,?,?,?,'labeled',?,?,?)",
-                (run_id, run_id, ts, reason, gold_json, ts, 1 if corrected else 0),
+                " (id, run_id, ts, reason, status, gold_json, labeled_at,"
+                " corrected, labeled_by) VALUES (?,?,?,?,'labeled',?,?,?,?)",
+                (run_id, run_id, ts, reason, gold_json, ts,
+                 1 if corrected else 0, actor),
             )
+
+
+def learn_item(run_id: str) -> dict | None:
+    """标注工作台需要的一条完整数据：原文、系统抽取、现有金标。"""
+    with _conn() as conn:
+        q = conn.execute(
+            "SELECT q.id, q.run_id, q.ts, q.reason, q.status, q.gold_json,"
+            " q.labeled_at, q.corrected, q.labeled_by,"
+            " r.raw_text, r.fields_json, r.kind, r.review_level, r.confirmed,"
+            " r.errors, r.warns, u.name AS labeler_name, u.email AS labeler_email"
+            " FROM learn_queue q JOIN runs r ON r.id = q.run_id"
+            " LEFT JOIN users u ON u.id = q.labeled_by WHERE q.id=?",
+            (run_id,),
+        ).fetchone()
+    if not q:
+        return None
+    d = dict(q)
+    d["fields"] = json.loads(d.pop("fields_json") or "{}")
+    try:
+        d["gold"] = json.loads(d.pop("gold_json") or "null")
+    except json.JSONDecodeError:
+        d["gold"] = None
+    d.pop("raw_text_full", None)
+    return d
+
+
+def label_item(run_id: str, gold: dict[str, str], actor: str = "",
+               note: str = "") -> dict:
+    """人工标注一条金标（B1）。
+
+    corrected 由系统自动判断：金标与系统抽取值有差异 = 难例。
+    这个标记直接决定导出到评测集时它是"提分样本"还是"覆盖新格式"。
+    """
+    if not isinstance(gold, dict):
+        raise ValueError("gold 必须是对象")
+    gold = {str(k): str(v or "").strip() for k, v in gold.items()}
+    gold = {k: v for k, v in gold.items() if v}
+
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT q.status, q.gold_json, r.fields_json"
+            " FROM learn_queue q JOIN runs r ON r.id=q.run_id WHERE q.id=?",
+            (run_id,),
+        ).fetchone()
+        if not row:
+            raise LookupError("未找到该标注项")
+        try:
+            auto = json.loads(row["fields_json"] or "{}")
+        except json.JSONDecodeError:
+            auto = {}
+        auto_vals = {k: (v or {}).get("value") or "" for k, v in auto.items()}
+        corrected = any(auto_vals.get(k, "") != v for k, v in gold.items())
+        try:
+            old_gold = json.loads(row["gold_json"]) if row["gold_json"] else None
+        except json.JSONDecodeError:
+            old_gold = None
+
+        ts = _now()
+        conn.execute(
+            "UPDATE learn_queue SET status='labeled', gold_json=?, labeled_at=?,"
+            " corrected=?, labeled_by=? WHERE id=?",
+            (json.dumps(gold, ensure_ascii=False), ts,
+             1 if corrected else 0, actor, run_id),
+        )
+        _record_revision(
+            conn, run_id, "label", actor,
+            before={"status": row["status"], "gold": old_gold},
+            after={"status": "labeled", "gold": gold},
+            note=note,
+        )
+
+    return {"ok": True, "id": run_id, "status": "labeled",
+            "corrected": corrected, "fields": len(gold)}
+
+
+def ignore_item(run_id: str, actor: str = "", note: str = "") -> dict:
+    """跳过一条：不进训练集，但从待标注里移除。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT status FROM learn_queue WHERE id=?", (run_id,)
+        ).fetchone()
+        if not row:
+            raise LookupError("未找到该标注项")
+        conn.execute("UPDATE learn_queue SET status='ignored' WHERE id=?", (run_id,))
+        _record_revision(
+            conn, run_id, "ignore", actor,
+            before={"status": row["status"]},
+            after={"status": "ignored"}, note=note,
+        )
+    return {"ok": True, "id": run_id, "status": "ignored"}
 
 
 def learn_queue(status: str = "pending", limit: int = 100) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
             "SELECT q.id, q.run_id, q.ts, q.reason, q.status, q.gold_json,"
-            " r.review_level, r.engine, substr(r.raw_text,1,80) AS preview"
+            " q.corrected, q.labeled_by, u.name AS labeler_name,"
+            " r.kind, r.review_level, r.engine, substr(r.raw_text,1,80) AS preview"
             " FROM learn_queue q LEFT JOIN runs r ON r.id = q.run_id"
+            " LEFT JOIN users u ON u.id = q.labeled_by"
             " WHERE q.status = ? ORDER BY q.ts DESC LIMIT ?",
             (status, limit),
         ).fetchall()
@@ -636,13 +730,13 @@ def learn_stats() -> dict:
             "SELECT status, reason, COUNT(*) n, COALESCE(SUM(corrected),0) c"
             " FROM learn_queue GROUP BY status, reason"
         ).fetchall()
-    out = {"pending": 0, "labeled": 0, "corrected": 0, "by_reason": {}}
+    out = {"pending": 0, "labeled": 0, "ignored": 0, "corrected": 0, "by_reason": {}}
     for r in rows:
         out[r["status"]] = out.get(r["status"], 0) + r["n"]
         if r["status"] == "labeled":
             out["by_reason"][r["reason"]] = r["n"]
             out["corrected"] += r["c"] or 0
-    out["total"] = out.get("pending", 0) + out.get("labeled", 0)
+    out["total"] = out.get("pending", 0) + out.get("labeled", 0) + out.get("ignored", 0)
     return out
 
 

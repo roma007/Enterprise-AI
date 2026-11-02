@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>学习队列 · 标注工作台</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{padding:16px;max-width:1280px;margin:0 auto}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;min-width:110px}
+  .stat b{display:block;font-size:20px;line-height:1.2}
+  .stat span{font-size:11.5px;color:var(--muted)}
+  .stat.hot b{color:var(--err)}
+  .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .tab{padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px}
+  .tab.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .bar .sp{margin-left:auto}
+  button{font:inherit;font-size:13px;padding:8px 15px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .cols{display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:start}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .list{max-height:70vh;overflow:auto}
+  .item{padding:10px 12px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+  .item:hover{background:#fafbfc}
+  .item.on{background:#eef4fb;box-shadow:inset 3px 0 0 var(--brand)}
+  .item .t{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+  .item .p{font-size:12.5px;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .tag{padding:1px 7px;border-radius:999px;font-size:11px;background:#eef2f7;white-space:nowrap}
+  .tag.auto{background:#e6f4ea;color:#1e7b45}
+  .tag.double{background:#fdf1dc;color:#9a5b00}
+  .tag.blocked{background:#fde8e8;color:var(--err)}
+  .editor{padding:0}
+  .raw{margin:0;padding:12px 14px;background:#fafbfc;border-bottom:1px solid var(--line);
+       white-space:pre-wrap;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:220px;overflow:auto}
+  .fields{padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+  @media(max-width:700px){.fields{grid-template-columns:1fr}}
+  .f label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+  .f label b{color:var(--err)}
+  .f input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:13px;outline:none}
+  .f input:focus{border-color:var(--brand)}
+  .f .auto{font-size:10.5px;color:var(--muted);margin-top:2px;height:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .f .auto.chg{color:var(--err)}
+  .foot{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .foot .hint{color:var(--muted);font-size:12px}
+  .empty{padding:34px;color:var(--muted);text-align:center;font-size:13px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;max-width:80vw}
+  .toast.show{opacity:1}
+  .export{font-size:12px;color:var(--muted);margin-top:10px}
+  .export code{background:#eef2f7;padding:1px 5px;border-radius:4px;font-size:11.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>学习队列 · 标注工作台</h1>
+  <span class="sub">人改过的单才是难例；标完导成 JSONL，直接进评测集</span>
+  <a href="/">← 返回工作台</a>
+</header>
+
+<div class="wrap">
+  <div class="stats" id="stats"></div>
+
+  <div class="bar">
+    <button class="tab on" data-status="pending">待标注</button>
+    <button class="tab" data-status="labeled">已标注</button>
+    <button class="tab" data-status="ignored">已跳过</button>
+    <span class="sp"></span>
+    <a class="tab" href="/api/learn/export.jsonl" download="learn.jsonl">导出 JSONL</a>
+  </div>
+
+  <div class="cols">
+    <section class="card">
+      <h2 id="listTitle">待标注（0）</h2>
+      <div class="list" id="list"></div>
+    </section>
+
+    <section class="card editor" id="editor">
+      <div class="empty">从左侧选一条开始标注。</div>
+    </section>
+  </div>
+
+  <div class="export" id="exportHint"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const j = (u,o) => fetch(u,o).then(async r => {
+  const t = await r.text();
+  let d = null; try { d = JSON.parse(t); } catch(e) {}
+  if(!r.ok) throw new Error((d && (d.detail || d.message)) || t.slice(0,140) || ('HTTP ' + r.status));
+  return d;
+});
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LV = {auto:'自动通过', single:'单人复核', double:'双人复核', blocked:'拦截'};
+const REASON = {
+  blocked:'有阻断项', fuzzy_match:'容错抽取值', low_confidence:'低置信',
+  multi_ticket:'多票切分', confirmed:'人工确认'
+};
+
+let ME = null, STATUS = 'pending', ITEMS = [], CUR = null;
+
+async function loadStats(){
+  const s = await j('/api/learn/stats');
+  $('#stats').innerHTML = `
+    <div class="stat ${s.pending?'hot':''}"><b>${s.pending}</b><span>待标注</span></div>
+    <div class="stat"><b>${s.labeled}</b><span>已标注</span></div>
+    <div class="stat"><b>${s.corrected}</b><span>其中人改过（难例）</span></div>
+    <div class="stat"><b>${s.ignored}</b><span>已跳过</span></div>`;
+  $('#exportHint').innerHTML = `已标注 ${s.labeled} 条，其中难例 ${s.corrected} 条。
+    导出后追加到 <code>samples/bookings.jsonl</code>，再跑
+    <code>PYTHONPATH=. .venv/bin/python scripts/run_eval.py</code> 即可看到变化。`;
+}
+
+async function loadList(){
+  const d = await j('/api/learn/queue?status=' + STATUS + '&limit=200');
+  ITEMS = d.items;
+  $('#listTitle').textContent = ({pending:'待标注', labeled:'已标注', ignored:'已跳过'}[STATUS] || STATUS) + `（${ITEMS.length}）`;
+  if(!ITEMS.length){
+    $('#list').innerHTML = `<div class="empty">${STATUS === 'pending' ? '队列空了。解析新托书或标注历史单据后会出现在这里。' : '没有记录。'}</div>`;
+    return;
+  }
+  $('#list').innerHTML = ITEMS.map(it => `
+    <div class="item ${CUR && CUR.id === it.id ? 'on' : ''}" data-id="${esc(it.id)}">
+      <div class="t">
+        <span class="tag ${esc(it.review_level||'')}">${esc(LV[it.review_level] || it.review_level || '')}</span>
+        <span>${esc(REASON[it.reason] || it.reason)}</span>
+        <span style="margin-left:auto">${esc((it.ts||'').replace('T',' ').slice(5,16))}</span>
+      </div>
+      <div class="p">${esc(it.preview || '')}</div>
+      ${it.status === 'labeled' ? `<div class="t" style="margin-top:4px">
+        ${it.corrected ? '<span class="tag" style="background:#fde8e8;color:#c53030">难例</span>' : '<span class="tag">原样确认</span>'}
+        <span>${esc(it.labeler_name || '')}</span></div>` : ''}
+    </div>`).join('');
+  document.querySelectorAll('.item').forEach(el => el.onclick = () => openItem(el.dataset.id));
+}
+
+function fieldRow(key, label, item){
+  const auto = item.fields[key] || {};
+  const gold = item.gold || {};
+  const val = gold[key] != null ? gold[key] : (auto.value || '');
+  const changed = (auto.value || '') !== (val || '');
+  const conf = auto.value ? Math.round((auto.confidence || 0) * 100) + '%' : '未抽取';
+  return `<div class="f">
+    <label>${esc(label || key)}${(item.field_order||[]).includes(key)?'':''}</label>
+    <input data-key="${esc(key)}" value="${esc(val)}" placeholder="${esc(auto.value || '')}" />
+    <div class="auto ${changed?'chg':''}" title="${esc(auto.value || '')}">
+      系统：${esc(auto.value || '—')}（${conf}${auto.source ? ' · ' + esc(auto.source) : ''}）${changed?' · 已修改':''}
+    </div>
+  </div>`;
+}
+
+async function openItem(id){
+  CUR = await j('/api/learn/item/' + id);
+  const it = CUR;
+  const editable = !(ME && ME.role === 'viewer');
+  $('#editor').innerHTML = `
+    <h2>${esc(it.run_id)} · ${esc(LV[it.review_level] || it.review_level || '')} · ${esc(REASON[it.reason] || it.reason)}
+      ${it.status === 'labeled' ? ' · 已标注' : ''}</h2>
+    <pre class="raw">${esc(it.raw_text || '')}</pre>
+    <div class="fields">
+      ${(it.field_order || []).map(k => fieldRow(k, it.labels[k], it)).join('')}
+    </div>
+    <div class="foot">
+      <button class="primary" id="btnSave" ${editable?'':'disabled'}>保存金标并下一条</button>
+      <button id="btnIgnore" ${editable?'':'disabled'}>跳过（不进训练集）</button>
+      <span class="hint" id="editHint"></span>
+    </div>`;
+
+  const inputs = () => [...document.querySelectorAll('.fields input')];
+  inputs().forEach(inp => inp.oninput = () => {
+    const key = inp.dataset.key;
+    const auto = (it.fields[key] || {}).value || '';
+    const line = inp.parentElement.querySelector('.auto');
+    const changed = auto !== inp.value.trim();
+    line.classList.toggle('chg', changed);
+    $('#editHint').textContent = changed ? '有修改：保存后记为「难例」' : '与系统一致：保存后记为「原样确认」';
+  });
+  $('#editHint').textContent = it.status === 'labeled'
+    ? `上次标注：${(it.labeled_at || '').replace('T',' ').slice(0,16)} ${it.labeler_name || ''}`
+    : '可直接改，也可原样保存';
+
+  $('#btnSave').onclick = saveLabel;
+  $('#btnIgnore').onclick = ignoreItem;
+  document.querySelectorAll('.item').forEach(el => el.classList.toggle('on', el.dataset.id === id));
+}
+
+async function saveLabel(){
+  if(!CUR) return;
+  const gold = {};
+  document.querySelectorAll('.fields input').forEach(i => {
+    const v = i.value.trim();
+    if(v) gold[i.dataset.key] = v;
+  });
+  if(!Object.keys(gold).length){ toast('金标为空，至少填一个字段'); return; }
+  $('#btnSave').disabled = true;
+  try{
+    const r = await j('/api/learn/label/' + CUR.id, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({gold})
+    });
+    toast(`已标注 ${r.fields} 个字段${r.corrected ? '（难例，进评测集）' : '（原样确认）'}`);
+    const curId = CUR.id;
+    await loadStats();
+    await loadList();
+    if(STATUS === 'pending'){
+      const next = ITEMS.find(x => x.id !== curId);
+      if(next) return openItem(next.id);
+    }
+    CUR = null;
+    $('#editor').innerHTML = '<div class="empty">这条已标注。左侧继续选下一条。</div>';
+  }catch(e){ toast('保存失败：' + e.message); }
+  finally{ const b = $('#btnSave'); if(b) b.disabled = false; }
+}
+
+async function ignoreItem(){
+  if(!CUR) return;
+  if(!confirm('跳过这一条？它不会进入训练集，但会从待标注里移除。')) return;
+  try{
+    await j('/api/learn/ignore/' + CUR.id, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: '{}'
+    });
+    toast('已跳过');
+    const curId = CUR.id;
+    await loadStats();
+    await loadList();
+    const next = ITEMS.find(x => x.id !== curId);
+    if(STATUS === 'pending' && next) return openItem(next.id);
+    CUR = null;
+    $('#editor').innerHTML = '<div class="empty">这条已跳过。左侧继续选下一条。</div>';
+  }catch(e){ toast('操作失败：' + e.message); }
+}
+
+document.querySelectorAll('.tab[data-status]').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab[data-status]').forEach(x => x.classList.toggle('on', x === t));
+  STATUS = t.dataset.status;
+  CUR = null;
+  $('#editor').innerHTML = '<div class="empty">从左侧选一条开始标注。</div>';
+  loadList().catch(e => toast(e.message));
+});
+
+(async () => {
+  try{
+    ME = await j('/api/me');
+    await loadStats();
+    await loadList();
+  }catch(e){ $('#list').innerHTML = `<div class="empty" style="color:#c53030">${esc(e.message)}</div>`; }
+})();
+</script>
+</body>
+</html>

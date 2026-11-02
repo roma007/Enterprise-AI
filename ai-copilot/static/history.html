@@ -78,16 +78,26 @@ function revRows(items){
     ${items.map(x => {
       const before = x.before || {}, after = x.after || {};
       let diff = '';
+      let kind = '确认';
       if(x.action === 'confirm'){
         const n = (after.feedback || []).length;
         diff = `确认，修正 ${n} 项`;
       } else if(x.action === 'undo'){
         const n = (before.feedback || []).length;
         diff = `撤销，恢复 ${n} 项`;
+        kind = '撤销';
+      } else if(x.action === 'label'){
+        diff = `标注 ${Object.keys(after.gold || {}).length} 个字段`;
+        kind = '标注';
+      } else if(x.action === 'ignore'){
+        diff = '跳过，不进训练集';
+        kind = '跳过';
       }
       return `<tr>
         <td class="muted">${esc((x.ts||'').replace('T',' ').slice(0,19))}</td>
-        <td>${x.action === 'undo' ? '<span class="chg">撤销</span>' : '<span class="new">确认</span>'}</td>
+        <td>${x.action === 'undo'
+              ? '<span class="chg">撤销</span>'
+              : (x.action === 'confirm' ? '<span class="new">确认</span>' : esc(kind))}</td>
         <td>${esc(x.actor_name || x.actor_email || x.actor || '—')}</td>
         <td>${x.version ?? ''}</td>
         <td>${diff}</td>

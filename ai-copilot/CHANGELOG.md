@@ -5,6 +5,37 @@
 
 ---
 
+## [0.23.0] · 2026-11-02 · 企业微信安全模式（B3）
+
+### 新增
+- `app/wecom_crypto.py`：企业微信官方加解密协议
+  · `AESKey = Base64_Decode(EncodingAESKey + "=")`
+  · 明文结构 `random(16B) + msg_len(4B) + msg + receiveid`
+  · AES-256-CBC，IV = AESKey[:16]，PKCS#7 **32 字节块**
+  · 签名 `sha1(sort(token, timestamp, nonce, encrypt))`
+  · receiveid 校验（防串号）
+- GET 回调：安全模式下解密 `echostr` 后原样返回
+- POST 回调：解密外层 `<Encrypt>`，处理后再把回复包成加密信封
+- `WECOM_ENCODING_AES_KEY` 环境变量；留空仍走明文（本地调试）
+- 安全模式缺 token / corpid / aes key 时返回 503，明确缺哪一项
+
+### 设计取舍
+- **`cryptography` 是可选依赖**：只有启用安全模式才需要；
+  未安装时上传路径不受影响，回调返回「pip install cryptography」
+- **明文模式保留**：现场没有 EncodingAESKey 时仍能用，但文档写明仅调试
+- **加解密单独成文件**：协议细节多，和消息拼装混在一起很难测
+- **拒绝空 token 跑安全模式**：否则等于谁都能伪造回调
+
+### 实测
+- 官方文档 POST 示例：签名 `477715d1…` 一致，解密得到 `<Content>hello</Content>`
+- URL 验证：加密 echostr → 解密回原文，签名错误 403
+- 加密 POST：回复签名可验、可解密，内容含识别出的箱号
+- 明文模式：GET/POST 均正常，不影响现有部署
+- 官方向量自检已挂进 smoke
+- smoke 10 项全绿；三样本集回归未变
+
+---
+
 ## [0.22.0] · 2026-11-02 · 学习队列标注工作台（B1）
 
 ### 新增

@@ -20,7 +20,7 @@ from . import auth, storage
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ocr
+from . import ocr, wecom_crypto
 from .config import ROOT, settings
 from .csvio import decode_csv_bytes, export_csv, parse_tms_csv
 from . import wecom
@@ -506,44 +506,100 @@ def batch_page():
     return FileResponse(ROOT / "static" / "batch.html")
 
 
+def _require_wecom_config() -> None:
+    """安全模式三件套缺一不可，缺了就别装作能收消息。"""
+    missing = [k for k, v in (
+        ("WECOM_TOKEN", settings.wecom_token),
+        ("WECOM_ENCODING_AES_KEY", settings.wecom_aes_key),
+        ("WECOM_CORPID", settings.wecom_corpid),
+    ) if not v]
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=f"企业微信安全模式配置不完整，缺少：{', '.join(missing)}",
+        )
+
+
 @app.get("/api/wecom/callback", response_class=PlainTextResponse)
 def wecom_verify(msg_signature: str = "", timestamp: str = "", nonce: str = "",
-                 echostr: str = ""):
-    """企业微信回调 URL 验证。"""
-    if not wecom.verify_signature(settings.wecom_token, msg_signature, timestamp, nonce):
+                 echostr: str = "", signature: str = ""):
+    """企业微信回调 URL 验证。
+
+    - 配了 WECOM_ENCODING_AES_KEY → 安全模式：验 msg_signature 后解密 echostr
+    - 没配 → 明文模式：验 signature 后原样返回 echostr（仅本地调试）
+    """
+    if settings.wecom_aes_key:
+        _require_wecom_config()
+        if not wecom_crypto.verify(settings.wecom_token, msg_signature,
+                                   timestamp, nonce, echostr):
+            raise HTTPException(status_code=403, detail="签名校验失败")
+        try:
+            return wecom_crypto.decrypt_echo(
+                echostr, settings.wecom_aes_key, settings.wecom_corpid)
+        except wecom_crypto.WeComCryptoError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    if not wecom.verify_signature(settings.wecom_token, signature or msg_signature,
+                                  timestamp, nonce):
         raise HTTPException(status_code=403, detail="签名校验失败")
     return echostr
 
 
 @app.post("/api/wecom/callback", response_class=PlainTextResponse)
 async def wecom_message(request: Request, msg_signature: str = "", timestamp: str = "",
-                        nonce: str = ""):
+                        nonce: str = "", signature: str = ""):
     """企业微信消息入口：先记录来单，再解析，最后被动回复。
 
     顺序很重要：**先 inbound 再解析**。这样即使解析失败，这条单也进了分母，
     绕过率才不会被"处理失败的单"悄悄稀释。
-    """
-    if not wecom.verify_signature(settings.wecom_token, msg_signature, timestamp, nonce):
-        raise HTTPException(status_code=403, detail="签名校验失败")
 
+    安全模式下 body 是加密信封，解密后才能拿到真正的 XML。
+    """
     body = (await request.body()).decode("utf-8", errors="ignore")
-    msg = wecom.parse_message(body)
+    encrypted = bool(settings.wecom_aes_key)
+
+    if encrypted:
+        _require_wecom_config()
+        try:
+            envelope = wecom_crypto.extract_encrypt(body)
+        except wecom_crypto.WeComCryptoError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not wecom_crypto.verify(settings.wecom_token, msg_signature,
+                                   timestamp, nonce, envelope):
+            raise HTTPException(status_code=403, detail="签名校验失败")
+        try:
+            xml_text = wecom_crypto.decrypt_with_key(
+                envelope, settings.wecom_aes_key, settings.wecom_corpid)
+        except wecom_crypto.WeComCryptoError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    else:
+        if not wecom.verify_signature(settings.wecom_token, signature or msg_signature,
+                                      timestamp, nonce):
+            raise HTTPException(status_code=403, detail="签名校验失败")
+        xml_text = body
+
+    msg = wecom.parse_message(xml_text)
     content = msg["content"].strip()
 
     if not content:
-        return Response(
-            content=wecom.build_text_reply(msg["from_user"], msg["to_user"], wecom.format_help()),
-            media_type="application/xml",
-        )
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], wecom.format_help())
+        return _wecom_reply(inner, encrypted)
 
     record_inbound(content, source="wecom")
     draft = extract(content)
     run_id = save_run(content, draft, actor="wecom")
     reply = wecom.format_result(draft, run_id)
-    return Response(
-        content=wecom.build_text_reply(msg["from_user"], msg["to_user"], reply),
-        media_type="application/xml",
-    )
+    inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+    return _wecom_reply(inner, encrypted)
+
+
+def _wecom_reply(inner_xml: str, encrypted: bool) -> Response:
+    """明文模式直接回；安全模式包一层加密信封。"""
+    if not encrypted:
+        return Response(content=inner_xml, media_type="application/xml")
+    wrapped = wecom_crypto.build_encrypted_reply(
+        inner_xml, settings.wecom_token,
+        settings.wecom_aes_key, settings.wecom_corpid)
+    return Response(content=wrapped, media_type="application/xml")
 
 
 @app.post("/api/inbound")

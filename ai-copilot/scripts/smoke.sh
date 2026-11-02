@@ -81,6 +81,16 @@ if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
   else
     chk "存储后端自检（local + s3 假客户端）" 0
   fi
+
+  if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python -c "from app import wecom_crypto; raise SystemExit(0 if wecom_crypto.available() else 9)") 2>/dev/null; then
+    if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_wecom_crypto.py >/dev/null 2>&1); then
+      chk "企微加解密自检（官方向量）" 1
+    else
+      chk "企微加解密自检（官方向量）" 0
+    fi
+  else
+    echo "  - 未安装 cryptography，跳过企微加解密自检"
+  fi
 fi
 
 rm -f "$COOKIE"

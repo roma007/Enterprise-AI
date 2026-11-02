@@ -63,6 +63,7 @@ class Settings:
     # 企业微信入口（D3）：留空则跳过签名校验，便于本地调试
     wecom_token: str = os.getenv("WECOM_TOKEN", "").strip()
     wecom_corpid: str = os.getenv("WECOM_CORPID", "").strip()
+    wecom_aes_key: str = os.getenv("WECOM_ENCODING_AES_KEY", "").strip()
 
     # 图像增强（D2）：多版本 OCR。关掉可省时间，但糊图识别率会明显下降
     ocr_enhance: bool = os.getenv("OCR_ENHANCE", "1").strip() not in {"0", "false", "off"}

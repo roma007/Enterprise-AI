@@ -5,6 +5,42 @@
 
 ---
 
+## [0.26.0] · 2026-11-02 · 单实例上生产加固（D1/D2/D3/D6）
+
+### D1 WAL + 安全备份
+- 数据库切换 `journal_mode=WAL`、`synchronous=NORMAL`
+- 连接改为用后即关（之前靠 GC，WAL 下会阻止 checkpoint）
+- `scripts/backup_db.py`：SQLite 在线备份 API，校验 `integrity_check` 与行数，保留最近 N 份
+- `make backup`；恢复步骤写进运维手册
+- **不再建议 `cp copilot.db`**：WAL 下会丢最新写入
+
+### D2 外键
+- 每个连接 `PRAGMA foreign_keys=ON`
+- 启动时清理历史孤儿（本次清掉 2 条 `run_id=''` 的 feedback）
+- 新库 schema 为 feedback / run_revisions / learn_queue / user_sessions / batch_items 加外键
+- 老库不重建表，只启用已声明的外键（文档写明）
+
+### D3 登录失败锁定
+- `login_attempts` 表：同一 邮箱+IP 在窗口内失败 N 次 → 锁定 M 秒
+- 默认 5 次 / 15 分钟，环境变量可调
+- 返回 429 + `Retry-After`
+- 未知邮箱也执行一次 scrypt，避免按响应时间枚举账号
+
+### D6 数据保留
+- `scripts/cleanup.py`：默认 dry-run
+- 清理过期会话、已结束发件箱、过期登录记录
+- 业务数据（runs/feedback/金标）默认不动，需 `--runs-days` 显式开启
+
+### 实测
+- WAL 后写入期间读取 p95：22.6ms → 0.5ms
+- `foreign_keys=on`；插入无主会话被 IntegrityError 拦住；历史孤儿启动时清理
+- 连续 3 次错密码 → 429；锁定期间正确密码仍 429；到期后 200
+- 清理脚本 dry-run 不改数据；apply 只删过期行
+- 备份 424KB，`integrity_check=ok`，行数一致
+- smoke 14 项全绿；三样本集回归未变
+
+---
+
 ## [0.25.0] · 2026-11-02 · 地址校验与异常费用（B5 + B6）
 
 ### B5 地址校验

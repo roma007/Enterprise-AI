@@ -35,6 +35,7 @@ from .store import (
     metrics, queue, recent, record_inbound, report_md, revoke_session,
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
+    clear_login_failures, login_locked, record_login_failure,
     confirmed_recent, revisions, undo_confirm, NotConfirmed, VersionMismatch,
 )
 
@@ -173,11 +174,40 @@ class LoginReq(BaseModel):
 
 @app.post("/api/auth/login")
 def api_login(req: LoginReq, request: Request):
-    u = get_user_by_email(req.email)
+    email = req.email.strip().lower()
+    ip = request.client.host if request.client else ""
+    key = f"{email}|{ip}"
+
+    def _wait_text(seconds: int) -> str:
+        return f"{seconds // 60} 分钟" if seconds >= 60 else f"{max(1, seconds)} 秒"
+
+    remain = login_locked(key)
+    if remain > 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"登录失败次数过多，请 {_wait_text(remain)}后再试",
+            headers={"Retry-After": str(remain)},
+        )
+
+    u = get_user_by_email(email)
+    if not u:
+        # 未知账号也做一次等价开销的校验，避免按响应时间枚举
+        auth.verify_password(req.password, auth.DUMMY_HASH, auth.DUMMY_SALT)
     if not u or not u.get("active") or not auth.verify_password(
             req.password, u["pw_hash"], u["pw_salt"]):
+        locked = record_login_failure(
+            key, settings.login_max_failures,
+            settings.login_lock_seconds, settings.login_window_seconds,
+        )
+        if locked:
+            raise HTTPException(
+                status_code=429,
+                detail=f"登录失败次数过多，请 {_wait_text(locked)}后再试",
+                headers={"Retry-After": str(locked)},
+            )
         raise HTTPException(status_code=401, detail="邮箱或密码不正确")
 
+    clear_login_failures(key)
     payload = auth.new_payload(u["id"])
     create_session(payload["jti"], u["id"], payload["exp"],
                    request.headers.get("user-agent", ""),

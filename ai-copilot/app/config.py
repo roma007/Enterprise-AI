@@ -60,6 +60,11 @@ class Settings:
     baseline_manual_sec: float = float(os.getenv("BASELINE_MANUAL_SEC", "180"))
     hourly_cost: float = float(os.getenv("HOURLY_COST", "45"))
 
+    # 登录失败锁定（D3）：同一 邮箱+IP 在窗口内失败 N 次 → 锁 M 秒
+    login_max_failures: int = int(os.getenv("LOGIN_MAX_FAILURES", "5"))
+    login_lock_seconds: int = int(os.getenv("LOGIN_LOCK_SECONDS", "900"))
+    login_window_seconds: int = int(os.getenv("LOGIN_WINDOW_SECONDS", "900"))
+
     # 企业微信入口（D3）：留空则跳过签名校验，便于本地调试
     wecom_token: str = os.getenv("WECOM_TOKEN", "").strip()
     wecom_corpid: str = os.getenv("WECOM_CORPID", "").strip()

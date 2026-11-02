@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean
+.PHONY: setup dev eval smoke prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -35,11 +35,22 @@ prewarm:
 	PYTHONPATH=. $(PY) scripts/prewarm.py
 
 reset:
-	rm -f data/copilot.db
+	rm -f data/copilot.db data/copilot.db-wal data/copilot.db-shm
 	@echo "telemetry db removed"
 
 clean:
-	rm -rf .venv data/copilot.db __pycache__ app/__pycache__
+	rm -rf .venv data/copilot.db data/copilot.db-wal data/copilot.db-shm __pycache__ app/__pycache__
+
+# 安全备份（WAL 下必须用 SQLite 在线备份，不能直接 cp）
+backup:
+	PYTHONPATH=. $(PY) scripts/backup_db.py --keep 14
+
+# 数据保留：默认 dry-run，只统计会删多少
+cleanup:
+	PYTHONPATH=. $(PY) scripts/cleanup.py --days 180
+
+cleanup-apply:
+	PYTHONPATH=. $(PY) scripts/cleanup.py --days 180 --apply
 
 # 模拟一整天：入口 → 解析 → 分级 → 确认 → 指标 → 风险 → 拆分 → 改单
 simday:

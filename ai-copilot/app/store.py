@@ -13,6 +13,7 @@ import json
 import re
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from .config import settings
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS inbound (
 CREATE INDEX IF NOT EXISTS idx_inbound_hash ON inbound(text_hash);
 CREATE TABLE IF NOT EXISTS learn_queue (
     id          TEXT PRIMARY KEY,
-    run_id      TEXT NOT NULL,
+    run_id      TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     ts          TEXT NOT NULL,
     reason      TEXT NOT NULL,
     status      TEXT NOT NULL DEFAULT 'pending',
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS batches (
 );
 CREATE TABLE IF NOT EXISTS batch_items (
     id          TEXT PRIMARY KEY,
-    batch_id    TEXT NOT NULL,
+    batch_id    TEXT NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
     filename    TEXT NOT NULL,
     path        TEXT,
     status      TEXT NOT NULL DEFAULT 'pending',
@@ -93,7 +94,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE TABLE IF NOT EXISTS user_sessions (
     jti         TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at  TEXT NOT NULL,
     expires_at  INTEGER NOT NULL,
     revoked     INTEGER NOT NULL DEFAULT 0,
@@ -110,7 +111,8 @@ CREATE TABLE IF NOT EXISTS run_revisions (
     version     INTEGER,
     before_json TEXT,
     after_json  TEXT,
-    note        TEXT
+    note        TEXT,
+    FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_revisions_run ON run_revisions(run_id, ts);
 CREATE TABLE IF NOT EXISTS delivery_outbox (
@@ -127,6 +129,12 @@ CREATE TABLE IF NOT EXISTS delivery_outbox (
     sent_at         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON delivery_outbox(status, created_at);
+CREATE TABLE IF NOT EXISTS login_attempts (
+    key           TEXT PRIMARY KEY,
+    fails         INTEGER NOT NULL DEFAULT 0,
+    first_at      TEXT NOT NULL,
+    locked_until  TEXT
+);
 """
 
 # 增量列：老库自动补，不用重建
@@ -152,19 +160,58 @@ _EXTRA_COLUMNS = (
 )
 
 
-def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(settings.db_path)
+@contextmanager
+def _conn():
+    """每次操作一个连接，用完关闭。
+
+    为什么必须关：WAL 模式下长连接会持有读快照，阻止 checkpoint，
+    `-wal` 文件会一直长。之前用 `with sqlite3.connect()` 只提交不关闭，
+    靠 GC 回收，批量处理时容易积累。
+    """
+    conn = sqlite3.connect(settings.db_path, timeout=10)
     conn.row_factory = sqlite3.Row
-    return conn
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _cleanup_orphans(conn: sqlite3.Connection) -> int:
+    """清掉历史孤儿行（外键启用前产生的）。返回删除条数。"""
+    total = 0
+    for sql in (
+        "DELETE FROM feedback WHERE run_id NOT IN (SELECT id FROM runs)",
+        "DELETE FROM run_revisions WHERE run_id NOT IN (SELECT id FROM runs)",
+        "DELETE FROM learn_queue WHERE run_id NOT IN (SELECT id FROM runs)",
+        "DELETE FROM user_sessions WHERE user_id NOT IN (SELECT id FROM users)",
+        "DELETE FROM batch_items WHERE batch_id NOT IN (SELECT id FROM batches)",
+    ):
+        total += conn.execute(sql).rowcount
+    return total
 
 
 def init_db() -> None:
+    # journal_mode 是持久属性，设一次即可；必须在写事务之前设置
+    with _conn() as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+
     with _conn() as conn:
         conn.executescript(_SCHEMA)
         for table, col, decl in _EXTRA_COLUMNS:
             cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
             if col not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        removed = _cleanup_orphans(conn)
+        if removed:
+            print(f"[db] 清理孤儿行 {removed} 条")
 
 
 def _now() -> str:
@@ -1022,6 +1069,65 @@ def touch_login(uid: str) -> None:
 def count_users() -> int:
     with _conn() as conn:
         return conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
+
+
+# ---------------- 登录失败锁定（D3） ----------------
+
+def login_locked(key: str) -> int:
+    """返回剩余锁定秒数；0 表示未锁定。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT locked_until FROM login_attempts WHERE key=?", (key,)
+        ).fetchone()
+    if not row or not row["locked_until"]:
+        return 0
+    try:
+        until = datetime.fromisoformat(row["locked_until"])
+    except ValueError:
+        return 0
+    remain = int((until - datetime.now(timezone.utc)).total_seconds())
+    return max(0, remain)
+
+
+def record_login_failure(key: str, max_fails: int = 5, lock_seconds: int = 900,
+                         window_seconds: int = 900) -> int:
+    """记一次失败；达到阈值返回锁定秒数，否则 0。"""
+    now = datetime.now(timezone.utc)
+    ts = now.isoformat(timespec="seconds")
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT fails, first_at FROM login_attempts WHERE key=?", (key,)
+        ).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO login_attempts (key, fails, first_at, locked_until)"
+                " VALUES (?,1,?,NULL)", (key, ts),
+            )
+            return 0
+        try:
+            first = datetime.fromisoformat(row["first_at"])
+        except ValueError:
+            first = now
+        if (now - first).total_seconds() > window_seconds:
+            conn.execute(
+                "UPDATE login_attempts SET fails=1, first_at=?, locked_until=NULL"
+                " WHERE key=?", (ts, key),
+            )
+            return 0
+        fails = int(row["fails"] or 0) + 1
+        locked_until = None
+        if fails >= max_fails:
+            locked_until = (now + timedelta(seconds=lock_seconds)).isoformat(timespec="seconds")
+        conn.execute(
+            "UPDATE login_attempts SET fails=?, locked_until=? WHERE key=?",
+            (fails, locked_until, key),
+        )
+    return lock_seconds if locked_until else 0
+
+
+def clear_login_failures(key: str) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM login_attempts WHERE key=?", (key,))
 
 
 def create_session(jti: str, user_id: str, expires_at: int, ua: str = "", ip: str = "") -> None:

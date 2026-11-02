@@ -27,6 +27,10 @@ from .config import ROOT
 SECRET_PATH = ROOT / "data" / "auth_secret"
 TOKEN_TTL = int(os.getenv("AUTH_TOKEN_TTL", str(12 * 3600)))  # 12 小时
 
+# 未知邮箱也跑一次 scrypt，避免"响应快 = 账号不存在"的枚举
+DUMMY_HASH = "9c8176331f34e812d76b6628dec82ad2203cc57189ed6f2504e733ccd0c4303e"
+DUMMY_SALT = "468a00fff215ad7c2e0632140c9804a5"
+
 ROLES = ("admin", "operator", "finance", "viewer")
 ROLE_LABEL = {
     "admin": "管理员",

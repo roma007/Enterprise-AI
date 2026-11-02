@@ -65,7 +65,7 @@
 <body>
 <header>
   <h1>一键演示 · 全链路</h1>
-  <span class="sub">按会客顺序，10 步走完</span>
+  <span class="sub">按会客顺序，13 步走完</span>
   <span class="sp"></span>
   <a href="/">托书</a><a href="/invoice" style="margin-left:10px">发票</a>
   <a href="/threeway" style="margin-left:10px">三单</a><a href="/reconcile" style="margin-left:10px">对账</a>
@@ -156,6 +156,24 @@ const INVOICE = `增值税专用发票
 税率：13%
 税额：299.12
 价税合计：2600.00`;
+
+const ADDR_BAD = `客户：宏远国际货代
+委托单号：ADDR-1
+箱型：40HQ
+箱量：1
+箱号：CSQU3054383
+提箱地：北仓二期堆场
+卸货地：上海市北仑区某某路 8 号
+截港时间：2026-12-07 18:00`;
+
+const FEE_DEMO = `运单号,费用名称,数量,单价,金额,车队
+HY-001,运费,1,2600,2600,宏运车队
+HY-001,提箱费,1,300,300,宏运车队
+HY-001,运费,1,2600,2600,宏运车队
+HY-002,运费,1,2800,2900,宏运车队
+HY-004,运费,1,2500,2500,宏运车队
+HY-005,运费,1,2550,2550,宏运车队
+HY-006,运费,1,9000,9000,宏运车队`;
 
 const steps = [
   {
@@ -336,7 +354,73 @@ const steps = [
     }
   },
   {
-    title: "⑩ 收尾：指标与风险",
+    title: "⑩ 地址校验：错别字与港区冲突",
+    say: "北仑写成北仓、上海配北仑区——这类错误不用等司机跑错才发现。",
+    input: ADDR_BAD,
+    async run(){
+      const d = await jpost('/api/extract', {text: ADDR_BAD, use_llm: false});
+      const rows = (d.checks || []).filter(c => c.code.startsWith('W_ADDR') || c.code.startsWith('E_ADDR'))
+        .map(c => [c.level === 'error' ? '必须改' : '提醒', c.code, c.message]);
+      return {
+        kpi: [['地址问题', rows.length + ' 条'], ['分级', d.review_level]],
+        table: {head: ['级别', '错误码', '说明'], rows},
+        note: "只判断同一个地址字段内部是否自相矛盾；提箱洋山、卸货宁波是正常业务，不会误报。"
+      };
+    }
+  },
+  {
+    title: "⑪ 异常费用：重复、算错、离群",
+    say: "车队报账几十行，财务只会核对「看着眼熟」的那几行。",
+    input: FEE_DEMO,
+    async run(){
+      const r = await jpost('/api/fees/check', {text: FEE_DEMO});
+      if (r.detail) return {kpi: [['权限', '未执行']], table: {head: ['提示'], rows: [[r.detail]]}};
+      const errs = r.issues.filter(x => x.level === 'error').length;
+      const warns = r.issues.filter(x => x.level === 'warn').length;
+      return {
+        kpi: [['费用行', r.rows], ['合计', money(r.total_amount)], ['必须处理', errs], ['需核对', warns]],
+        table: {
+          head: ['级别', '行', '单号', '费用', '金额', '说明'],
+          rows: r.issues.map(x => [x.level === 'error' ? '必须处理' : '核对',
+            x.row + 1, x.booking_no || '—', x.fee_name || '—', x.amount || '—', x.message]),
+        },
+        note: "只做结构异常与同批离群；不与合同价比，也不判断某项费用该不该收。"
+      };
+    }
+  },
+  {
+    title: "⑫ 撤销：确认错了还能退回来",
+    say: "人一定会点错。关键不是不犯错，是犯错后能不能留下证据地撤回。",
+    input: "确认一张单 → 撤销 → 查看修订流水",
+    async run(){
+      const d = await jpost('/api/extract', {text: BASE_BOOKING, use_llm: false});
+      const auto = {}; Object.entries(d.fields).forEach(([k,v]) => auto[k] = v.value || '');
+      await jpost('/api/confirm', {run_id: d.run_id, auto, final: auto, handle_ms: 20000});
+      const before = await jget('/api/audit/' + d.run_id);
+      const u = await jpost('/api/runs/' + d.run_id + '/undo', {note: '演示：确认错了', version: before.version});
+      if (!u.ok) {
+        return {
+          kpi: [['撤销', '未执行'], ['原因', u.detail || '需要管理员']],
+          table: {head: ['权限边界'], rows: [['撤销确认仅管理员可操作；普通账号能看到按钮被拒，也能在审计里看到记录。']]},
+        };
+      }
+      const after = await jget('/api/audit/' + d.run_id);
+      return {
+        kpi: [['撤销前', before.confirmed ? '已确认' : '未确认'],
+              ['撤销后', after.confirmed ? '已确认' : '未确认'],
+              ['版本', after.version]],
+        table: {
+          head: ['时间', '动作', '操作者', '版本', '说明'],
+          rows: (after.revisions || []).map(x => [
+            (x.ts || '').replace('T', ' ').slice(5, 19),
+            x.action, x.actor || '—', x.version ?? '', x.note || '']),
+        },
+        note: "撤销不删除历史：被撤回的字段与金标完整保存在修订流水里。"
+      };
+    }
+  },
+  {
+    title: "⑬ 收尾：指标与风险",
     say: "客户会问「省了多少」「能不能不要人」。这两个都能算给他看。",
     input: "运行指标 + 风险模拟",
     async run(){

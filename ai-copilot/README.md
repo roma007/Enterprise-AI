@@ -300,7 +300,7 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
 | **账龄与催收**：四档账龄 + 客户风险分级 + 催收话术 | `app/aging.py` | `/aging`、`/api/aging/*` |
 | **外协结算**：合同价 × 数量 = 应付，与车队报账比对 | `app/settlement.py` | `/settlement`、`/api/settlement/*` |
-| **一键演示页**：按会客顺序串起 10 步全链路 | `static/demo.html` | `/demo`、`make demo` |
+| **一键演示页**：按会客顺序串起 13 步全链路（含地址、费用、撤销） | `static/demo.html` | `/demo`、`make demo` |
 | **登录与角色（A1）**：admin / operator / finance / viewer，会话可撤销 | `app/auth.py` | `/login`、`/api/auth/*` |
 | **用户管理（A1）**：建用户、改角色、停用（停用即踢下线） | `app/main.py` | `/users`（仅管理员） |
 | **操作者记录（A2）**：每次解析与确认记录 `actor` / `confirmed_by` | `app/store.py` | 审计与回写的基础 |
@@ -321,7 +321,7 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | 按需调用模型（规则够好就不花 5 秒） | `app/extract.py` `_needs_llm` | 结构化托书 18ms |
 | 合并策略可切换（fill_only / floor / llm_wins） | `app/extract.py` | 28 份样本对照 |
 | CSV 导出 | `static/index.html` | 手工验证 |
-| 演示前自检 | `scripts/smoke.sh` | 5 项全绿 |
+| 演示前自检 | `scripts/smoke.sh` | 13 项全绿 |
 
 ### 8.2 未实现（按计划排期）
 

@@ -87,6 +87,7 @@
   <span id="engineBadge" class="badge">检测引擎中…</span>
   <span style="flex:1"></span>
   <span class="badge" id="userChip" style="display:none"></span>
+  <a href="/history" id="historyLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">历史</a>
   <a href="/users" id="userLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">用户</a>
   <a href="#" id="logoutLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">退出</a>
   <button class="ghost" id="btnMetrics" style="padding:4px 12px;font-size:12px">运行指标</button>
@@ -130,6 +131,7 @@
       <span id="correctionInfo" style="font-size:12px;color:var(--muted)"></span>
       <span>
         <a id="auditLink" href="#" target="_blank" style="font-size:12px;color:var(--muted);margin-right:10px;text-decoration:none">审计 ↗</a>
+        <button id="btnUndo" style="display:none">撤销确认</button>
         <button id="btnCsv">导出 CSV</button>
         <button class="primary" id="btnConfirm">确认并记录</button>
       </span>
@@ -158,7 +160,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let META = null, LAST = null, ROWS = [], HANDLE_START = 0;
+let META = null, LAST = null, ROWS = [], HANDLE_START = 0, ME = null;
 
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -169,12 +171,14 @@ async function loadMe(){
   try{
     const me = await (await fetch('/api/me')).json();
     if(!me || !me.id) return;
+    ME = me;
     const chip = $('#userChip');
     chip.textContent = (me.name || me.email) + ' · ' + (me.role_label || me.role);
     chip.style.display = '';
     $('#logoutLink').style.display = '';
     if(me.role === 'admin'){
       $('#userLink').style.display = '';
+      $('#historyLink').style.display = '';
     }
     $('#logoutLink').onclick = async e => {
       e.preventDefault();
@@ -350,10 +354,27 @@ async function confirmDraft(){
     })
   });
   const r = await res.json();
+  if(r.version) LAST.version = r.version;
   toast(`已记录：${r.fields} 个字段，人工修正 ${r.changed} 个（${(r.correction_rate*100).toFixed(1)}%），耗时 ${((Date.now()-HANDLE_START)/1000).toFixed(1)} 秒`);
   ROWS = META.fields.map(f => [f.label, (final[f.key]||'')]);
   $('#correctionInfo').textContent = `本次修正 ${r.changed} 项，级别 ${r.review_level}，已写入遥测库。`;
   HANDLE_START = 0;
+  if(ME && ME.role === 'admin') $('#btnUndo').style.display = '';
+  loadMetrics();
+}
+
+async function undoConfirm(){
+  if(!LAST) return;
+  const note = prompt('撤销原因（会写进修订流水）：', '确认错了');
+  if(note === null) return;
+  const res = await fetch('/api/runs/' + LAST.run_id + '/undo', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({note, version: LAST.version})
+  });
+  const r = await res.json();
+  if(!res.ok){ toast('撤销失败：' + (r.detail || res.status)); return; }
+  toast(`已撤销：恢复 ${r.restored_fields} 个字段，版本 ${r.version}`);
+  $('#btnUndo').style.display = 'none';
   loadMetrics();
 }
 
@@ -503,6 +524,7 @@ dz.addEventListener('drop', e => {
 $('#btnConfirm').onclick = confirmDraft;
 $('#btnCsv').onclick = exportCsv;
 $('#btnEval').onclick = runEval;
+$('#btnUndo').onclick = undoConfirm;
 $('#btnClear').onclick = ()=>{ $('#raw').value=''; $('#fields').innerHTML='<div class="empty">左侧粘贴托书，点“解析”。</div>'; $('#summary').style.display='none'; $('#banner').innerHTML=''; $('#checks').style.display='none'; $('#confirmRow').style.display='none'; };
 document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter') parse(); });
 

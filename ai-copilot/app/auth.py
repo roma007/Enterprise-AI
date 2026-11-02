@@ -150,6 +150,10 @@ def allowed(role: str, method: str, path: str) -> tuple[bool, str]:
         if path.startswith(p):
             return False, "仅管理员可操作"
 
+    # 撤销确认会改动已确认数据与金标，只给管理员
+    if method == "POST" and path.startswith("/api/runs/") and path.endswith("/undo"):
+        return False, "撤销确认仅管理员可操作"
+
     write = method in {"POST", "PUT", "PATCH", "DELETE"}
     if not write:
         return True, ""

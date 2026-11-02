@@ -5,6 +5,44 @@
 
 ---
 
+## [0.21.0] · 2026-11-02 · 撤销与修订流水（B2）
+
+### 新增
+- `run_revisions` 表：append-only，记录 `confirm` / `undo` 的完整前后快照
+- `POST /api/runs/{id}/undo`：撤销一次确认（**仅管理员**）
+- `GET /api/runs/{id}/revisions`：查看一张单的修订历史
+- `GET /api/runs/confirmed`：最近已确认、可撤销的单据
+- `/history` 页面：确认历史 + 修订明细 + 撤销按钮
+- 工作台确认成功后，管理员会看到「撤销确认」按钮
+- `GET /api/audit/{id}` 现在附带 `revisions`
+
+### 撤销做了什么
+| 对象 | 变化 |
+|---|---|
+| `runs` | `confirmed=0`、`confirmed_by=''`、`handle_ms/forced` 清空、`version+1` |
+| `feedback` | 删除该单的修正明细（被撤回内容完整保存在 `before_json`） |
+| `learn_queue` | 金标回到 `pending`，`gold_json` 清空 |
+| `run_revisions` | **追加**一条 `undo`，不删任何历史 |
+
+### 设计取舍
+- **撤销不是删除**：确认这个动作发生过，删记录等于篡改审计；
+  所以只追加反向流水，`before_json` 保存被撤回的字段与金标
+- **feedback 直接清空而不是打作废标记**：修正率、字段准确率都按 feedback 统计，
+  留一条"已作废但仍在表里"的记录，早晚污染某个没加过滤的查询
+- **乐观并发**：撤销可带 `version`，期间有人重新确认则 409，避免撤错版本
+- **条件更新**：`WHERE confirmed=1`，两个人同时点撤销只有一个成功
+- **仅管理员**：撤销影响已确认数据与金标，单证员/财务越权返回 403
+
+### 实测
+- 确认 → revision `confirm v1`；撤销 → `undo v2`，feedback 清空，金标回 pending
+- 重复撤销 409；版本不匹配 409；单证员撤销 403
+- 撤销后可重新确认（version 3），审计里能看到 confirm→undo→confirm 全链路
+- 指标一致：撤销后 `tickets_confirmed=0`、`labeled=0`
+- 页面：历史列表、修订展开、撤销 toast 均正常，无控制台报错
+- smoke 9 项全绿；三样本集回归未变
+
+---
+
 ## [0.20.0] · 2026-11-02 · 对象存储抽象（A6）
 
 ### 新增

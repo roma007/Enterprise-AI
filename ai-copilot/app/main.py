@@ -34,6 +34,7 @@ from .store import (
     metrics, queue, recent, record_inbound, report_md, revoke_session,
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
+    confirmed_recent, revisions, undo_confirm, NotConfirmed, VersionMismatch,
 )
 
 MAX_UPLOAD = 10 * 1024 * 1024  # 10 MB
@@ -458,6 +459,40 @@ def api_confirm(req: ConfirmReq, request: Request):
                 "version": exc.version,
             },
         )
+
+
+class UndoReq(BaseModel):
+    note: str = ""
+    version: int | None = None
+
+
+@app.post("/api/runs/{run_id}/undo")
+def api_undo(run_id: str, req: UndoReq, request: Request):
+    """撤销一次确认（B2，仅管理员）。"""
+    try:
+        return undo_confirm(run_id, actor=_uid(request), note=req.note,
+                            expected_version=req.version)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except NotConfirmed as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except VersionMismatch as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.get("/api/runs/confirmed")
+def api_runs_confirmed(limit: int = 100):
+    return {"items": confirmed_recent(limit)}
+
+
+@app.get("/api/runs/{run_id}/revisions")
+def api_runs_revisions(run_id: str, limit: int = 100):
+    return {"items": revisions(run_id, limit)}
+
+
+@app.get("/history")
+def history_page():
+    return FileResponse(ROOT / "static" / "history.html")
 
 
 @app.get("/h5")

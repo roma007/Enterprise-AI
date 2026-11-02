@@ -101,6 +101,18 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     ip          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
+CREATE TABLE IF NOT EXISTS run_revisions (
+    id          TEXT PRIMARY KEY,
+    run_id      TEXT NOT NULL,
+    ts          TEXT NOT NULL,
+    actor       TEXT,
+    action      TEXT NOT NULL,
+    version     INTEGER,
+    before_json TEXT,
+    after_json  TEXT,
+    note        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_revisions_run ON run_revisions(run_id, ts);
 """
 
 # 增量列：老库自动补，不用重建
@@ -218,6 +230,142 @@ class AlreadyConfirmed(Exception):
         super().__init__(f"{run_id} 已被确认（version {version}）")
 
 
+class NotConfirmed(RuntimeError):
+    """撤销时发现这张单并未确认（可能已被别人撤销）。"""
+
+
+class VersionMismatch(RuntimeError):
+    """撤销时版本已变化，说明期间有人重新确认过。"""
+
+
+def _record_revision(conn: sqlite3.Connection, run_id: str, action: str,
+                     actor: str, before: dict, after: dict, note: str = "") -> None:
+    """修订流水：append-only。撤销不删历史，只追加一条反向记录。"""
+    conn.execute(
+        "INSERT INTO run_revisions (id, run_id, ts, actor, action, version,"
+        " before_json, after_json, note) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            uuid.uuid4().hex[:12], run_id, _now(), actor, action,
+            after.get("version"),
+            json.dumps(before, ensure_ascii=False),
+            json.dumps(after, ensure_ascii=False),
+            note or "",
+        ),
+    )
+
+
+def undo_confirm(run_id: str, actor: str = "", note: str = "",
+                 expected_version: int | None = None) -> dict:
+    """撤销一次确认（B2）。
+
+    为什么不是"删掉这条记录"：
+    - 确认这个动作本身发生过，删掉等于篡改审计
+    - 所以 runs 回到未确认、feedback 清空、learn_queue 回到 pending，
+      但 run_revisions 里留一条 action='undo'，before_json 保存被撤回的内容
+
+    为什么清 feedback 而不是打标记：
+    - 所有指标（修正率、字段准确率）都按 feedback 统计，
+      留一条"已作废但仍在表里"的记录，早晚会污染某个没加过滤的查询
+    - 被撤回的明细完整存在 before_json 里，没有丢失
+    """
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+        if not row:
+            raise LookupError("未找到该单据")
+
+        if expected_version is not None and int(row["version"] or 0) != int(expected_version):
+            raise VersionMismatch(
+                f"版本已变化（当前 {row['version']}，请求 {expected_version}），请刷新后再操作"
+            )
+
+        fb = [dict(x) for x in conn.execute(
+            "SELECT field, auto_value, final_value, changed, ts FROM feedback"
+            " WHERE run_id=? ORDER BY ts", (run_id,)
+        ).fetchall()]
+        gold_row = conn.execute(
+            "SELECT status, reason, gold_json, corrected, labeled_at"
+            " FROM learn_queue WHERE id=?", (run_id,)
+        ).fetchone()
+
+        before = {
+            "confirmed": int(row["confirmed"] or 0),
+            "confirmed_by": row["confirmed_by"] or "",
+            "version": int(row["version"] or 0),
+            "handle_ms": row["handle_ms"],
+            "forced": int(row["forced"] or 0),
+            "feedback": fb,
+            "gold": json.loads(gold_row["gold_json"]) if gold_row and gold_row["gold_json"] else None,
+        }
+
+        # 条件更新：两个人同时点撤销，只有一个能成功
+        cur = conn.execute(
+            "UPDATE runs SET confirmed=0, confirmed_by='', handle_ms=NULL, forced=0,"
+            " version=COALESCE(version,0)+1 WHERE id=? AND confirmed=1",
+            (run_id,),
+        )
+        if cur.rowcount == 0:
+            raise NotConfirmed("这张单当前不是已确认状态，可能已被撤销")
+
+        conn.execute("DELETE FROM feedback WHERE run_id=?", (run_id,))
+        # 金标回到待标注：撤销意味着"这条标注不可信"
+        conn.execute(
+            "UPDATE learn_queue SET status='pending', gold_json=NULL,"
+            " labeled_at=NULL, corrected=0 WHERE id=?",
+            (run_id,),
+        )
+
+        new_version = int(row["version"] or 0) + 1
+        after = {
+            "confirmed": 0, "confirmed_by": "", "version": new_version,
+            "handle_ms": None, "forced": 0, "feedback": [], "gold": None,
+        }
+        _record_revision(conn, run_id, "undo", actor, before, after, note)
+
+    return {
+        "ok": True, "run_id": run_id, "version": new_version,
+        "restored_fields": len(fb),
+        "note": "已撤销确认；该单回到未确认，金标回到待标注",
+    }
+
+
+def revisions(run_id: str, limit: int = 100) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT v.id, v.ts, v.actor, v.action, v.version, v.before_json,"
+            " v.after_json, v.note, u.name AS actor_name, u.email AS actor_email"
+            " FROM run_revisions v LEFT JOIN users u ON u.id = v.actor"
+            " WHERE v.run_id=? ORDER BY v.ts DESC, v.rowid DESC LIMIT ?",
+            (run_id, limit),
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["before"] = json.loads(d.pop("before_json") or "{}")
+        except json.JSONDecodeError:
+            d["before"] = {}
+        try:
+            d["after"] = json.loads(d.pop("after_json") or "{}")
+        except json.JSONDecodeError:
+            d["after"] = {}
+        out.append(d)
+    return out
+
+
+def confirmed_recent(limit: int = 100) -> list[dict]:
+    """可撤销列表：最近确认过的单，带确认人姓名。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT r.id, r.ts, r.kind, r.review_level, r.version, r.handle_ms,"
+            " r.confirmed_by, substr(r.raw_text,1,80) AS preview,"
+            " u.name AS actor_name, u.email AS actor_email"
+            " FROM runs r LEFT JOIN users u ON u.id = r.confirmed_by"
+            " WHERE r.confirmed=1 ORDER BY r.ts DESC, r.rowid DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def save_feedback(
     run_id: str,
     auto: dict[str, str],
@@ -230,7 +378,8 @@ def save_feedback(
 
     with _conn() as conn:
         row = conn.execute(
-            "SELECT confirmed, review_level, version FROM runs WHERE id=?", (run_id,)
+            "SELECT confirmed, review_level, version, handle_ms, forced, confirmed_by"
+            " FROM runs WHERE id=?", (run_id,)
         ).fetchone()
         level = (row["review_level"] if row else "") or "single"
 
@@ -249,6 +398,7 @@ def save_feedback(
                     "run_id": run_id, "review_level": level, "fields": len(auto),
                     "changed": 0, "correction_rate": 0.0, "changed_fields": [],
                     "handle_ms": handle_ms, "idempotent": True,
+                    "version": int(row["version"] or 1),
                 }
             raise AlreadyConfirmed(run_id, int(row["version"] or 1))
 
@@ -264,6 +414,26 @@ def save_feedback(
                 (uuid.uuid4().hex[:12], run_id, ts, key, a, f),
             )
 
+        old_version = int(row["version"] or 0) if row else 0
+        gold = {k: v for k, v in final.items() if v}
+        _record_revision(
+            conn, run_id, "confirm", actor,
+            before={
+                "confirmed": 0, "confirmed_by": "", "version": old_version,
+                "handle_ms": row["handle_ms"] if row else None,
+                "forced": row["forced"] if row else 0,
+                "feedback": [], "gold": None,
+            },
+            after={
+                "confirmed": 1, "confirmed_by": actor, "version": old_version + 1,
+                "handle_ms": handle_ms,
+                "forced": 1 if level == "blocked" else 0,
+                "feedback": [{"field": k, "auto": a, "final": f}
+                             for k, (a, f) in changed.items()],
+                "gold": gold,
+            },
+        )
+
     total = len(auto)
     # D5：人工确认即产出一条金标；改过的单要单独标记（那才是难例）
     label_run(run_id, final, corrected=bool(changed))
@@ -276,6 +446,7 @@ def save_feedback(
         "changed_fields": list(changed.keys()),
         "handle_ms": handle_ms,
         "idempotent": False,
+        "version": old_version + 1,
     }
 
 
@@ -801,6 +972,7 @@ def audit(run_id: str) -> dict:
     except json.JSONDecodeError:
         row["fields"] = {}
     row["corrections"] = [dict(x) for x in fb]
+    row["revisions"] = revisions(run_id)
     return row
 
 

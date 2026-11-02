@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>外协结算 · 合同价核对</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:14px;align-items:center}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{padding:16px;max-width:1300px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:9px 12px;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:180px;border:0;padding:10px 12px;resize:vertical;
+           font:12.5px/1.6 ui-monospace,Menlo,monospace;outline:none}
+  .bar{display:flex;gap:10px;align-items:center;padding:0 14px 14px;flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:110px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+  th{color:var(--muted);background:#fafbfc;font-weight:600}
+  .tag{padding:2px 8px;border-radius:999px;font-size:11.5px}
+  .t-ok{background:#e6f4ea;color:var(--ok)}
+  .t-overcharge{background:#fde8e8;color:var(--err)}
+  .t-undercharge{background:#fdf3e2;color:var(--warn)}
+  .t-no_rate{background:#eef1f4;color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>外协结算</h1>
+  <span class="sub">合同价 × 数量 = 应付 · 与车队报账比对</span>
+  <a href="/">← 托书</a>
+  <a href="/reconcile" style="margin-left:12px">对账</a>
+  <a href="/aging" style="margin-left:12px">账龄</a>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <section class="card">
+      <h2>① 合同价表</h2>
+      <textarea id="rates">车队,线路,箱型,单价,单位
+北仑顺达车队,北仑-慈溪,40HQ,320,趟
+北仑顺达车队,北仑-余姚,40HQ,380,趟</textarea>
+    </section>
+    <section class="card">
+      <h2>② 车队结算单</h2>
+      <textarea id="bills">车队,单号,线路,箱型,数量,报账金额
+北仑顺达车队,WC-001,北仑-慈溪,40HQ,1,320</textarea>
+    </section>
+  </div>
+
+  <div class="bar">
+    <button class="primary" id="btnRun">核对</button>
+    <button id="btnDemo">加载演示数据</button>
+    <button id="btnExport">导出</button>
+    <span style="color:var(--muted);font-size:12px" id="hint"></span>
+  </div>
+
+  <section class="card" id="out" style="display:none">
+    <h2>③ 核对结果</h2>
+    <div class="kpi" id="kpi"></div>
+    <div style="padding:0 14px 14px"><table id="rows"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let LAST = null;
+const LABEL = {ok:'一致', overcharge:'多付', undercharge:'少付', no_rate:'无合同价'};
+const money = n => Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+
+function render(r){
+  LAST = r;
+  const s = r.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${s.bills}</b><span>结算行数</span></div>
+    <div><b>${s.ok}</b><span>一致</span></div>
+    <div><b style="color:${s.overcharge?'var(--err)':'inherit'}">${s.overcharge}</b><span>多付</span></div>
+    <div><b style="color:${s.undercharge?'var(--warn)':'inherit'}">${s.undercharge}</b><span>少付</span></div>
+    <div><b>${s.no_rate}</b><span>无合同价</span></div>
+    <div><b>${money(s.expected_total)}</b><span>应付合计</span></div>
+    <div><b>${money(s.claimed_total)}</b><span>报账合计</span></div>
+    <div><b style="color:${s.diff_total>0?'var(--err)':'var(--ok)'}">${money(s.diff_total)}</b><span>差额</span></div>`;
+  $('#rows').innerHTML = '<tr><th>单号</th><th>车队</th><th>线路</th><th>箱型</th><th>数量</th>'
+    + '<th>单价</th><th>应付</th><th>报账</th><th>差额</th><th>状态</th><th>查价</th></tr>' +
+    r.rows.map(x=>`<tr>
+      <td>${x.booking_no}</td><td>${x.carrier}</td><td>${x.route}</td><td>${x.container_type}</td>
+      <td>${x.qty ?? ''}</td><td>${x.price ?? ''}</td>
+      <td>${x.expected ?? ''}</td><td>${x.claimed ?? ''}</td>
+      <td style="color:${x.diff>0?'var(--err)':x.diff<0?'var(--warn)':'inherit'}">${x.diff ?? ''}</td>
+      <td><span class="tag t-${x.status}">${LABEL[x.status]||x.status}</span></td>
+      <td style="color:var(--muted);font-size:11.5px">${x.price_level||''}</td></tr>`).join('');
+  $('#out').style.display='block';
+}
+
+$('#btnRun').onclick = async () => {
+  $('#btnRun').disabled = true; $('#hint').textContent='核对中…';
+  try{
+    const r = await fetch('/api/settlement', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({rate_text: $('#rates').value, bill_text: $('#bills').value})});
+    if(!r.ok){ toast('失败：'+(await r.text()).slice(0,90)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent=''; }
+};
+
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/settlement/demo')).json();
+  $('#rates').value = d.rate_text; $('#bills').value = d.bill_text;
+  render(d.result);
+  toast('演示：2 个车队 / 5 条合同价 / 8 笔结算');
+};
+
+$('#btnExport').onclick = async () => {
+  if(!LAST){ toast('先核对一次'); return; }
+  const r = await fetch('/api/settlement/export.csv', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({rate_text: $('#rates').value, bill_text: $('#bills').value})});
+  const t = await r.text();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], {type:'text/csv;charset=utf-8'}));
+  a.download = '外协结算核对.csv'; a.click();
+};
+</script>
+</body>
+</html>

@@ -809,6 +809,41 @@ def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")
 
 
+@app.post("/api/settlement")
+def api_settlement(req: dict):
+    """外协结算：合同价 × 数量 = 应付，与车队报账比对。"""
+    from .settlement import parse_bills, parse_rates, settle
+
+    rates = req.get("rates") or parse_rates((req.get("rate_text") or "").strip())
+    bills = req.get("bills") or parse_bills((req.get("bill_text") or "").strip())
+    if not rates:
+        raise HTTPException(status_code=400, detail="合同价表为空或无法解析")
+    if not bills:
+        raise HTTPException(status_code=400, detail="车队结算单为空或无法解析")
+    return settle(rates, bills)
+
+
+@app.post("/api/settlement/export.csv", response_class=PlainTextResponse)
+def api_settlement_export(req: dict):
+    from .settlement import export_csv, parse_bills, parse_rates, settle
+
+    rates = req.get("rates") or parse_rates((req.get("rate_text") or "").strip())
+    bills = req.get("bills") or parse_bills((req.get("bill_text") or "").strip())
+    return export_csv(settle(rates, bills))
+
+
+@app.get("/api/settlement/demo")
+def api_settlement_demo():
+    from .settlement import demo_data
+
+    return demo_data()
+
+
+@app.get("/settlement")
+def settlement_page():
+    return FileResponse(ROOT / "static" / "settlement.html")
+
+
 @app.get("/api/queue")
 def api_queue(limit: int = 50):
     """人工兜底队列：需复核但未确认的单。"""

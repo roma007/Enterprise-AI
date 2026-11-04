@@ -546,6 +546,16 @@ export function AuditPage() {
     }
   };
 
+  const retryExportJob = async (job: AuditExportJob) => {
+    setJobError(null);
+    try {
+      await api.retryAuditExportJob(job.id);
+      await loadExportJobs();
+    } catch (err) {
+      setJobError(err);
+    }
+  };
+
   const removeExportJob = async (job: AuditExportJob) => {
     if (!window.confirm('确认删除该导出任务与文件？')) return;
     setJobError(null);
@@ -1242,6 +1252,15 @@ export function AuditPage() {
                           onClick={() => void downloadExportJob(job)}
                         >
                           下载
+                        </Button>
+                      ) : null}
+                      {job.status === 'failed' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void retryExportJob(job)}
+                        >
+                          重试
                         </Button>
                       ) : null}
                       <Button

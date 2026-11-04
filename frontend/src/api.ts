@@ -1003,6 +1003,11 @@ export const api = {
     request<{ items: AuditExportJob[] }>('/api/audit-exports'),
   downloadAuditExportJob: (id: string) =>
     requestBlob(`/api/audit-exports/${id}/download`),
+  retryAuditExportJob: (id: string) =>
+    request<{ item: AuditExportJob }>(
+      `/api/audit-exports/${id}/retry`,
+      json('POST', {}),
+    ),
   deleteAuditExportJob: (id: string) =>
     request<{ ok: boolean }>(`/api/audit-exports/${id}`, {
       method: 'DELETE',

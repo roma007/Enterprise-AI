@@ -152,6 +152,35 @@ export async function processAuditExportJob(id: string): Promise<void> {
   }
 }
 
+/** 失败任务重新排队；只有 failed 状态可重试。 */
+export async function retryAuditExportJob(
+  orgId: string,
+  userId: string,
+  id: string,
+): Promise<{ job?: AuditExportJob; error?: 'NOT_FOUND' | 'NOT_RETRYABLE' }> {
+  const row = await one<AuditExportJob>(
+    `UPDATE audit_export_jobs
+        SET status = 'pending', error = NULL, row_count = NULL,
+            started_at = NULL, finished_at = NULL
+      WHERE id = $1 AND org_id = $2 AND user_id = $3 AND status = 'failed'
+      RETURNING *`,
+    [id, orgId, userId],
+  );
+  if (!row) {
+    const existing = await one<{ status: string }>(
+      `SELECT status FROM audit_export_jobs
+        WHERE id = $1 AND org_id = $2 AND user_id = $3`,
+      [id, orgId, userId],
+    );
+    return { error: existing ? 'NOT_RETRYABLE' : 'NOT_FOUND' };
+  }
+  await objectStorage().delete(fileKey(id)).catch(() => undefined);
+  setImmediate(() => {
+    void processAuditExportJob(id).catch(() => undefined);
+  });
+  return { job: row };
+}
+
 /** 导出任务与文件保留天数，默认 7，限制 1–365。 */
 export function auditExportRetentionDays(): number {
   const raw = Number(process.env.AUDIT_EXPORT_RETENTION_DAYS ?? 7);

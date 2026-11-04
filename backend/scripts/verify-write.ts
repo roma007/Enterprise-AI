@@ -5820,6 +5820,55 @@ async function main() {
     const oldFile = await objectStorage().get(oldKey);
     assert.equal(oldFile, null, '过期导出文件应被删除');
 
+    const failedJob = await one<{ id: string }>(
+      `INSERT INTO audit_export_jobs
+         (org_id, user_id, scope, filters, columns, status, error)
+       VALUES ($1,$2,'live','{"status":"4xx"}'::jsonb,
+               '["action","status"]'::jsonb,'failed','simulated failure')
+       RETURNING id`,
+      [eng!.org_id, auditLogin.user.id],
+    );
+    const retried = ok(
+      await auditCall(
+        'POST',
+        `/api/audit-exports/${failedJob!.id}/retry`,
+      ),
+      202,
+      '重试失败任务',
+    );
+    assert.equal((retried.item as any).status, 'pending');
+    let retriedJob: any = retried.item;
+    for (let i = 0; i < 40 && retriedJob.status !== 'done'; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const listedJobs = ok(
+        await auditCall('GET', '/api/audit-exports'),
+        200,
+        '重试后任务列表',
+      );
+      retriedJob = (listedJobs.items as any[]).find(
+        (item) => item.id === failedJob!.id,
+      );
+    }
+    assert.equal(
+      retriedJob.status,
+      'done',
+      `重试后任务应收尾：${retriedJob?.error ?? ''}`,
+    );
+    assert.equal(retriedJob.error, null);
+
+    const retryDone = await auditCall(
+      'POST',
+      `/api/audit-exports/${failedJob!.id}/retry`,
+    );
+    assert.equal(retryDone.status, 409);
+    assert.equal(retryDone.body.error, 'JOB_NOT_RETRYABLE');
+
+    ok(
+      await auditCall('DELETE', `/api/audit-exports/${failedJob!.id}`),
+      200,
+      '清理重试任务',
+    );
+
     const viewName = `审计视图-${Date.now()}`;
     const savedView = ok(
       await auditCall('POST', '/api/audit-filter-views', {

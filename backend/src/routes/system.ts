@@ -28,6 +28,7 @@ import {
   deleteAuditExportJob,
   getAuditExportDownload,
   listAuditExportJobs,
+  retryAuditExportJob,
 } from '../services/audit_exports';
 
 async function auditViewRecipients(
@@ -407,6 +408,22 @@ export async function systemRoutes(app: FastifyInstance) {
       .parse(req.query);
     const items = await listAuditExportJobs(auth.org_id, auth.sub, limit);
     return { items };
+  });
+
+  app.post('/api/audit-exports/:id/retry', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const res = await retryAuditExportJob(auth.org_id, auth.sub, id);
+    if (res.error === 'NOT_FOUND') {
+      throw httpError(404, 'NOT_FOUND', '导出任务不存在');
+    }
+    if (res.error === 'NOT_RETRYABLE') {
+      throw httpError(409, 'JOB_NOT_RETRYABLE', '只有失败任务可以重试');
+    }
+    return reply.code(202).send({ item: res.job });
   });
 
   app.get('/api/audit-exports/:id/download', async (req, reply) => {

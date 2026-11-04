@@ -822,6 +822,12 @@ function ReconcileReviewDetail({
   const [resumeTarget, setResumeTarget] = useState<ReconcileBatch | null>(null);
   const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(new Set());
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
+  const allDiffTypes = groupDifferences(review.differences).map(
+    ([type]) => type,
+  );
+  const allDiffTypesCollapsed =
+    allDiffTypes.length > 0 &&
+    allDiffTypes.every((type) => collapsedTypes.has(type));
   const toggleDiffType = (type: string) =>
     setCollapsedTypes((prev) => {
       const next = new Set(prev);
@@ -1804,6 +1810,21 @@ function ReconcileReviewDetail({
 
       <div className="row" style={{ marginTop: 12, marginBottom: 6 }}>
         <strong>差异明细</strong>
+        {allDiffTypes.length > 1 ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              setCollapsedTypes(
+                allDiffTypesCollapsed
+                  ? new Set()
+                  : new Set(allDiffTypes),
+              )
+            }
+          >
+            {allDiffTypesCollapsed ? '全部展开' : '全部折叠'}
+          </Button>
+        ) : null}
         <Button size="sm" disabled={exportingDiffs} onClick={() => void exportDiffs()}>
           {exportingDiffs ? '导出中…' : '导出差异 CSV'}
         </Button>

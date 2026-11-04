@@ -195,11 +195,12 @@ export function CollabAuditPage() {
   const [opError, setOpError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const users = useLoad(() => api.listUsers(), []);
-  const weekly = useLoad(
-    () => api.listCollabSnapshots({ days: 7, bucket: 'day' }),
-    [],
+  const [boardDays, setBoardDays] = useState(7);
+  const board = useLoad(
+    () => api.listCollabSnapshots({ days: boardDays, bucket: 'day' }),
+    [boardDays],
   );
-  const weeklyComparison = weekly.data?.comparison ?? null;
+  const boardComparison = board.data?.comparison ?? null;
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
   const { data, error, loading, reload } = useLoad(
@@ -507,15 +508,40 @@ export function CollabAuditPage() {
         />
       </div>
       <Card
-        title="本周 vs 上周"
-        subtitle="按快照新增量 · 最近 7 天"
+        title="对比看板"
+        subtitle={`按快照新增量 · 最近 ${boardDays} 天`}
         actions={
-          <Button size="sm" disabled={weekly.loading} onClick={() => void weekly.reload()}>
-            刷新
-          </Button>
+          <div className="row">
+            <Select
+              value={boardDays}
+              onChange={(e) => setBoardDays(Number(e.target.value))}
+              style={{ maxWidth: 120 }}
+            >
+              <option value={7}>最近 7 天</option>
+              <option value={30}>最近 30 天</option>
+              <option value={90}>最近 90 天</option>
+            </Select>
+            <Button
+              size="sm"
+              disabled={!boardComparison?.current}
+              onClick={() => {
+                if (!boardComparison?.current) return;
+                setType('all');
+                setAction('');
+                setFrom(boardComparison.current.start);
+                setTo(boardComparison.current.end);
+                setOffset(0);
+              }}
+            >
+              查看明细
+            </Button>
+            <Button size="sm" disabled={board.loading} onClick={() => void board.reload()}>
+              刷新
+            </Button>
+          </div>
         }
       >
-        {weeklyComparison ? (
+        {boardComparison ? (
           <div className="stat-grid">
             {(
               [
@@ -526,8 +552,8 @@ export function CollabAuditPage() {
                 ['决策', 'delta_decision'],
               ] as const
             ).map(([label, key]) => {
-              const current = weeklyComparison.current[key];
-              const change = weeklyComparison.change[key];
+              const current = boardComparison.current[key];
+              const change = boardComparison.change[key];
               return (
                 <Stat
                   key={key}
@@ -539,17 +565,17 @@ export function CollabAuditPage() {
               );
             })}
           </div>
-        ) : weekly.loading ? (
+        ) : board.loading ? (
           <Spinner />
         ) : (
           <p className="muted">暂无快照数据。</p>
         )}
-        {weeklyComparison?.current ? (
+        {boardComparison?.current ? (
           <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
-            本周期 {weeklyComparison.current.start} ~{' '}
-            {weeklyComparison.current.end}
-            {weeklyComparison.previous
-              ? ` · 上周期 ${weeklyComparison.previous.start} ~ ${weeklyComparison.previous.end}`
+            本周期 {boardComparison.current.start} ~{' '}
+            {boardComparison.current.end}
+            {boardComparison.previous
+              ? ` · 上周期 ${boardComparison.previous.start} ~ ${boardComparison.previous.end}`
               : ' · 上周期无数据'}
           </p>
         ) : null}

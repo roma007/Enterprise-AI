@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useLoad } from '../hooks';
 import {
@@ -225,6 +225,12 @@ export function CollabAuditPage() {
   const selectedAuditView = (auditViews.data?.items ?? []).find(
     (view) => view.id === selectedViewId,
   );
+  const initialCollabViewId = useMemo(
+    () =>
+      new URLSearchParams(window.location.search).get('collab_view') ?? '',
+    [],
+  );
+  const appliedCollabView = useRef<string | null>(null);
   const [boardDays, setBoardDays] = useState(7);
   const board = useLoad(
     () => api.listCollabSnapshots({ days: boardDays, bucket: 'day' }),
@@ -257,6 +263,26 @@ export function CollabAuditPage() {
       setShareUsers(item.shared_user_ids ?? []);
     }
   };
+
+  useEffect(() => {
+    if (!initialCollabViewId) return;
+    if (appliedCollabView.current === initialCollabViewId) return;
+    const item = (auditViews.data?.items ?? []).find(
+      (view) => view.id === initialCollabViewId,
+    );
+    if (!item) return;
+    appliedCollabView.current = initialCollabViewId;
+    applyAuditView(initialCollabViewId);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('collab_view');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCollabViewId, auditViews.data]);
 
   const saveAuditView = async () => {
     const name = window.prompt('视图名称（同名会覆盖）')?.trim();

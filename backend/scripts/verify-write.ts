@@ -5318,6 +5318,44 @@ async function main() {
       assert.equal(sharedItem.is_owner, false, '同事不是创建者');
       assert.equal(sharedItem.owner_name, '系统管理员');
 
+      const collabNoticeCount = async () =>
+        Number(
+          (
+            await one<{ count: string }>(
+              `SELECT count(*)::text AS count FROM user_notifications
+                WHERE user_id = $1
+                  AND kind = 'copilot_collab_view_shared'
+                  AND ref_id = $2`,
+              [director!.id, viewId],
+            )
+          )!.count,
+        );
+      assert.equal(await collabNoticeCount(), 1, '共享后应通知同事');
+      const collabNotice = await one<{ link: string }>(
+        `SELECT link FROM user_notifications
+          WHERE user_id = $1
+            AND kind = 'copilot_collab_view_shared'
+            AND ref_id = $2
+          LIMIT 1`,
+        [director!.id, viewId],
+      );
+      assert.ok(
+        collabNotice?.link.startsWith('?collab_view=') &&
+          collabNotice?.link.endsWith('#/collab-audits'),
+        '共享通知应直达并套用审计视图',
+      );
+      await call(adminToken, 'POST', '/api/collab-audit-filter-views', {
+        name,
+        type: 'decision',
+        action: 'DECIDE copilot-reconcile-difference',
+        shared: true,
+      });
+      assert.equal(
+        await collabNoticeCount(),
+        1,
+        '重复保存同一批共享对象不应重复通知',
+      );
+
       const renamedView = await call(
         adminToken,
         'PATCH',
@@ -5417,6 +5455,17 @@ async function main() {
       );
       assert.equal(removed.statusCode, 200, '创建者应能删除');
     } finally {
+      await query(
+        `DELETE FROM user_notifications
+          WHERE kind = 'copilot_collab_view_shared'
+            AND (
+              title LIKE '%' || $1 || '%'
+              OR ref_id IN (
+                SELECT id FROM collab_audit_filter_views WHERE name LIKE $1
+              )
+            )`,
+        [`${name}%`],
+      );
       await query(
         `DELETE FROM collab_audit_filter_views WHERE name LIKE $1`,
         [`${name}%`],

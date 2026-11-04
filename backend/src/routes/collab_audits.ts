@@ -318,6 +318,43 @@ async function loadSnapshotComparison(
   return { items, comparison: compareSnapshotPeriods(items, previous) };
 }
 
+async function collabViewRecipients(
+  client: any,
+  orgId: string,
+  view: { shared?: boolean; shared_role?: string | null },
+  shareIds: string[],
+): Promise<Set<string>> {
+  const ids = new Set<string>(shareIds);
+  if (view.shared) {
+    const rows = await client.query(
+      `SELECT id FROM users WHERE org_id = $1 AND status = 'active'`,
+      [orgId],
+    );
+    for (const row of rows.rows) ids.add(row.id as string);
+  } else if (view.shared_role) {
+    const rows = await client.query(
+      `SELECT u.id
+         FROM users u
+         JOIN memberships m ON m.user_id = u.id
+        WHERE u.org_id = $1 AND u.status = 'active' AND m.role = $2`,
+      [orgId, view.shared_role],
+    );
+    for (const row of rows.rows) ids.add(row.id as string);
+  }
+  // 只有能查看协作审计的成员才需要收到共享提醒
+  const viewers = await client.query(
+    `SELECT u.id
+       FROM users u
+       LEFT JOIN memberships m ON m.user_id = u.id AND m.org_id = u.org_id
+      WHERE u.org_id = $1
+        AND u.status = 'active'
+        AND (u.is_platform_admin OR m.role IN ('admin', 'director'))`,
+    [orgId],
+  );
+  const viewerIds = new Set(viewers.rows.map((row: any) => row.id as string));
+  return new Set([...ids].filter((id) => viewerIds.has(id)));
+}
+
 export async function collabAuditRoutes(app: FastifyInstance) {
   app.get('/api/collab-audits', async (req) => {
     assertAuditViewer(req);
@@ -1539,7 +1576,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     }
     assertActionForType(body.type, body.action);
     const shareIds = Array.from(new Set(body.shared_user_ids ?? []));
-    const item = await withTransaction(async (client) => {
+    const result = await withTransaction(async (client) => {
       if (shareIds.length) {
         const found = await client.query(
           `SELECT id FROM users WHERE org_id = $1 AND id = ANY($2::uuid[])`,
@@ -1549,6 +1586,30 @@ export async function collabAuditRoutes(app: FastifyInstance) {
           throw httpError(422, 'INVALID_SHARED_USERS', '共享对象不属于当前组织');
         }
       }
+      const existing = await client.query<any>(
+        `SELECT id, shared, shared_role
+           FROM collab_audit_filter_views
+          WHERE user_id = $1 AND name = $2`,
+        [auth.sub, body.name],
+      );
+      let oldRecipients = new Set<string>();
+      let oldShareIds: string[] = [];
+      if (existing.rows[0]) {
+        const existingShares = await client.query(
+          `SELECT user_id FROM collab_audit_filter_view_shares WHERE view_id = $1`,
+          [existing.rows[0].id],
+        );
+        oldShareIds = existingShares.rows.map((row: any) => row.user_id as string);
+        oldRecipients = await collabViewRecipients(
+          client,
+          auth.org_id,
+          existing.rows[0],
+          oldShareIds,
+        );
+      }
+      const effectiveShareIds =
+        body.shared_user_ids === undefined ? oldShareIds : shareIds;
+
       const inserted = await client.query<any>(
         `INSERT INTO collab_audit_filter_views
            (org_id, user_id, name, audit_type, action, from_date, to_date,
@@ -1609,9 +1670,47 @@ export async function collabAuditRoutes(app: FastifyInstance) {
           WHERE v.id = $1`,
         [viewId],
       );
-      return row.rows[0];
+      const newRecipients = await collabViewRecipients(
+        client,
+        auth.org_id,
+        {
+          shared: body.shared ?? false,
+          shared_role: body.shared_role ?? null,
+        },
+        effectiveShareIds,
+      );
+      return {
+        item: row.rows[0],
+        recipients: [...newRecipients].filter(
+          (userId) => userId !== auth.sub && !oldRecipients.has(userId),
+        ),
+      };
     });
-    return reply.code(201).send({ item });
+
+    if (result.recipients.length) {
+      try {
+        await query(
+          `INSERT INTO user_notifications
+             (org_id, user_id, actor_id, kind, title, body, link, ref_type, ref_id)
+           SELECT $1, unnest($2::uuid[]), $3,
+                  'copilot_collab_view_shared',
+                  $4, $5,
+                  '?collab_view=' || $6::text || '#/collab-audits',
+                  'collab_audit_filter_view', $6::uuid`,
+          [
+            auth.org_id,
+            result.recipients,
+            auth.sub,
+            `审计视图已共享：${body.name}`,
+            `${auth.name ?? '同事'} 共享了协作审计视图「${body.name}」`,
+            result.item.id,
+          ],
+        );
+      } catch (err) {
+        req.log?.warn?.({ err }, 'collab view share notification failed');
+      }
+    }
+    return reply.code(201).send({ item: result.item });
   });
 
   app.patch('/api/collab-audit-filter-views/:id', async (req) => {

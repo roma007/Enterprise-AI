@@ -19,6 +19,7 @@ import {
   localDateInTimezone,
   snapshotCollabAudits,
 } from '../src/services/collab_audit_snapshot';
+import { sendCollabAuditDigest } from '../src/services/collab_audit_digest';
 
 process.env.LOG_LEVEL = 'silent';
 process.env.PAYMENT_PROVIDER = 'mock';
@@ -4843,6 +4844,55 @@ async function main() {
       await query(`DELETE FROM audit_logs_archive WHERE org_id = $1`, [orgId]);
       await query(`DELETE FROM audit_logs WHERE org_id = $1`, [orgId]);
       await query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
+    }
+  });
+
+  await check('协作审计周报：按角色发送且 6 天内不重复', async () => {
+    await query(
+      `DELETE FROM user_notifications WHERE kind = 'copilot_collab_audit_digest'`,
+    );
+    try {
+      const first = await sendCollabAuditDigest();
+      assert.ok(first >= 1, '应向管理员/总监/项目经理发送周报');
+
+      const countFor = async (email: string) =>
+        Number(
+          (
+            await one<{ count: string }>(
+              `SELECT count(*)::text AS count
+                 FROM user_notifications n
+                 JOIN users u ON u.id = n.user_id
+                WHERE n.kind = 'copilot_collab_audit_digest'
+                  AND u.email = $1`,
+              [email],
+            )
+          )!.count,
+        );
+      assert.equal(await countFor('admin@hengzhi.ai'), 1, '管理员应收到 1 条');
+      assert.equal(await countFor('zhang@hengzhi.ai'), 0, '顾问不应收到周报');
+
+      const notice = await one<{ body: string; link: string }>(
+        `SELECT n.body, n.link
+           FROM user_notifications n
+           JOIN users u ON u.id = n.user_id
+          WHERE n.kind = 'copilot_collab_audit_digest'
+            AND u.email = 'admin@hengzhi.ai'
+          LIMIT 1`,
+      );
+      assert.ok(notice?.body.includes('最近 7 天协作审计'), '周报正文应含统计');
+      assert.equal(notice?.link, '#/collab-audits');
+
+      const second = await sendCollabAuditDigest();
+      assert.equal(second, 0, '6 天内不应重复发送');
+      const total = await one<{ count: string }>(
+        `SELECT count(*)::text AS count FROM user_notifications
+          WHERE kind = 'copilot_collab_audit_digest'`,
+      );
+      assert.equal(Number(total!.count), first, '重复调用不应增加通知');
+    } finally {
+      await query(
+        `DELETE FROM user_notifications WHERE kind = 'copilot_collab_audit_digest'`,
+      );
     }
   });
 

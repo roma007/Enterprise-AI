@@ -6,7 +6,7 @@ const EXPORT_ACTION_SQL =
 const DECISION_ACTION = 'DECIDE copilot-reconcile-difference';
 
 /** 协作审计口径：通知、筛选视图、协作审计导出、差异决策。热表与归档表通用。 */
-function collabAuditFilterSql(alias: string): string {
+export function collabAuditFilterSql(alias: string): string {
   return `(${alias}.object_type IN ('user_notification','copilot_batch_filter_view')
     OR ${alias}.action IN ${EXPORT_ACTION_SQL}
     OR ${alias}.action = '${DECISION_ACTION}')`;

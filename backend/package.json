@@ -31,7 +31,8 @@
     "batches:reap": "tsx scripts/reap-batches.ts",
     "notifications:cleanup": "tsx scripts/cleanup-notifications.ts",
     "collab-audits:archive": "tsx scripts/archive-collab-audits.ts",
-    "collab-audits:snapshot": "tsx scripts/snapshot-collab-audits.ts"
+    "collab-audits:snapshot": "tsx scripts/snapshot-collab-audits.ts",
+    "collab-audits:digest": "tsx scripts/collab-audit-digest.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",

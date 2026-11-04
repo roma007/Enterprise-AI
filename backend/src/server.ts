@@ -17,6 +17,10 @@ import {
   cleanupCollabSnapshots,
   collabSnapshotIntervalSeconds,
 } from './services/collab_audit_snapshot';
+import {
+  collabDigestIntervalSeconds,
+  sendCollabAuditDigest,
+} from './services/collab_audit_digest';
 
 const app = buildApp();
 
@@ -27,6 +31,7 @@ let batchReapTimer: NodeJS.Timeout | null = null;
 let notificationCleanupTimer: NodeJS.Timeout | null = null;
 let collabAuditArchiveTimer: NodeJS.Timeout | null = null;
 let collabSnapshotTimer: NodeJS.Timeout | null = null;
+let collabDigestTimer: NodeJS.Timeout | null = null;
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
@@ -45,6 +50,10 @@ const shutdown = async (signal: string) => {
   if (collabSnapshotTimer) {
     clearInterval(collabSnapshotTimer);
     collabSnapshotTimer = null;
+  }
+  if (collabDigestTimer) {
+    clearInterval(collabDigestTimer);
+    collabDigestTimer = null;
   }
   await app.close();
   await closePool();
@@ -154,6 +163,30 @@ try {
     app.log.info(
       { intervalSeconds: snapshotInterval },
       'collaboration audit snapshot enabled',
+    );
+  }
+
+  const digestInterval = collabDigestIntervalSeconds();
+  if (digestInterval > 0) {
+    const digest = async () => {
+      try {
+        const sent = await sendCollabAuditDigest();
+        if (sent) {
+          app.log.info({ sent }, 'sent collaboration audit digest');
+        }
+      } catch (err) {
+        app.log.warn({ err }, 'failed to send collaboration audit digest');
+      }
+    };
+    setTimeout(() => void digest(), 30000).unref?.();
+    collabDigestTimer = setInterval(
+      () => void digest(),
+      digestInterval * 1000,
+    );
+    collabDigestTimer.unref?.();
+    app.log.info(
+      { intervalSeconds: digestInterval },
+      'collaboration audit digest enabled',
     );
   }
 } catch (err) {

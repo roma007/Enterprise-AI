@@ -4354,6 +4354,7 @@ async function main() {
     };
     const zhangToken = await login('zhang@hengzhi.ai');
     const wangToken = await login('wang@hengzhi.ai');
+    const liuToken = await login('liu@hengzhi.ai');
     const call = (token: string, method: any, url: string, payload?: any) =>
       app.inject({
         method,
@@ -4404,6 +4405,24 @@ async function main() {
       assert.ok(sharedSeen, '共享视图应被同事看到');
       assert.equal(sharedSeen.is_owner, false, '同事不是视图创建者');
       assert.equal(sharedSeen.owner_name, '张顾问', '应返回创建者名称');
+
+      const roleView = await call(zhangToken, 'POST', '/api/notification-filter-views', {
+        name: `${name}-role`,
+        unread: true,
+        shared_role: 'pm',
+      });
+      assert.equal(roleView.statusCode, 201, `角色共享保存失败：${roleView.body}`);
+      const roleViewId = roleView.json().item.id;
+      const pmList = await call(wangToken, 'GET', '/api/notification-filter-views');
+      assert.ok(
+        (pmList.json().items as any[]).some((v) => v.id === roleViewId),
+        '同角色同事应看到角色共享视图',
+      );
+      const otherRoleList = await call(liuToken, 'GET', '/api/notification-filter-views');
+      assert.ok(
+        !(otherRoleList.json().items as any[]).some((v) => v.id === roleViewId),
+        '其他角色不应看到角色共享视图',
+      );
 
       const deleteOther = await call(
         wangToken,

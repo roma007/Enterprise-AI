@@ -476,21 +476,27 @@ export async function notificationRoutes(app: FastifyInstance) {
     to: dateStr.nullable().optional(),
     scope: z.enum(['inbox', 'trash']).optional(),
     shared: z.boolean().optional(),
+    shared_role: z
+      .enum(['admin', 'director', 'pm', 'consultant', 'tech_lead'])
+      .nullable()
+      .optional(),
   });
 
   /** 当前用户保存的通知筛选视图。 */
   app.get('/api/notification-filter-views', async (req) => {
-    const auth = currentUser(req);
+    const auth = (req as any).authUser;
     const items = await query(
       `SELECT v.id, v.name, v.kind, v.unread,
               v.from_date::text AS "from", v.to_date::text AS "to",
-              v.scope, v.shared, (v.user_id = $1) AS is_owner,
+              v.scope, v.shared, v.shared_role, (v.user_id = $1) AS is_owner,
               u.name AS owner_name, v.created_at, v.updated_at
          FROM notification_filter_views v
          LEFT JOIN users u ON u.id = v.user_id
-        WHERE v.user_id = $1 OR v.shared
+        WHERE v.user_id = $1
+           OR v.shared
+           OR v.shared_role = $2
         ORDER BY v.name`,
-      [auth.id],
+      [auth.sub, auth.role ?? ''],
     );
     return { items };
   });
@@ -506,8 +512,9 @@ export async function notificationRoutes(app: FastifyInstance) {
     }
     const item = await one(
       `INSERT INTO notification_filter_views
-         (org_id, user_id, name, kind, unread, from_date, to_date, scope, shared)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         (org_id, user_id, name, kind, unread, from_date, to_date, scope,
+          shared, shared_role)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (user_id, name)
        DO UPDATE SET kind = EXCLUDED.kind,
                      unread = EXCLUDED.unread,
@@ -515,10 +522,11 @@ export async function notificationRoutes(app: FastifyInstance) {
                      to_date = EXCLUDED.to_date,
                      scope = EXCLUDED.scope,
                      shared = EXCLUDED.shared,
+                     shared_role = EXCLUDED.shared_role,
                      updated_at = now()
        RETURNING id, name, kind, unread,
                  from_date::text AS "from", to_date::text AS "to",
-                 scope, shared, true AS is_owner,
+                 scope, shared, shared_role, true AS is_owner,
                  (SELECT name FROM users WHERE id = user_id) AS owner_name,
                  created_at, updated_at`,
       [
@@ -531,6 +539,7 @@ export async function notificationRoutes(app: FastifyInstance) {
         body.to ?? null,
         body.scope ?? 'inbox',
         body.shared ?? false,
+        body.shared_role ?? null,
       ],
     );
     return reply.code(201).send({ item });

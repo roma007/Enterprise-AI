@@ -15,6 +15,14 @@ import {
 import { fmtDateTime } from '../utils';
 import type { UserNotification } from '../types';
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: '管理员',
+  director: '总监',
+  pm: '项目经理',
+  consultant: '顾问',
+  tech_lead: '技术负责人',
+};
+
 const KIND_LABEL: Record<string, string> = {
   copilot_batch_filter_view_shared: '视图共享',
   copilot_reconcile_report_stale: '报告过期',
@@ -91,7 +99,8 @@ export function NotificationsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
-  const [shareView, setShareView] = useState(false);
+  const [shareMode, setShareMode] = useState<'none' | 'all' | 'role'>('none');
+  const [shareRole, setShareRole] = useState('pm');
   const [selectAll, setSelectAll] = useState(false);
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
@@ -247,6 +256,12 @@ export function NotificationsPage() {
     setOffset(0);
     setSelected(new Set());
     setSelectAll(false);
+    if (item.is_owner) {
+      setShareMode(
+        item.shared ? 'all' : item.shared_role ? 'role' : 'none',
+      );
+      setShareRole(item.shared_role ?? 'pm');
+    }
   };
 
   const saveCurrentView = async () => {
@@ -262,7 +277,8 @@ export function NotificationsPage() {
         from: from || null,
         to: to || null,
         scope: view,
-        shared: shareView,
+        shared: shareMode === 'all',
+        shared_role: shareMode === 'role' ? shareRole : null,
       });
       setSelectedViewId(res.item.id);
       await savedViews.reload();
@@ -446,19 +462,39 @@ export function NotificationsPage() {
             {(savedViews.data?.items ?? []).map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
-                {v.shared ? '（共享）' : ''}
+                {v.shared
+                  ? '（全员）'
+                  : v.shared_role
+                    ? `（角色：${ROLE_LABEL[v.shared_role] ?? v.shared_role}）`
+                    : ''}
                 {v.is_owner ? '' : ` · ${v.owner_name ?? '同事'}`}
               </option>
             ))}
           </Select>
-          <label className="row" style={{ gap: 4 }}>
-            <input
-              type="checkbox"
-              checked={shareView}
-              onChange={(e) => setShareView(e.target.checked)}
-            />
-            <span className="muted">共享给同事</span>
-          </label>
+          <Select
+            value={shareMode}
+            onChange={(e) =>
+              setShareMode(e.target.value as 'none' | 'all' | 'role')
+            }
+            style={{ maxWidth: 130 }}
+          >
+            <option value="none">仅自己</option>
+            <option value="all">共享给全员</option>
+            <option value="role">按角色共享</option>
+          </Select>
+          {shareMode === 'role' ? (
+            <Select
+              value={shareRole}
+              onChange={(e) => setShareRole(e.target.value)}
+              style={{ maxWidth: 130 }}
+            >
+              <option value="admin">管理员</option>
+              <option value="director">总监</option>
+              <option value="pm">项目经理</option>
+              <option value="consultant">顾问</option>
+              <option value="tech_lead">技术负责人</option>
+            </Select>
+          ) : null}
           <Button
             size="sm"
             disabled={busy || savingView}

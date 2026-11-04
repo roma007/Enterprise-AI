@@ -1164,6 +1164,7 @@ export const api = {
     to?: string | null;
     scope?: 'inbox' | 'trash';
     shared?: boolean;
+    shared_role?: string | null;
   }) =>
     request<{ item: NotificationFilterView }>(
       '/api/notification-filter-views',

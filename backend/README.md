@@ -363,7 +363,7 @@ curl -s -X POST http://127.0.0.1:8788/api/deliverables/generate \
 | 标杆维护 | `GET /api/benchmarks?all=1`、`POST /api/benchmarks`、`PATCH/DELETE /api/benchmarks/:id`；p25 ≤ p50 ≤ p75 |
 | 回收站 | `GET /api/trash`、`POST /api/trash/:batch/restore`；客户/项目/交付物按批次恢复 |
 | 审计 | `GET /api/audit-logs?limit=200&action=&object_type=`；所有写操作自动留痕 |
-| 字典 | `GET /api/users` |
+| 字典 | `GET /api/users`（返回 `role`） |
 
 几个关键行为：
 

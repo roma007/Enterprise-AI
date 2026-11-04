@@ -5258,6 +5258,13 @@ async function main() {
     const name = `回归协作视图-${stamp}`;
 
     try {
+      const usersWithRoles = await call(adminToken, 'GET', '/api/users');
+      assert.equal(usersWithRoles.statusCode, 200);
+      assert.ok(
+        (usersWithRoles.json().items as any[]).some((u) => u.role === 'admin'),
+        '用户列表应返回角色',
+      );
+
       const created = await call(
         adminToken,
         'POST',

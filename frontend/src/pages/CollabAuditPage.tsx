@@ -225,6 +225,13 @@ export function CollabAuditPage() {
   const selectedAuditView = (auditViews.data?.items ?? []).find(
     (view) => view.id === selectedViewId,
   );
+  const viewerUsers = (users.data?.items ?? []).filter(
+    (u) => u.role === 'admin' || u.role === 'director',
+  );
+  const roleMembers = viewerUsers.filter((u) => u.role === shareRole);
+  const targetedMembers = viewerUsers.filter((u) =>
+    shareUsers.includes(u.id),
+  );
   const initialCollabViewId = useMemo(
     () =>
       new URLSearchParams(window.location.search).get('collab_view') ?? '',
@@ -934,10 +941,23 @@ export function CollabAuditPage() {
             >
               <option value="admin">管理员</option>
               <option value="director">总监</option>
-              <option value="pm">项目经理</option>
-              <option value="consultant">顾问</option>
-              <option value="tech_lead">技术负责人</option>
             </Select>
+          ) : null}
+          {shareMode === 'role' ? (
+            <span className="muted small">
+              将共享给：
+              {roleMembers.length
+                ? roleMembers.map((u) => u.name).join('、')
+                : '暂无成员'}
+            </span>
+          ) : null}
+          {shareMode === 'users' ? (
+            <span className="muted small">
+              已选：
+              {targetedMembers.length
+                ? targetedMembers.map((u) => u.name).join('、')
+                : '未选择'}
+            </span>
           ) : null}
           {shareMode === 'users' ? (
             <Select
@@ -950,7 +970,7 @@ export function CollabAuditPage() {
               }
               style={{ maxWidth: 160, minHeight: 72 }}
             >
-              {(users.data?.items ?? []).map((u) => (
+              {viewerUsers.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
                 </option>

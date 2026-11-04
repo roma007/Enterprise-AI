@@ -107,6 +107,12 @@ export function NotificationsPage() {
   const [shareRole, setShareRole] = useState('pm');
   const [shareUsers, setShareUsers] = useState<string[]>([]);
   const users = useLoad(() => api.listUsers(), []);
+  const roleMembers = (users.data?.items ?? []).filter(
+    (u) => u.role === shareRole,
+  );
+  const targetedMembers = (users.data?.items ?? []).filter((u) =>
+    shareUsers.includes(u.id),
+  );
   const [selectAll, setSelectAll] = useState(false);
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
@@ -559,6 +565,22 @@ export function NotificationsPage() {
               <option value="consultant">顾问</option>
               <option value="tech_lead">技术负责人</option>
             </Select>
+          ) : null}
+          {shareMode === 'role' ? (
+            <span className="muted small">
+              将共享给：
+              {roleMembers.length
+                ? roleMembers.map((u) => u.name).join('、')
+                : '暂无成员'}
+            </span>
+          ) : null}
+          {shareMode === 'users' ? (
+            <span className="muted small">
+              已选：
+              {targetedMembers.length
+                ? targetedMembers.map((u) => u.name).join('、')
+                : '未选择'}
+            </span>
           ) : null}
           {shareMode === 'users' ? (
             <Select

@@ -320,6 +320,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  status?: string;
+  role?: string | null;
 }
 
 export interface Risk {

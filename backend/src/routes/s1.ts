@@ -247,8 +247,12 @@ export async function s1Routes(app: FastifyInstance) {
     const org = await requestOrg(req);
     return {
       items: await query(
-        `SELECT id, name, email, status FROM users
-          WHERE org_id = $1 AND status = 'active' ORDER BY name`,
+        `SELECT u.id, u.name, u.email, u.status, m.role
+           FROM users u
+           LEFT JOIN memberships m
+             ON m.user_id = u.id AND m.org_id = u.org_id
+          WHERE u.org_id = $1 AND u.status = 'active'
+          ORDER BY u.name`,
         [org],
       ),
     };

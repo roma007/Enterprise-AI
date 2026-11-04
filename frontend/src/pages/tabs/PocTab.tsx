@@ -3,6 +3,7 @@ import { api, type BatchActionEvent } from '../../api';
 import { getStoredUser } from '../../auth';
 import { useDebouncedValue, useLoad } from '../../hooks';
 import type {
+  CopilotReconcileReview,
   CopilotReconcileReviewDetail,
   EngagementDetail,
   ReconcileBatch,
@@ -322,7 +323,7 @@ export function PocTab({
                 <thead>
                   <tr>
                     <th>收到时间</th><th>类型</th><th>单据号</th>
-                    <th>差异</th><th>决策</th><th>来源</th><th />
+                    <th>差异</th><th>决策进度</th><th>决策</th><th>来源</th><th />
                   </tr>
                 </thead>
                 <tbody>
@@ -335,6 +336,23 @@ export function PocTab({
                         <Badge tone={r.differences.length ? 'red' : 'green'}>
                           {r.differences.length}
                         </Badge>
+                      </td>
+                      <td>
+                        {(() => {
+                          const { total, decided } = decisionProgress(r);
+                          if (!total) return <span className="muted">—</span>;
+                          const tone =
+                            decided === total
+                              ? 'green'
+                              : decided > 0
+                                ? 'amber'
+                                : 'gray';
+                          return (
+                            <Badge tone={tone}>
+                              {decided}/{total}
+                            </Badge>
+                          );
+                        })()}
                       </td>
                       <td className="muted">{decisionSummary(r.decisions)}</td>
                       <td className="muted">{r.source}</td>
@@ -589,6 +607,22 @@ function formatBytes(bytes: number): string {
 function statusLabel(status?: string | null): string {
   if (!status) return '已生成';
   return ACTION_STATUS_LABEL[status] ?? status;
+}
+
+function decisionProgress(review: CopilotReconcileReview): {
+  total: number;
+  decided: number;
+} {
+  const total = review.differences.length;
+  const ignored = new Set(
+    review.decisions
+      .filter((d) => d.decision === '采纳' || d.decision === '忽略')
+      .map((d) => d.difference_id),
+  );
+  const decided = review.differences.filter(
+    (d) => d.difference_id && ignored.has(d.difference_id),
+  ).length;
+  return { total, decided };
 }
 
 function decisionSummary(decisions: Array<{ decision: string }>): string {

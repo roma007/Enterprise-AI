@@ -185,6 +185,9 @@ export function CollabAuditPage() {
     'day',
   );
   const [snapshotMetric, setSnapshotMetric] = useState<'delta' | 'total'>('delta');
+  const [snapshotSeries, setSnapshotSeries] = useState<
+    'total' | 'notification' | 'filter_view' | 'export' | 'decision'
+  >('total');
   const [detailItem, setDetailItem] = useState<CollabAudit | null>(null);
   const [opError, setOpError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -272,8 +275,33 @@ export function CollabAuditPage() {
   );
   const snapshotTrend = [...(snapshots.data?.items ?? [])].reverse();
   const snapshotCompare = snapshots.data?.comparison ?? null;
+  const SERIES_FIELD: Record<
+    'total' | 'notification' | 'filter_view' | 'export' | 'decision',
+    { delta: string; total: string; label: string }
+  > = {
+    total: { delta: 'delta_total', total: 'total', label: '总数' },
+    notification: {
+      delta: 'delta_notification',
+      total: 'notification_count',
+      label: '通知',
+    },
+    filter_view: {
+      delta: 'delta_filter_view',
+      total: 'filter_view_count',
+      label: '筛选视图',
+    },
+    export: { delta: 'delta_export', total: 'export_count', label: '导出' },
+    decision: {
+      delta: 'delta_decision',
+      total: 'decision_count',
+      label: '决策',
+    },
+  };
+  const seriesField = SERIES_FIELD[snapshotSeries];
   const metricValue = (s: any) =>
-    snapshotMetric === 'delta' ? s.delta_total ?? 0 : s.total ?? 0;
+    snapshotMetric === 'delta'
+      ? s[seriesField.delta] ?? 0
+      : s[seriesField.total] ?? 0;
   const maxMetric = Math.max(1, ...snapshotTrend.map(metricValue));
   useEffect(() => {
     setRunsOffset(0);
@@ -776,6 +804,26 @@ export function CollabAuditPage() {
             <option value="month">按月</option>
           </Select>
           <Select
+            value={snapshotSeries}
+            onChange={(e) =>
+              setSnapshotSeries(
+                e.target.value as
+                  | 'total'
+                  | 'notification'
+                  | 'filter_view'
+                  | 'export'
+                  | 'decision',
+              )
+            }
+            style={{ maxWidth: 120 }}
+          >
+            <option value="total">总数</option>
+            <option value="notification">通知</option>
+            <option value="filter_view">筛选视图</option>
+            <option value="export">导出</option>
+            <option value="decision">决策</option>
+          </Select>
+          <Select
             value={snapshotMetric}
             onChange={(e) =>
               setSnapshotMetric(e.target.value as 'delta' | 'total')
@@ -870,7 +918,7 @@ export function CollabAuditPage() {
                   key={s.snapshot_date}
                   title={`${s.period_start} ~ ${s.period_end} ${
                     snapshotMetric === 'delta' ? '新增' : '累计'
-                  } ${metricValue(s)}`}
+                  } ${seriesField.label} ${metricValue(s)}`}
                   style={{
                     flex: 1,
                     display: 'flex',

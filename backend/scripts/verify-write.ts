@@ -4434,6 +4434,7 @@ async function main() {
       [engagementId],
     );
     const differenceId = `DECIDE-${stamp}-1`;
+    const secondDifferenceId = `DECIDE-${stamp}-2`;
     const review = await one<{ id: string }>(
       `INSERT INTO copilot_reconcile_reviews
          (idempotency_key, org_id, engagement_id, kind, document_id, status,
@@ -4451,6 +4452,13 @@ async function main() {
             type: 'amount_mismatch',
             waybill_no: 'HY-DECIDE-1',
             delta: 10,
+            source: 'rule',
+          },
+          {
+            difference_id: secondDifferenceId,
+            type: 'rounding',
+            waybill_no: 'HY-DECIDE-2',
+            delta: 0.5,
             source: 'rule',
           },
         ]),
@@ -4493,13 +4501,48 @@ async function main() {
         '未传备注时应保留原备注',
       );
 
+      const batch = await app.inject({
+        method: 'POST',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions/batch`,
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          difference_ids: [differenceId, secondDifferenceId],
+          decision: '待确认',
+        }),
+      });
+      assert.equal(batch.statusCode, 200, `批量决策失败：${batch.body}`);
+      assert.equal(batch.json().updated, 2);
+      assert.equal(batch.json().decisions.length, 2);
+      assert.ok(
+        batch.json().decisions.every((d: any) => d.decision === '待确认'),
+        '批量决策应覆盖选中差异',
+      );
+      assert.equal(
+        batch.json().decisions[0].note,
+        '重复计费，已确认',
+        '批量决策未传备注时应保留原备注',
+      );
+
+      const batchInvalid = await app.inject({
+        method: 'POST',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions/batch`,
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          difference_ids: [differenceId, 'NOT-EXIST'],
+          decision: '采纳',
+        }),
+      });
+      assert.equal(batchInvalid.statusCode, 422);
+      assert.equal(batchInvalid.json().error, 'DIFFERENCE_NOT_FOUND');
+
       const detail = await app.inject({
         method: 'GET',
         url: `/api/copilot-reconcile-reviews/${reviewId}`,
         headers: authHeaders,
       });
       assert.equal(detail.statusCode, 200);
-      assert.equal(detail.json().item.decisions[0].decision, '采纳');
+      assert.equal(detail.json().item.decisions.length, 2, '无效批量不应部分生效');
+      assert.equal(detail.json().item.decisions[0].decision, '待确认');
 
       const missing = await decide({
         difference_id: 'NOT-EXIST',
@@ -4519,7 +4562,7 @@ async function main() {
           WHERE action = 'DECIDE copilot-reconcile-difference' AND object_id = $1`,
         [reviewId],
       );
-      assert.equal(Number(audits!.count), 2, '每次决策都应写审计');
+      assert.equal(Number(audits!.count), 3, '单条与批量决策都应写审计');
     } finally {
       await query(
         `DELETE FROM audit_logs WHERE object_id = $1 AND object_type = 'copilot_reconcile_review'`,

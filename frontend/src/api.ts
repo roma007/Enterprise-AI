@@ -1509,6 +1509,18 @@ export const api = {
       `/api/copilot-reconcile-reviews/${reviewId}/decisions`,
       json('PUT', payload),
     ),
+  batchDecideReconcileDifferences: (
+    reviewId: string,
+    payload: {
+      difference_ids: string[];
+      decision: '采纳' | '忽略' | '待确认';
+      note?: string | null;
+    },
+  ) =>
+    request<{ decisions: ReconcileDecision[]; updated: number }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/decisions/batch`,
+      json('POST', payload),
+    ),
   listReconcileDocuments: (reviewId: string) =>
     request<{
       items: Array<{

@@ -302,6 +302,35 @@ function diffDetailText(review: any, diff: any): string {
   ].join('\n');
 }
 
+type DecisionValue = '采纳' | '忽略' | '待确认';
+
+/** 合并单条差异决策：存在则覆盖，未传 note 时保留原备注。 */
+function mergeDifferenceDecision(
+  existing: any[],
+  differenceId: string,
+  decision: DecisionValue,
+  note: string | null | undefined,
+  auth: any,
+): any[] {
+  const index = existing.findIndex(
+    (d) => String(d?.difference_id ?? '') === differenceId,
+  );
+  const previous = index >= 0 ? existing[index] : null;
+  const entry = {
+    ...(previous ?? {}),
+    difference_id: differenceId,
+    decision,
+    note: note === undefined ? previous?.note ?? null : note,
+    source: 'platform',
+    decided_by: auth.sub,
+    decided_by_name: auth.name ?? null,
+    decided_at: new Date().toISOString(),
+  };
+  return index >= 0
+    ? existing.map((d, i) => (i === index ? entry : d))
+    : [...existing, entry];
+}
+
 function diffDocLabel(review: any): string {
   const doc = review.document ?? {};
   return String(doc.statement_no ?? doc.settlement_no ?? review.document_id ?? review.id);
@@ -1214,25 +1243,13 @@ export async function copilotRoutes(app: FastifyInstance) {
         throw httpError(422, 'DIFFERENCE_NOT_FOUND', '差异不存在');
       }
       const existing = Array.isArray(review.decisions) ? review.decisions : [];
-      const index = existing.findIndex(
-        (d: any) => String(d?.difference_id ?? '') === body.difference_id,
+      const next = mergeDifferenceDecision(
+        existing,
+        body.difference_id,
+        body.decision,
+        body.note,
+        auth,
       );
-      const previous = index >= 0 ? existing[index] : null;
-      const entry = {
-        ...(previous ?? {}),
-        difference_id: body.difference_id,
-        decision: body.decision,
-        note:
-          body.note === undefined ? previous?.note ?? null : body.note,
-        source: 'platform',
-        decided_by: auth.sub,
-        decided_by_name: auth.name ?? null,
-        decided_at: new Date().toISOString(),
-      };
-      const next =
-        index >= 0
-          ? existing.map((d: any, i: number) => (i === index ? entry : d))
-          : [...existing, entry];
       await client.query(
         `UPDATE copilot_reconcile_reviews SET decisions = $2::jsonb WHERE id = $1`,
         [id, JSON.stringify(next)],
@@ -1262,6 +1279,85 @@ export async function copilotRoutes(app: FastifyInstance) {
     }
 
     return { decisions };
+  });
+
+  /** 批量记录决策；任一差异不存在则整批不生效。 */
+  app.post('/api/copilot-reconcile-reviews/:id/decisions/batch', async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({
+        difference_ids: z
+          .array(z.string().trim().min(1).max(200))
+          .min(1)
+          .max(500),
+        decision: z.enum(['采纳', '忽略', '待确认']),
+        note: z.string().trim().max(500).nullable().optional(),
+      })
+      .parse(req.body ?? {});
+    const auth = (req as any).authUser;
+    if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    const unique = Array.from(new Set(body.difference_ids));
+
+    const decisions = await withTransaction(async (client) => {
+      const found = await client.query<any>(
+        `SELECT differences, decisions
+           FROM copilot_reconcile_reviews WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const review = found.rows[0];
+      if (!review) throw httpError(404, 'NOT_FOUND', '对账复核记录不存在');
+      const diffs = Array.isArray(review.differences) ? review.differences : [];
+      const known = new Set(
+        diffs.map((d: any) => String(d?.difference_id ?? '')),
+      );
+      const missing = unique.filter((differenceId) => !known.has(differenceId));
+      if (missing.length) {
+        throw httpError(
+          422,
+          'DIFFERENCE_NOT_FOUND',
+          `差异不存在：${missing.slice(0, 5).join('、')}`,
+        );
+      }
+      let next = Array.isArray(review.decisions) ? review.decisions : [];
+      for (const differenceId of unique) {
+        next = mergeDifferenceDecision(
+          next,
+          differenceId,
+          body.decision,
+          body.note,
+          auth,
+        );
+      }
+      await client.query(
+        `UPDATE copilot_reconcile_reviews SET decisions = $2::jsonb WHERE id = $1`,
+        [id, JSON.stringify(next)],
+      );
+      return next;
+    });
+
+    try {
+      await query(
+        `INSERT INTO audit_logs
+           (org_id, user_id, action, object_type, object_id, status_code, detail)
+         VALUES ($1,$2,'DECIDE copilot-reconcile-difference',
+                 'copilot_reconcile_review',$3,200,$4::jsonb)`,
+        [
+          auth.org_id ?? null,
+          auth.sub,
+          id,
+          JSON.stringify({
+            mode: 'batch',
+            count: unique.length,
+            decision: body.decision,
+            difference_ids: unique.slice(0, 20),
+          }),
+        ],
+      );
+    } catch (err) {
+      req.log?.warn?.({ err }, 'decision audit failed');
+    }
+
+    return { decisions, updated: unique.length };
   });
 
   /** 复核记录 Markdown（便于排查与二次加工）。 */

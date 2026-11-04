@@ -583,6 +583,9 @@ function ReconcileReviewDetail({
   const [exportingDocx, setExportingDocx] = useState(false);
   const [generatingDoc, setGeneratingDoc] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState<string | null>(null);
+  const [batchDecisionBusy, setBatchDecisionBusy] = useState<
+    '采纳' | '忽略' | null
+  >(null);
   const [latestDoc, setLatestDoc] = useState<{
     id: string;
     title: string;
@@ -840,6 +843,27 @@ function ReconcileReviewDetail({
       alive = false;
     };
   }, [review.id, decisionsKey]);
+
+  const applyBatchDecision = async (decision: '采纳' | '忽略') => {
+    const ids = selectedDiffs
+      .map((d) => d.difference_id)
+      .filter((id): id is string => Boolean(id));
+    if (!ids.length) return;
+    setBatchDecisionBusy(decision);
+    setActionError(null);
+    try {
+      const res = await api.batchDecideReconcileDifferences(review.id, {
+        difference_ids: ids,
+        decision,
+      });
+      onAction({ decisions: res.decisions });
+      setActionNotice(`已批量标记 ${res.updated} 条差异为「${decision}」。`);
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setBatchDecisionBusy(null);
+    }
+  };
 
   const saveDecision = async (
     diff: ReconcileDifference,
@@ -1392,6 +1416,20 @@ function ReconcileReviewDetail({
         <span className="hint">
           已选 {selectedDiffs.length} / 可处理 {selectableDiffs.length} 条
         </span>
+        <Button
+          size="sm"
+          disabled={!selectedDiffs.length || Boolean(batchDecisionBusy)}
+          onClick={() => void applyBatchDecision('采纳')}
+        >
+          {batchDecisionBusy === '采纳' ? '处理中…' : '批量采纳'}
+        </Button>
+        <Button
+          size="sm"
+          disabled={!selectedDiffs.length || Boolean(batchDecisionBusy)}
+          onClick={() => void applyBatchDecision('忽略')}
+        >
+          {batchDecisionBusy === '忽略' ? '处理中…' : '批量忽略'}
+        </Button>
         {review.risk_id ? (
           <span className="hint">风险状态：{statusLabel(review.risk_status)}</span>
         ) : null}

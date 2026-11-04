@@ -254,4 +254,110 @@ export async function systemRoutes(app: FastifyInstance) {
     const stats = statsRows[0] ?? { total: 0, deletes: 0, failures: 0 };
     return { ...pageResult(rows, stats.total, page), stats };
   });
+
+  const auditViewBody = z.object({
+    name: z.string().trim().min(1).max(80),
+    mode: z.enum(['live', 'archive']).default('live'),
+    q: z.string().trim().max(200).optional(),
+    action: z.string().trim().max(200).optional(),
+    object_type: z.string().trim().max(120).optional(),
+    status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+
+  const AUDIT_VIEW_COLUMNS = `v.id, v.name, v.mode, v.q, v.action,
+              v.object_type, v.status,
+              v.from_date::text AS "from", v.to_date::text AS "to",
+              v.created_at, v.updated_at`;
+
+  /** 当前用户保存的审计日志筛选视图（私有）。 */
+  app.get('/api/audit-filter-views', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    const items = await query(
+      `SELECT ${AUDIT_VIEW_COLUMNS}
+         FROM audit_filter_views v
+        WHERE v.user_id = $1
+        ORDER BY v.name`,
+      [auth.sub],
+    );
+    return { items };
+  });
+
+  app.post('/api/audit-filter-views', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const body = auditViewBody.parse(req.body ?? {});
+    if (body.from && body.to && body.from > body.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
+    const item = await one(
+      `INSERT INTO audit_filter_views
+         (org_id, user_id, name, mode, q, action, object_type, status,
+          from_date, to_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (user_id, name)
+       DO UPDATE SET mode = EXCLUDED.mode,
+                     q = EXCLUDED.q,
+                     action = EXCLUDED.action,
+                     object_type = EXCLUDED.object_type,
+                     status = EXCLUDED.status,
+                     from_date = EXCLUDED.from_date,
+                     to_date = EXCLUDED.to_date,
+                     updated_at = now()
+       RETURNING id, name, mode, q, action, object_type, status,
+                 from_date::text AS "from", to_date::text AS "to",
+                 created_at, updated_at`,
+      [
+        auth.org_id,
+        auth.sub,
+        body.name,
+        body.mode,
+        body.q ?? null,
+        body.action ?? null,
+        body.object_type ?? null,
+        body.status ?? null,
+        body.from ?? null,
+        body.to ?? null,
+      ],
+    );
+    return reply.code(201).send({ item });
+  });
+
+  app.patch('/api/audit-filter-views/:id', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({ name: z.string().trim().min(1).max(80) })
+      .parse(req.body ?? {});
+    const item = await one(
+      `UPDATE audit_filter_views
+          SET name = $2, updated_at = now()
+        WHERE id = $1 AND user_id = $3
+        RETURNING id, name, mode, q, action, object_type, status,
+                  from_date::text AS "from", to_date::text AS "to",
+                  created_at, updated_at`,
+      [id, body.name, auth.sub],
+    );
+    if (!item) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');
+    return { item };
+  });
+
+  app.delete('/api/audit-filter-views/:id', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const row = await one(
+      `DELETE FROM audit_filter_views
+        WHERE id = $1 AND user_id = $2
+        RETURNING id`,
+      [id, auth.sub],
+    );
+    if (!row) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');
+    return { ok: true };
+  });
 }

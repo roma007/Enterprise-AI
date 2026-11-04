@@ -277,6 +277,45 @@ test.describe('关键路径冒烟', () => {
       modal.locator('footer').getByRole('button', { name: '关闭' }),
     ).toBeVisible();
   });
+  test('审计筛选视图可保存并删除', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    expect(login.status()).toBe(200);
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+
+    const name = `E2E审计视图${Date.now()}`;
+    page.on('dialog', (dialog) => dialog.accept(name));
+    await page.goto('/#/audit');
+    await expect(
+      page.getByRole('heading', { name: '审计日志', level: 1 }),
+    ).toBeVisible();
+
+    const saveButton = page.getByRole('button', { name: '保存当前筛选' });
+    await expect(saveButton).toBeVisible();
+    await saveButton.click();
+    const viewSelect = page
+      .locator('select')
+      .filter({ has: page.locator('option', { hasText: '选择已保存视图' }) })
+      .first();
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    const deleteButton = page.getByRole('button', { name: '删除视图' });
+    await expect(deleteButton).toBeVisible({ timeout: 15_000 });
+    await deleteButton.click();
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(0, {
+      timeout: 15_000,
+    });
+  });
+
   test('协作审计页展示看板与快照', async ({ page, request }) => {
     const login = await request.post('/api/auth/login', {
       data: { email: 'admin@hengzhi.ai', password: 'demo1234' },

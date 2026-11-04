@@ -1264,6 +1264,20 @@ export interface NotificationFilterView {
   updated_at: string;
 }
 
+export interface AuditFilterView {
+  id: string;
+  name: string;
+  mode: 'live' | 'archive';
+  q: string | null;
+  action: string | null;
+  object_type: string | null;
+  status: string | null;
+  from: string | null;
+  to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserNotification {
   id: string;
   kind: string;

@@ -1,6 +1,7 @@
 import { authHeaders, type StoredUser } from './auth';
 import type {
   ApiErrorBody,
+  AuditFilterView,
   AuditLog,
   Baseline,
   Benchmark,
@@ -959,6 +960,32 @@ export const api = {
       moved: number;
       remaining: number;
     }>('/api/audit-logs/archive', json('POST', payload)),
+
+  listAuditFilterViews: () =>
+    request<{ items: AuditFilterView[] }>('/api/audit-filter-views'),
+  saveAuditFilterView: (payload: {
+    name: string;
+    mode: 'live' | 'archive';
+    q?: string;
+    action?: string;
+    object_type?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+  }) =>
+    request<{ item: AuditFilterView }>(
+      '/api/audit-filter-views',
+      json('POST', payload),
+    ),
+  renameAuditFilterView: (id: string, name: string) =>
+    request<{ item: AuditFilterView }>(
+      `/api/audit-filter-views/${id}`,
+      json('PATCH', { name }),
+    ),
+  deleteAuditFilterView: (id: string) =>
+    request<{ ok: boolean }>(`/api/audit-filter-views/${id}`, {
+      method: 'DELETE',
+    }),
 
   // 行业标杆
   listBenchmarks: (all = true, industry = 'logistics') =>

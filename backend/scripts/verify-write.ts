@@ -5566,6 +5566,34 @@ async function main() {
   });
 
   await check('审计归档：预演、确认执行、归档查询与权限', async () => {
+    const auditLogin = ok(
+      await req('POST', '/api/auth/login', {
+        email: 'admin@hengzhi.ai',
+        password: 'demo1234',
+      }),
+      200,
+      '审计视图登录',
+    );
+    const auditCall = async (method: any, url: string, payload?: any) => {
+      const res = await app.inject({
+        method,
+        url,
+        headers: {
+          authorization: `Bearer ${auditLogin.token}`,
+          ...(payload === undefined
+            ? {}
+            : { 'content-type': 'application/json' }),
+        },
+        payload: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+      let body: any = null;
+      try {
+        body = res.body ? res.json() : null;
+      } catch {
+        body = res.body;
+      }
+      return { status: res.statusCode, body };
+    };
     const eng = await one<{ org_id: string }>(
       `SELECT org_id FROM engagements WHERE id = $1`,
       [engagementId],
@@ -5634,6 +5662,78 @@ async function main() {
       '日期筛选应只返回当天记录',
     );
     assert.equal(todayList.stats.total, todayList.total);
+
+    const viewName = `审计视图-${Date.now()}`;
+    const savedView = ok(
+      await auditCall('POST', '/api/audit-filter-views', {
+        name: viewName,
+        mode: 'live',
+        q: 'POST',
+        status: '4xx',
+        from: today,
+        to: today,
+      }),
+      201,
+      '保存审计筛选视图',
+    );
+    const viewId = (savedView.item as any).id as string;
+    assert.equal((savedView.item as any).status, '4xx');
+    assert.equal((savedView.item as any).from, today);
+
+    const upserted = ok(
+      await auditCall('POST', '/api/audit-filter-views', {
+        name: viewName,
+        mode: 'archive',
+        status: '5xx',
+      }),
+      201,
+      '同名覆盖审计视图',
+    );
+    assert.equal((upserted.item as any).id, viewId, '同名保存应覆盖');
+    assert.equal((upserted.item as any).mode, 'archive');
+    assert.equal((upserted.item as any).status, '5xx');
+
+    const viewList = ok(
+      await auditCall('GET', '/api/audit-filter-views'),
+      200,
+      '审计视图列表',
+    );
+    assert.ok(
+      (viewList.items as any[]).some((item) => item.id === viewId),
+      '保存后应出现在列表',
+    );
+
+    const renamedView = ok(
+      await auditCall('PATCH', `/api/audit-filter-views/${viewId}`, {
+        name: `${viewName}-renamed`,
+      }),
+      200,
+      '重命名审计视图',
+    );
+    assert.equal((renamedView.item as any).name, `${viewName}-renamed`);
+
+    const badViewRange = await auditCall('POST', '/api/audit-filter-views', {
+      name: `${viewName}-bad`,
+      from: '2026-12-31',
+      to: '2026-01-01',
+    });
+    assert.equal(badViewRange.status, 400);
+    assert.equal(badViewRange.body.error, 'INVALID_DATE_RANGE');
+
+    ok(
+      await auditCall('DELETE', `/api/audit-filter-views/${viewId}`),
+      200,
+      '删除审计视图',
+    );
+    const afterDelete = ok(
+      await auditCall('GET', '/api/audit-filter-views'),
+      200,
+      '删除后列表',
+    );
+    assert.ok(
+      !(afterDelete.items as any[]).some((item) => item.id === viewId),
+      '删除后不应再出现在列表',
+    );
 
     const before = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const dryRun = ok(

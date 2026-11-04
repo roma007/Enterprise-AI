@@ -120,6 +120,13 @@ export function AuditPage() {
   const [toFilter, setToFilter] = useState(initial.to);
   const dq = useDebouncedValue(search, 300);
   const facets = useLoad(() => api.listAuditFacets(mode), [mode]);
+  const auditViews = useLoad(() => api.listAuditFilterViews(), []);
+  const [selectedViewId, setSelectedViewId] = useState('');
+  const [savingView, setSavingView] = useState(false);
+  const [viewError, setViewError] = useState<unknown>(null);
+  const selectedView = (auditViews.data?.items ?? []).find(
+    (view) => view.id === selectedViewId,
+  );
 
   const { data, error, loading, reload } = useLoad(
     () =>
@@ -216,6 +223,81 @@ export function AuditPage() {
     setToFilter('');
     setArchiveNotice(null);
     setArchiveError(null);
+  };
+
+  const currentViewPayload = (name: string) => ({
+    name,
+    mode,
+    q: search || undefined,
+    action: actionFilter || undefined,
+    object_type: objectTypeFilter || undefined,
+    status: statusFilter || undefined,
+    from: fromFilter || undefined,
+    to: toFilter || undefined,
+  });
+
+  const saveCurrentView = async () => {
+    const name = window.prompt('视图名称（同名会覆盖）')?.trim();
+    if (!name) return;
+    setSavingView(true);
+    setViewError(null);
+    try {
+      const res = await api.saveAuditFilterView(currentViewPayload(name));
+      setSelectedViewId(res.item.id);
+      await auditViews.reload();
+    } catch (err) {
+      setViewError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const applySavedView = (id: string) => {
+    setSelectedViewId(id);
+    const view = (auditViews.data?.items ?? []).find((item) => item.id === id);
+    if (!view) return;
+    setMode(view.mode);
+    setSearch(view.q ?? '');
+    setActionFilter(view.action ?? '');
+    setObjectTypeFilter(view.object_type ?? '');
+    setStatusFilter(view.status ?? '');
+    setFromFilter(view.from ?? '');
+    setToFilter(view.to ?? '');
+    setOffset(0);
+    setArchiveNotice(null);
+    setArchiveError(null);
+  };
+
+  const renameCurrentView = async () => {
+    if (!selectedViewId) return;
+    const name = window.prompt('新的视图名称', selectedView?.name ?? '')?.trim();
+    if (!name) return;
+    setSavingView(true);
+    setViewError(null);
+    try {
+      await api.renameAuditFilterView(selectedViewId, name);
+      await auditViews.reload();
+    } catch (err) {
+      setViewError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const deleteCurrentView = async () => {
+    if (!selectedViewId) return;
+    if (!window.confirm(`确认删除视图「${selectedView?.name ?? ''}」？`)) return;
+    setSavingView(true);
+    setViewError(null);
+    try {
+      await api.deleteAuditFilterView(selectedViewId);
+      setSelectedViewId('');
+      await auditViews.reload();
+    } catch (err) {
+      setViewError(err);
+    } finally {
+      setSavingView(false);
+    }
   };
 
   const previewArchive = async () => {
@@ -393,9 +475,50 @@ export function AuditPage() {
                 >
                   清空筛选
                 </Button>
+                <Select
+                  value={selectedViewId}
+                  onChange={(e) => applySavedView(e.target.value)}
+                  style={{ maxWidth: 180 }}
+                >
+                  <option value="">选择已保存视图</option>
+                  {(auditViews.data?.items ?? []).map((view) => (
+                    <option key={view.id} value={view.id}>
+                      {view.name}
+                      {view.mode === 'archive' ? '（归档）' : ''}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  size="sm"
+                  disabled={savingView}
+                  onClick={() => void saveCurrentView()}
+                >
+                  {savingView ? '保存中…' : '保存当前筛选'}
+                </Button>
+                {selectedView ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={savingView}
+                    onClick={() => void renameCurrentView()}
+                  >
+                    重命名
+                  </Button>
+                ) : null}
+                {selectedView ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={savingView}
+                    onClick={() => void deleteCurrentView()}
+                  >
+                    删除视图
+                  </Button>
+                ) : null}
               </div>
             }
           >
+            {viewError ? <ErrorBox error={viewError} /> : null}
             {items.length === 0 ? (
               <Empty
                 title={mode === 'archive' ? '归档表为空' : '没有匹配的审计记录'}

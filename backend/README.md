@@ -126,6 +126,7 @@ npm run dev          # http://127.0.0.1:8788
 - `POST /api/audit-logs/archive`：`{ before, dry_run, confirm }`；默认 dry-run，执行需 `confirm=ARCHIVE`。
 - `GET /api/audit-logs/archive`：分页查询归档记录。
 - `GET /api/audit-logs/facets?scope=live|archive`：返回可选的操作与对象类型，供页面下拉筛选。
+- 审计筛选视图：`GET/POST /api/audit-filter-views`、`PATCH/DELETE /api/audit-filter-views/:id`（保存关键词/操作/对象/状态/日期/热表或归档，同名覆盖，仅创建者可改/删；私有视图，不共享）。
 - 归档只移动、不删除；管理员/总监可操作，其他角色 403。
 - CLI：`npm run audit:archive -- --days=180 --dry-run`，去掉 `--dry-run` 执行；支持 `--batch=1000`。
 - 建议 cron 每日执行，保留 180 天热数据（`AUDIT_RETENTION_DAYS` 可覆盖）。

@@ -4319,6 +4319,7 @@ async function main() {
       return res.json().token as string;
     };
     const token = await login('zhang@hengzhi.ai');
+    const adminToken = await login('admin@hengzhi.ai');
     const eng = await one<{ org_id: string }>(
       `SELECT org_id FROM engagements WHERE id = $1`,
       [engagementId],
@@ -4435,12 +4436,36 @@ async function main() {
       const staleDocs = await listDocuments();
       assert.equal(staleDocs[0].is_stale, true, '复核变更后交付物应标记过期');
 
+      const approveStale = await app.inject({
+        method: 'PATCH',
+        url: `/api/deliverables/${firstItem.id}/status`,
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'content-type': 'application/json',
+        },
+        payload: JSON.stringify({ status: 'approved' }),
+      });
+      assert.equal(approveStale.statusCode, 409, '过期报告不应允许审批');
+      assert.equal(approveStale.json().error, 'DELIVERABLE_STALE');
+
       const second = await generate();
       assert.equal(second.statusCode, 201);
       assert.equal(second.json().item.version, 2, '再次生成应递增版本');
       const refreshedDocs = await listDocuments();
       assert.equal(refreshedDocs[0].version, 2);
       assert.equal(refreshedDocs[0].is_stale, false, '重新生成后应恢复最新');
+
+      const approveFresh = await app.inject({
+        method: 'PATCH',
+        url: `/api/deliverables/${second.json().item.id}/status`,
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'content-type': 'application/json',
+        },
+        payload: JSON.stringify({ status: 'approved' }),
+      });
+      assert.equal(approveFresh.statusCode, 200, '最新报告应允许审批');
+      assert.equal(approveFresh.json().item.status, 'approved');
 
       const stored = await one<{ markdown: string }>(
         `SELECT content->>'markdown' AS markdown FROM deliverables WHERE id = $1`,

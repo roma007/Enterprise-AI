@@ -37,6 +37,11 @@ import { sessionActive } from './services/sessions';
 import { pageResult, parsePage } from './services/pagination';
 import { observeRequest, renderPrometheus } from './services/metrics';
 import { redisHealthy } from './services/redis';
+import {
+  loadReconcileBundle,
+  reconcileMarkdownHash,
+  renderReconcileDoc,
+} from './services/reconcile_docs';
 import { startPdfWorker } from './services/pdf_jobs';
 import { cleanupShareViews } from './services/share_access';
 import { guardResource, requestOrg } from './services/tenant';
@@ -742,11 +747,39 @@ app.get('/api/engagements/:id/shares', async (req, reply) => {
   return { items: rows };
 });
 
+/** 复核报告类交付物是否已落后于当前复核内容。 */
+async function reconcileDeliverableStale(deliverableId: string): Promise<boolean> {
+  const row = await one<{ generated_from: any }>(
+    `SELECT generated_from FROM deliverables WHERE id = $1`,
+    [deliverableId],
+  );
+  const reviewId = row?.generated_from?.reviewId;
+  const storedHash = row?.generated_from?.content_hash;
+  if (!reviewId || !storedHash) return false;
+  try {
+    const bundle = await loadReconcileBundle(reviewId);
+    const current = reconcileMarkdownHash(renderReconcileDoc(bundle).markdown);
+    return current !== storedHash;
+  } catch {
+    return false;
+  }
+}
+
+function staleDeliverableReply(reply: any) {
+  return reply.code(409).send({
+    error: 'DELIVERABLE_STALE',
+    message: '复核内容已变更，请重新生成报告后再审批或外发',
+  });
+}
+
 app.patch('/api/deliverables/:id/status', async (req, reply) => {
   const { id } = deliverableParams.parse(req.params);
   const body = z
     .object({ status: z.enum(['draft', 'in_review', 'approved', 'shared', 'archived']) })
     .parse(req.body);
+  if (body.status === 'approved' && (await reconcileDeliverableStale(id))) {
+    return staleDeliverableReply(reply);
+  }
   const row = await one(
     `UPDATE deliverables SET status = $2 WHERE id = $1 RETURNING id, status`,
     [id, body.status],
@@ -781,6 +814,9 @@ app.post('/api/deliverables/:id/shares', async (req, reply) => {
       error: 'DELIVERABLE_NOT_APPROVED',
       message: '交付物需先批准后再外发',
     });
+  }
+  if (await reconcileDeliverableStale(id)) {
+    return staleDeliverableReply(reply);
   }
 
   const stakeholder = await one(

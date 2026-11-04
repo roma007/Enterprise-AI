@@ -5135,6 +5135,150 @@ async function main() {
     }
   });
 
+  await check('协作审计筛选视图：保存、覆盖、权限与校验', async () => {
+    const org = await one<{ org_id: string }>(
+      `SELECT org_id FROM engagements WHERE id = $1`,
+      [engagementId],
+    );
+    const email = `verify-collabview-${stamp}@example.com`;
+    const director = await one<{ id: string }>(
+      `INSERT INTO users (org_id, name, email, password_hash)
+       VALUES ($1,'视图总监',$2,$3) RETURNING id`,
+      [org!.org_id, email, hashPassword('demo1234')],
+    );
+    await query(
+      `INSERT INTO memberships (user_id, org_id, role)
+       VALUES ($1,$2,'director')`,
+      [director!.id, org!.org_id],
+    );
+    const login = async (who: string) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email: who, password: 'demo1234' },
+      });
+      assert.equal(res.statusCode, 200, `登录失败：${who}`);
+      return res.json().token as string;
+    };
+    const adminToken = await login('admin@hengzhi.ai');
+    const directorToken = await login(email);
+    const call = (token: string, method: any, url: string, payload?: any) =>
+      app.inject({
+        method,
+        url,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(payload === undefined
+            ? {}
+            : { 'content-type': 'application/json' }),
+        },
+        payload: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+    const name = `回归协作视图-${stamp}`;
+
+    try {
+      const created = await call(
+        adminToken,
+        'POST',
+        '/api/collab-audit-filter-views',
+        {
+          name,
+          type: 'notification',
+          from: '2026-11-01',
+          to: '2026-11-04',
+          scope: 'all',
+        },
+      );
+      assert.equal(created.statusCode, 201, `保存失败：${created.body}`);
+      const viewId = created.json().item.id;
+      assert.equal(created.json().item.type, 'notification');
+      assert.equal(created.json().item.scope, 'all');
+
+      const updated = await call(
+        adminToken,
+        'POST',
+        '/api/collab-audit-filter-views',
+        {
+          name,
+          type: 'decision',
+          action: 'DECIDE copilot-reconcile-difference',
+        },
+      );
+      assert.equal(updated.statusCode, 201);
+      assert.equal(updated.json().item.id, viewId, '同名保存应覆盖');
+      assert.equal(updated.json().item.type, 'decision');
+
+      const adminList = await call(
+        adminToken,
+        'GET',
+        '/api/collab-audit-filter-views',
+      );
+      assert.equal(adminList.statusCode, 200);
+      assert.ok(
+        (adminList.json().items as any[]).some((v) => v.id === viewId),
+        '保存后应出现在列表',
+      );
+
+      const directorList = await call(
+        directorToken,
+        'GET',
+        '/api/collab-audit-filter-views',
+      );
+      assert.equal(directorList.statusCode, 200);
+      assert.ok(
+        !(directorList.json().items as any[]).some((v) => v.id === viewId),
+        '不应看到他人的审计视图',
+      );
+
+      const deleteOther = await call(
+        directorToken,
+        'DELETE',
+        `/api/collab-audit-filter-views/${viewId}`,
+      );
+      assert.equal(deleteOther.statusCode, 404, '不能删除他人视图');
+
+      const badCombo = await call(
+        adminToken,
+        'POST',
+        '/api/collab-audit-filter-views',
+        {
+          name: `${name}-bad`,
+          type: 'notification',
+          action: 'EXPORT copilot-collab-audits',
+        },
+      );
+      assert.equal(badCombo.statusCode, 400);
+      assert.equal(badCombo.json().error, 'INVALID_ACTION_TYPE');
+
+      const badRange = await call(
+        adminToken,
+        'POST',
+        '/api/collab-audit-filter-views',
+        {
+          name: `${name}-range`,
+          type: 'all',
+          from: '2026-12-31',
+          to: '2026-01-01',
+        },
+      );
+      assert.equal(badRange.statusCode, 400);
+      assert.equal(badRange.json().error, 'INVALID_DATE_RANGE');
+
+      const removed = await call(
+        adminToken,
+        'DELETE',
+        `/api/collab-audit-filter-views/${viewId}`,
+      );
+      assert.equal(removed.statusCode, 200, '创建者应能删除');
+    } finally {
+      await query(
+        `DELETE FROM collab_audit_filter_views WHERE name LIKE $1`,
+        [`${name}%`],
+      );
+      await query(`DELETE FROM users WHERE email = $1`, [email]);
+    }
+  });
+
   await check('指标：Prometheus 输出、数据库状态与访问令牌', async () => {
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     assert.equal(health.statusCode, 200);

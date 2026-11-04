@@ -199,6 +199,8 @@ export function CollabAuditPage() {
     'day',
   );
   const [snapshotMetric, setSnapshotMetric] = useState<'delta' | 'total'>('delta');
+  const [selectedViewId, setSelectedViewId] = useState('');
+  const [savingView, setSavingView] = useState(false);
   const [snapshotSeries, setSnapshotSeries] = useState<
     'total' | 'notification' | 'filter_view' | 'export' | 'decision'
   >('total');
@@ -206,12 +208,66 @@ export function CollabAuditPage() {
   const [opError, setOpError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const users = useLoad(() => api.listUsers(), []);
+  const auditViews = useLoad(() => api.listCollabAuditFilterViews(), []);
   const [boardDays, setBoardDays] = useState(7);
   const board = useLoad(
     () => api.listCollabSnapshots({ days: boardDays, bucket: 'day' }),
     [boardDays],
   );
   const boardComparison = board.data?.comparison ?? null;
+  const applyAuditView = (id: string) => {
+    setSelectedViewId(id);
+    if (!id) return;
+    const item = (auditViews.data?.items ?? []).find((view) => view.id === id);
+    if (!item) return;
+    setType(item.type);
+    setAction(item.action ?? '');
+    setFrom(item.from ?? '');
+    setTo(item.to ?? '');
+    setActorId(item.actor_id ?? '');
+    setScope(item.scope);
+    setOffset(0);
+  };
+
+  const saveAuditView = async () => {
+    const name = window.prompt('视图名称（同名会覆盖）')?.trim();
+    if (!name) return;
+    setSavingView(true);
+    setOpError(null);
+    try {
+      const res = await api.saveCollabAuditFilterView({
+        name,
+        type,
+        action: action || undefined,
+        from: from || undefined,
+        to: to || undefined,
+        actor_id: actorId || undefined,
+        scope,
+      });
+      setSelectedViewId(res.item.id);
+      await auditViews.reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const deleteAuditView = async () => {
+    if (!selectedViewId) return;
+    setSavingView(true);
+    setOpError(null);
+    try {
+      await api.deleteCollabAuditFilterView(selectedViewId);
+      setSelectedViewId('');
+      await auditViews.reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
   const scrollToList = () => {
     window.setTimeout(() => {
       document
@@ -762,6 +818,35 @@ export function CollabAuditPage() {
           >
             清空筛选
           </Button>
+          <Select
+            value={selectedViewId}
+            onChange={(e) => applyAuditView(e.target.value)}
+            style={{ maxWidth: 180 }}
+          >
+            <option value="">选择已保存视图</option>
+            {(auditViews.data?.items ?? []).map((view) => (
+              <option key={view.id} value={view.id}>
+                {view.name}
+              </option>
+            ))}
+          </Select>
+          <Button
+            size="sm"
+            disabled={savingView}
+            onClick={() => void saveAuditView()}
+          >
+            {savingView ? '保存中…' : '保存当前筛选'}
+          </Button>
+          {selectedViewId ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={savingView}
+              onClick={() => void deleteAuditView()}
+            >
+              删除视图
+            </Button>
+          ) : null}
           {rangeError ? (
             <span style={{ color: '#b42318' }}>{rangeError}</span>
           ) : null}

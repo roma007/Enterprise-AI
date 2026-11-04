@@ -56,6 +56,7 @@ import type {
   BatchFilterView,
   UserNotification,
   NotificationFilterView,
+  CollabAuditFilterView,
   BatchFilterViewAudit,
   NotificationAudit,
   CollabAudit,
@@ -1152,6 +1153,27 @@ export const api = {
   },
   markNotificationRead: (id: string) =>
     request<{ ok: boolean }>(`/api/notifications/${id}/read`, json('POST', {})),
+  listCollabAuditFilterViews: () =>
+    request<{ items: CollabAuditFilterView[] }>(
+      '/api/collab-audit-filter-views',
+    ),
+  saveCollabAuditFilterView: (payload: {
+    name: string;
+    type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
+    action?: string;
+    from?: string;
+    to?: string;
+    actor_id?: string;
+    scope?: 'live' | 'archive' | 'all';
+  }) =>
+    request<{ item: CollabAuditFilterView }>(
+      '/api/collab-audit-filter-views',
+      json('POST', payload),
+    ),
+  deleteCollabAuditFilterView: (id: string) =>
+    request<{ ok: boolean }>(`/api/collab-audit-filter-views/${id}`, {
+      method: 'DELETE',
+    }),
   listNotificationFilterViews: () =>
     request<{ items: NotificationFilterView[] }>(
       '/api/notification-filter-views',

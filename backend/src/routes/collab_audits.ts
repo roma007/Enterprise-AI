@@ -1483,4 +1483,83 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       .header('content-disposition', 'attachment; filename="collab-audits.csv"')
       .send(`\uFEFF${lines.join('\r\n')}`);
   });
+
+  const filterViewBody = z.object({
+    name: z.string().trim().min(1).max(80),
+    type: z.enum(TYPE_VALUES).default('all'),
+    action: z.enum(ACTION_VALUES).optional(),
+    from: dateStr.optional(),
+    to: dateStr.optional(),
+    actor_id: z.uuid().optional(),
+    scope: z.enum(['live', 'archive', 'all']).default('live'),
+  });
+
+  /** 当前用户保存的协作审计筛选视图。 */
+  app.get('/api/collab-audit-filter-views', async (req) => {
+    assertAuditViewer(req);
+    const auth = (req as any).authUser;
+    const items = await query(
+      `SELECT id, name, audit_type AS type, action,
+              from_date::text AS "from", to_date::text AS "to",
+              actor_id, scope, created_at, updated_at
+         FROM collab_audit_filter_views
+        WHERE user_id = $1
+        ORDER BY name`,
+      [auth.sub],
+    );
+    return { items };
+  });
+
+  app.post('/api/collab-audit-filter-views', async (req, reply) => {
+    assertAuditViewer(req);
+    const auth = (req as any).authUser;
+    const body = filterViewBody.parse(req.body ?? {});
+    if (body.from && body.to && body.from > body.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
+    assertActionForType(body.type, body.action);
+    const item = await one(
+      `INSERT INTO collab_audit_filter_views
+         (org_id, user_id, name, audit_type, action, from_date, to_date,
+          actor_id, scope)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (user_id, name)
+       DO UPDATE SET audit_type = EXCLUDED.audit_type,
+                     action = EXCLUDED.action,
+                     from_date = EXCLUDED.from_date,
+                     to_date = EXCLUDED.to_date,
+                     actor_id = EXCLUDED.actor_id,
+                     scope = EXCLUDED.scope,
+                     updated_at = now()
+       RETURNING id, name, audit_type AS type, action,
+                 from_date::text AS "from", to_date::text AS "to",
+                 actor_id, scope, created_at, updated_at`,
+      [
+        auth.org_id,
+        auth.sub,
+        body.name,
+        body.type,
+        body.action ?? null,
+        body.from ?? null,
+        body.to ?? null,
+        body.actor_id ?? null,
+        body.scope,
+      ],
+    );
+    return reply.code(201).send({ item });
+  });
+
+  app.delete('/api/collab-audit-filter-views/:id', async (req) => {
+    assertAuditViewer(req);
+    const auth = (req as any).authUser;
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const row = await one(
+      `DELETE FROM collab_audit_filter_views
+        WHERE id = $1 AND user_id = $2
+        RETURNING id`,
+      [id, auth.sub],
+    );
+    if (!row) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');
+    return { ok: true };
+  });
 }

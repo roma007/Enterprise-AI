@@ -1215,6 +1215,19 @@ export interface BatchFilterView {
   updated_at: string;
 }
 
+export interface CollabAuditFilterView {
+  id: string;
+  name: string;
+  type: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
+  action: string | null;
+  from: string | null;
+  to: string | null;
+  actor_id: string | null;
+  scope: 'live' | 'archive' | 'all';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NotificationFilterView {
   id: string;
   name: string;

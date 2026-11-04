@@ -5782,6 +5782,66 @@ async function main() {
         WHERE ref_type = 'audit_filter_view' AND ref_id = $1`,
       [sharedViewId],
     );
+
+    const shareUsers = await query<{ id: string; email: string }>(
+      `SELECT id, email FROM users WHERE email = ANY($1::text[])`,
+      [['zhang@hengzhi.ai', 'wang@hengzhi.ai']],
+    );
+    const zhangId = shareUsers.find((u) => u.email === 'zhang@hengzhi.ai')!.id;
+    const targetedView = ok(
+      await auditCall('POST', '/api/audit-filter-views', {
+        name: `${viewName}-targeted`,
+        mode: 'live',
+        status: '5xx',
+        shared_user_ids: [zhangId],
+      }),
+      201,
+      '指定同事共享审计视图',
+    );
+    const targetedViewId = (targetedView.item as any).id as string;
+    assert.deepEqual((targetedView.item as any).shared_user_ids, [zhangId]);
+
+    const zhangTargeted = await app.inject({
+      method: 'GET',
+      url: '/api/audit-filter-views',
+      headers: { authorization: `Bearer ${zhangLogin.token}` },
+    });
+    assert.ok(
+      (zhangTargeted.json().items as any[]).some(
+        (item) => item.id === targetedViewId,
+      ),
+      '被指定的同事应看到视图',
+    );
+    const wangLogin = ok(
+      await req('POST', '/api/auth/login', {
+        email: 'wang@hengzhi.ai',
+        password: 'demo1234',
+      }),
+      200,
+      '未共享同事登录',
+    );
+    const wangList = await app.inject({
+      method: 'GET',
+      url: '/api/audit-filter-views',
+      headers: { authorization: `Bearer ${wangLogin.token}` },
+    });
+    assert.ok(
+      !(wangList.json().items as any[]).some(
+        (item) => item.id === targetedViewId,
+      ),
+      '未被指定的同事不应看到视图',
+    );
+
+    ok(
+      await auditCall('DELETE', `/api/audit-filter-views/${targetedViewId}`),
+      200,
+      '删除指定共享视图',
+    );
+    await query(
+      `DELETE FROM user_notifications
+        WHERE ref_type = 'audit_filter_view' AND ref_id = $1`,
+      [targetedViewId],
+    );
     ok(
       await auditCall('DELETE', `/api/audit-filter-views/${viewId}`),
       200,

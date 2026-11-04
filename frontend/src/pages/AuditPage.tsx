@@ -17,8 +17,9 @@ import {
   Select,
   Spinner,
   Stat,
+  UserMultiSelect,
 } from '../ui';
-import { fmtDate, fmtDateTime } from '../utils';
+import { fmtDate, fmtDateTime, namesPreview } from '../utils';
 
 const AUDIT_KEYS = {
   mode: 'audit_mode',
@@ -132,8 +133,15 @@ export function AuditPage() {
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [viewError, setViewError] = useState<unknown>(null);
-  const [shareMode, setShareMode] = useState<'none' | 'all' | 'role'>('none');
+  const [shareMode, setShareMode] = useState<
+    'none' | 'all' | 'role' | 'users'
+  >('none');
   const [shareRole, setShareRole] = useState('consultant');
+  const [shareUsers, setShareUsers] = useState<string[]>([]);
+  const users = useLoad(() => api.listUsers(), []);
+  const memberUsers = users.data?.items ?? [];
+  const targetedMembers = memberUsers.filter((u) => shareUsers.includes(u.id));
+  const roleMembers = memberUsers.filter((u) => u.role === shareRole);
   const selectedView = (auditViews.data?.items ?? []).find(
     (view) => view.id === selectedViewId,
   );
@@ -246,6 +254,7 @@ export function AuditPage() {
     to: toFilter || undefined,
     shared: shareMode === 'all',
     shared_role: shareMode === 'role' ? shareRole : null,
+    shared_user_ids: shareMode === 'users' ? shareUsers : [],
   });
 
   const saveCurrentView = async () => {
@@ -275,8 +284,17 @@ export function AuditPage() {
     setStatusFilter(view.status ?? '');
     setFromFilter(view.from ?? '');
     setToFilter(view.to ?? '');
-    setShareMode(view.shared ? 'all' : view.shared_role ? 'role' : 'none');
+    setShareMode(
+      view.shared
+        ? 'all'
+        : view.shared_role
+          ? 'role'
+          : (view.shared_user_ids?.length ?? 0) > 0
+            ? 'users'
+            : 'none',
+    );
     if (view.shared_role) setShareRole(view.shared_role);
+    setShareUsers(view.shared_user_ids ?? []);
     setOffset(0);
     setArchiveNotice(null);
     setArchiveError(null);
@@ -525,7 +543,9 @@ export function AuditPage() {
                         ? '（全员）'
                         : view.shared_role
                           ? `（角色：${ROLE_LABEL[view.shared_role] ?? view.shared_role}）`
-                          : ''}
+                          : (view.shared_user_ids?.length ?? 0) > 0
+                            ? `（指定 ${view.shared_user_ids!.length} 人）`
+                            : ''}
                       {view.is_owner ? '' : ` · ${view.owner_name ?? '同事'}`}
                     </option>
                   ))}
@@ -533,13 +553,16 @@ export function AuditPage() {
                 <Select
                   value={shareMode}
                   onChange={(e) =>
-                    setShareMode(e.target.value as 'none' | 'all' | 'role')
+                    setShareMode(
+                      e.target.value as 'none' | 'all' | 'role' | 'users',
+                    )
                   }
                   style={{ maxWidth: 130 }}
                 >
                   <option value="none">仅自己</option>
                   <option value="all">共享给全员</option>
                   <option value="role">按角色共享</option>
+                  <option value="users">指定同事</option>
                 </Select>
                 {shareMode === 'role' ? (
                   <Select
@@ -553,6 +576,32 @@ export function AuditPage() {
                       </option>
                     ))}
                   </Select>
+                ) : null}
+                {shareMode === 'role' ? (
+                  <span className="muted small">
+                    将共享给：
+                    {roleMembers.length
+                      ? namesPreview(roleMembers)
+                      : '暂无成员'}
+                  </span>
+                ) : null}
+                {shareMode === 'users' ? (
+                  <span className="muted small">
+                    已选：
+                    {targetedMembers.length
+                      ? namesPreview(targetedMembers)
+                      : '未选择'}
+                  </span>
+                ) : null}
+                {shareMode === 'users' ? (
+                  <UserMultiSelect
+                    users={memberUsers}
+                    value={shareUsers}
+                    onChange={setShareUsers}
+                    roleOptions={Object.entries(ROLE_LABEL).map(
+                      ([value, label]) => ({ value, label }),
+                    )}
+                  />
                 ) : null}
                 {shareMode !== 'none' ? (
                   <span className="muted small">保存后通知同事</span>

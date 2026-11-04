@@ -395,6 +395,13 @@ app.get('/metrics', async (req, reply) => {
     failed24h: 0,
     oldestPendingSeconds: 0,
   };
+  const auditExports = {
+    pending: 0,
+    running: 0,
+    done24h: 0,
+    failed24h: 0,
+    oldestPendingSeconds: 0,
+  };
   try {
     await one(`SELECT 1`);
     try {
@@ -423,6 +430,35 @@ app.get('/metrics', async (req, reply) => {
         pdfQueue.failed24h = row.failed_24h;
         pdfQueue.oldestPendingSeconds = row.oldest_pending_seconds;
       }
+      try {
+        const row = await one<{
+          pending: number;
+          running: number;
+          done_24h: number;
+          failed_24h: number;
+          oldest_pending_seconds: number;
+        }>(
+          `SELECT
+             count(*) FILTER (WHERE status = 'pending')::int AS pending,
+             count(*) FILTER (WHERE status = 'running')::int AS running,
+             count(*) FILTER (WHERE status = 'done' AND finished_at > now() - interval '24 hours')::int AS done_24h,
+             count(*) FILTER (WHERE status = 'failed' AND finished_at > now() - interval '24 hours')::int AS failed_24h,
+             COALESCE(
+               EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status = 'pending'))),
+               0
+             )::int AS oldest_pending_seconds
+           FROM audit_export_jobs`,
+        );
+        if (row) {
+          auditExports.pending = row.pending;
+          auditExports.running = row.running;
+          auditExports.done24h = row.done_24h;
+          auditExports.failed24h = row.failed_24h;
+          auditExports.oldestPendingSeconds = row.oldest_pending_seconds;
+        }
+      } catch {
+        // 迁移未完成时不阻断 /metrics
+      }
     } catch {
       // 旧库/迁移未完成时不阻断 /metrics，队列指标保持 0
     }
@@ -447,6 +483,7 @@ app.get('/metrics', async (req, reply) => {
         redisConfigured,
         redisUp,
         pdfQueue,
+        auditExports,
       }),
     );
 });

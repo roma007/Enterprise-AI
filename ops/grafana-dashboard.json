@@ -781,6 +781,97 @@
           "refId": "B"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "title": "审计导出任务",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(audit_export_jobs_pending{job=\"ai-delivery-backend\"})",
+          "legendFormat": "pending",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(audit_export_jobs_running{job=\"ai-delivery-backend\"})",
+          "legendFormat": "running",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(audit_export_jobs_done_24h{job=\"ai-delivery-backend\"})",
+          "legendFormat": "done 24h",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(audit_export_jobs_failed_24h{job=\"ai-delivery-backend\"})",
+          "legendFormat": "failed 24h",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 50
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "title": "审计导出最老等待",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "max(audit_export_jobs_oldest_pending_seconds{job=\"ai-delivery-backend\"})",
+          "legendFormat": "oldest pending",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "30s",

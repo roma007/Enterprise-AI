@@ -74,6 +74,13 @@ export interface RuntimeMetrics {
     failed24h: number;
     oldestPendingSeconds: number;
   };
+  auditExports: {
+    pending: number;
+    running: number;
+    done24h: number;
+    failed24h: number;
+    oldestPendingSeconds: number;
+  };
 }
 
 export function observePdfCache(status: 'HIT' | 'MISS'): void {
@@ -155,6 +162,22 @@ export function renderPrometheus(options: RuntimeMetrics): string {
   lines.push('# HELP pdf_jobs_oldest_pending_seconds Age of the oldest queued PDF job.');
   lines.push('# TYPE pdf_jobs_oldest_pending_seconds gauge');
   lines.push(`pdf_jobs_oldest_pending_seconds ${options.pdfQueue.oldestPendingSeconds}`);
+
+  lines.push('# HELP audit_export_jobs_pending Audit export jobs waiting.');
+  lines.push('# TYPE audit_export_jobs_pending gauge');
+  lines.push(`audit_export_jobs_pending ${options.auditExports.pending}`);
+  lines.push('# HELP audit_export_jobs_running Audit export jobs currently running.');
+  lines.push('# TYPE audit_export_jobs_running gauge');
+  lines.push(`audit_export_jobs_running ${options.auditExports.running}`);
+  lines.push('# HELP audit_export_jobs_done_24h Audit export jobs completed in the last 24 hours.');
+  lines.push('# TYPE audit_export_jobs_done_24h gauge');
+  lines.push(`audit_export_jobs_done_24h ${options.auditExports.done24h}`);
+  lines.push('# HELP audit_export_jobs_failed_24h Audit export jobs failed in the last 24 hours.');
+  lines.push('# TYPE audit_export_jobs_failed_24h gauge');
+  lines.push(`audit_export_jobs_failed_24h ${options.auditExports.failed24h}`);
+  lines.push('# HELP audit_export_jobs_oldest_pending_seconds Age of the oldest queued audit export job.');
+  lines.push('# TYPE audit_export_jobs_oldest_pending_seconds gauge');
+  lines.push(`audit_export_jobs_oldest_pending_seconds ${options.auditExports.oldestPendingSeconds}`);
 
   return `${lines.join('\n')}\n`;
 }

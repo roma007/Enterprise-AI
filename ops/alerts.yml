@@ -206,6 +206,37 @@ groups:
           summary: 'PDF 缓存命中率低于 50%'
           description: '检查报告内容是否频繁变化、缓存存储是否可写、PDF_CACHE_TTL_DAYS 是否过短。'
 
+      - alert: AuditExportJobStale
+        expr: max(audit_export_jobs_oldest_pending_seconds{job="ai-delivery-backend"}) > 900
+        for: 5m
+        labels:
+          severity: warning
+          service: audit-export
+        annotations:
+          summary: '审计导出任务等待超过 15 分钟'
+          description: '检查 API 进程是否卡住、对象存储是否可写，以及 audit_export_jobs 中的 pending 任务。'
+
+      - alert: AuditExportFailureRate
+        expr: |
+          (
+            sum(audit_export_jobs_failed_24h{job="ai-delivery-backend"})
+            /
+            clamp_min(
+              sum(audit_export_jobs_done_24h{job="ai-delivery-backend"})
+              + sum(audit_export_jobs_failed_24h{job="ai-delivery-backend"}),
+              1
+            )
+          ) > 0.2
+          and
+          sum(audit_export_jobs_failed_24h{job="ai-delivery-backend"}) >= 5
+        for: 30m
+        labels:
+          severity: warning
+          service: audit-export
+        annotations:
+          summary: '审计导出 24 小时失败率超过 20%'
+          description: '查看任务 error、对象存储写入与数据库连接；修复后可对失败任务逐条重试。'
+
       - alert: BackupStale
         expr: (time() - max(ai_delivery_backup_last_success_timestamp_seconds)) > 129600
         for: 30m

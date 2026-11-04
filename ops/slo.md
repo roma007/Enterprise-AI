@@ -20,6 +20,8 @@
 | PDF 成功率 | `1 - slo:pdf_job_failure_ratio:24h` | ≥ 99% | 24 小时滚动 | `PdfFailureRate` |
 | PDF 排队时长 | `pdf_jobs_oldest_pending_seconds` | < 15 分钟 | 7 天 | `PdfJobStale` |
 | PDF 缓存命中率 | `slo:pdf_cache_hit_ratio:30m` | ≥ 50% | 30 分钟滚动 | `PdfCacheHitRateLow` |
+| 审计导出成功率 | `1 - failed/(done+failed)` | ≥ 80% | 24 小时滚动 | `AuditExportFailureRate` |
+| 审计导出排队 | `audit_export_jobs_oldest_pending_seconds` | < 15 分钟 | 7 天 | `AuditExportJobStale` |
 | DB 连接池 | `slo:db_pool_utilization:5m` | < 90% | 7 天 | `DbPoolSaturated` / `DbPoolWaiting` |
 | 备份新鲜度 | `ai_delivery_backup_last_success_timestamp_seconds` | < 36 小时 | 每日 | `BackupStale` |
 | 恢复演练 | `ai_delivery_restore_drill_last_success_timestamp_seconds` | < 90 天 | 季度 | `RestoreDrillStale` |
@@ -132,6 +134,14 @@ make drill-restore
 4. 确认 `PDF_CACHE_TTL_DAYS` 没被调得过短；默认 30 天
 5. 缓存底层是对象存储：`local` 默认写到 `.pdf-cache`（可用 `PDF_CACHE_DIR` 改），多副本各写本地盘；`s3` 则跨副本共享
 6. 指标是进程内计数器，多副本请按副本分别看，再合计命中/未命中速率
+
+### AuditExportJobStale / AuditExportFailureRate
+
+1. 查 `GET /api/audit-exports` 是否有 pending 堆积；单进程内联执行，重启会续跑
+2. 检查对象存储（`.pdf-cache` 或 S3）是否可写、磁盘是否已满
+3. 失败任务看 `error` 字段；修复后调用 `POST /api/audit-exports/:id/retry` 重试
+4. 大批量导出会占用内存与数据库连接，必要时错峰或调低 `AUDIT_EXPORT_MAX_ROWS`
+5. 若为持续高失败率，先降级到同步小批量导出，再排查存储与 SQL
 
 ### DbPoolSaturated / DbPoolWaiting
 

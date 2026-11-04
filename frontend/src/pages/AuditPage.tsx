@@ -1259,7 +1259,7 @@ export function AuditPage() {
           </div>
         ) : null}
         <p className="hint">
-          单次最多导出 10 万行；文件存放在本地缓存或对象存储。
+          单次最多导出 10 万行；文件存放在本地缓存或对象存储，默认保留 7 天。
         </p>
       </Modal>
 

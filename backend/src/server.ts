@@ -21,7 +21,11 @@ import {
   collabDigestIntervalSeconds,
   sendCollabAuditDigest,
 } from './services/collab_audit_digest';
-import { resumePendingAuditExportJobs } from './services/audit_exports';
+import {
+  auditExportCleanupIntervalSeconds,
+  cleanupAuditExportJobs,
+  resumePendingAuditExportJobs,
+} from './services/audit_exports';
 
 const app = buildApp();
 
@@ -30,6 +34,7 @@ const host = process.env.HOST ?? '127.0.0.1';
 
 let batchReapTimer: NodeJS.Timeout | null = null;
 let notificationCleanupTimer: NodeJS.Timeout | null = null;
+let auditExportCleanupTimer: NodeJS.Timeout | null = null;
 let collabAuditArchiveTimer: NodeJS.Timeout | null = null;
 let collabSnapshotTimer: NodeJS.Timeout | null = null;
 let collabDigestTimer: NodeJS.Timeout | null = null;
@@ -43,6 +48,10 @@ const shutdown = async (signal: string) => {
   if (notificationCleanupTimer) {
     clearInterval(notificationCleanupTimer);
     notificationCleanupTimer = null;
+  }
+  if (auditExportCleanupTimer) {
+    clearInterval(auditExportCleanupTimer);
+    auditExportCleanupTimer = null;
   }
   if (collabAuditArchiveTimer) {
     clearInterval(collabAuditArchiveTimer);
@@ -115,6 +124,30 @@ try {
     app.log.info(
       { intervalSeconds: cleanupInterval },
       'notification trash cleanup enabled',
+    );
+  }
+
+  const exportCleanupInterval = auditExportCleanupIntervalSeconds();
+  if (exportCleanupInterval > 0) {
+    const cleanup = async () => {
+      try {
+        const deleted = await cleanupAuditExportJobs();
+        if (deleted) {
+          app.log.info({ count: deleted }, 'purged expired audit exports');
+        }
+      } catch (err) {
+        app.log.warn({ err }, 'failed to purge audit exports');
+      }
+    };
+    setTimeout(() => void cleanup(), 30000).unref?.();
+    auditExportCleanupTimer = setInterval(
+      () => void cleanup(),
+      exportCleanupInterval * 1000,
+    );
+    auditExportCleanupTimer.unref?.();
+    app.log.info(
+      { intervalSeconds: exportCleanupInterval },
+      'audit export cleanup enabled',
     );
   }
 

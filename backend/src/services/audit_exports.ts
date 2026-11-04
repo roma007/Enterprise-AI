@@ -152,6 +152,45 @@ export async function processAuditExportJob(id: string): Promise<void> {
   }
 }
 
+/** 导出任务与文件保留天数，默认 7，限制 1–365。 */
+export function auditExportRetentionDays(): number {
+  const raw = Number(process.env.AUDIT_EXPORT_RETENTION_DAYS ?? 7);
+  if (!Number.isFinite(raw)) return 7;
+  return Math.min(365, Math.max(1, Math.floor(raw)));
+}
+
+/** 常驻清理间隔（秒），默认 3600，0 关闭。 */
+export function auditExportCleanupIntervalSeconds(): number {
+  const raw = Number(
+    process.env.AUDIT_EXPORT_CLEANUP_INTERVAL_SECONDS ?? 3600,
+  );
+  if (!Number.isFinite(raw)) return 3600;
+  return Math.min(86400, Math.max(0, Math.floor(raw)));
+}
+
+/** 删除超过保留期的导出任务及其文件。 */
+export async function cleanupAuditExportJobs(days?: number): Promise<number> {
+  const retention = days ?? auditExportRetentionDays();
+  const rows = await query<{ id: string }>(
+    `SELECT id FROM audit_export_jobs
+      WHERE created_at < now() - make_interval(days => $1)
+      ORDER BY created_at
+      LIMIT 500`,
+    [retention],
+  );
+  if (!rows.length) return 0;
+  for (const row of rows) {
+    await objectStorage().delete(fileKey(row.id)).catch(() => undefined);
+  }
+  const deleted = await query<{ id: string }>(
+    `DELETE FROM audit_export_jobs
+      WHERE id = ANY($1::uuid[])
+      RETURNING id`,
+    [rows.map((row) => row.id)],
+  );
+  return deleted.length;
+}
+
 /** 进程重启后把中断的任务重新排队。 */
 export async function resumePendingAuditExportJobs(): Promise<void> {
   await query(

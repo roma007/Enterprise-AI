@@ -20,6 +20,8 @@ import {
   snapshotCollabAudits,
 } from '../src/services/collab_audit_snapshot';
 import { sendCollabAuditDigest } from '../src/services/collab_audit_digest';
+import { cleanupAuditExportJobs } from '../src/services/audit_exports';
+import { objectStorage } from '../src/services/object_storage';
 
 process.env.LOG_LEVEL = 'silent';
 process.env.PAYMENT_PROVIDER = 'mock';
@@ -5797,6 +5799,26 @@ async function main() {
       !(jobsAfterDelete.items as any[]).some((item) => item.id === jobId),
       '删除后任务不应再出现',
     );
+
+    const oldJob = await one<{ id: string }>(
+      `INSERT INTO audit_export_jobs
+         (org_id, user_id, scope, filters, columns, status, created_at, finished_at)
+       VALUES ($1,$2,'live','{}'::jsonb,'[]'::jsonb,'done',
+               now() - interval '30 days', now())
+       RETURNING id`,
+      [eng!.org_id, auditLogin.user.id],
+    );
+    const oldKey = `audit-exports/${oldJob!.id}.csv`;
+    await objectStorage().put(oldKey, Buffer.from('old'), 'text/csv');
+    const cleanedJobs = await cleanupAuditExportJobs(7);
+    assert.ok(cleanedJobs >= 1, '应清理过期导出任务');
+    const oldJobRow = await one<{ id: string }>(
+      `SELECT id FROM audit_export_jobs WHERE id = $1`,
+      [oldJob!.id],
+    );
+    assert.equal(oldJobRow, null, '过期任务应被删除');
+    const oldFile = await objectStorage().get(oldKey);
+    assert.equal(oldFile, null, '过期导出文件应被删除');
 
     const viewName = `审计视图-${Date.now()}`;
     const savedView = ok(

@@ -220,6 +220,16 @@ function pageQuery(limit?: number, offset?: number, q?: string) {
   return qs ? `?${qs}` : '';
 }
 
+export interface SnapshotPeriod {
+  start: string;
+  end: string;
+  total: number;
+  delta_total: number;
+  delta_notification: number;
+  delta_filter_view: number;
+  delta_export: number;
+}
+
 export const api = {
   health: () => request<{ ok: boolean; db: { tables: number } }>('/api/health'),
 
@@ -1287,6 +1297,16 @@ export const api = {
         period_end: string;
       }>;
       bucket: 'day' | 'week' | 'month';
+      comparison: {
+        current: SnapshotPeriod;
+        previous: SnapshotPeriod | null;
+        change: {
+          delta_total: number;
+          delta_notification: number;
+          delta_filter_view: number;
+          delta_export: number;
+        };
+      } | null;
       total: number;
       limit: number;
       offset: number;

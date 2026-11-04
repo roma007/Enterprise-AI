@@ -257,6 +257,7 @@ export function CollabAuditPage() {
     [snapshotDays, snapshotBucket],
   );
   const snapshotTrend = [...(snapshots.data?.items ?? [])].reverse();
+  const snapshotCompare = snapshots.data?.comparison ?? null;
   const metricValue = (s: any) =>
     snapshotMetric === 'delta' ? s.delta_total ?? 0 : s.total ?? 0;
   const maxMetric = Math.max(1, ...snapshotTrend.map(metricValue));
@@ -727,6 +728,50 @@ export function CollabAuditPage() {
         <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>
           累计口径包含已归档的协作审计；日期按组织时区划分。
         </p>
+        {snapshotCompare ? (
+          <div style={{ marginBottom: 8 }}>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>新增对比</th>
+                    <th>本周期</th>
+                    <th>上周期</th>
+                    <th>环比</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(
+                    [
+                      ['总数', 'delta_total'],
+                      ['通知', 'delta_notification'],
+                      ['筛选视图', 'delta_filter_view'],
+                      ['导出', 'delta_export'],
+                    ] as const
+                  ).map(([label, key]) => {
+                    const change = snapshotCompare.change[key];
+                    return (
+                      <tr key={key}>
+                        <td>{label}</td>
+                        <td>{snapshotCompare.current[key]}</td>
+                        <td>{snapshotCompare.previous?.[key] ?? 0}</td>
+                        <td>
+                          {change > 0 ? `+${change}` : change}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+              本周期 {snapshotCompare.current.start} ~ {snapshotCompare.current.end}
+              {snapshotCompare.previous
+                ? ` · 上周期 ${snapshotCompare.previous.start} ~ ${snapshotCompare.previous.end}`
+                : ' · 上周期无数据'}
+            </p>
+          </div>
+        ) : null}
         {(snapshots.data?.items ?? []).length === 0 ? (
           <p className="muted">暂无审计快照。</p>
         ) : (
@@ -743,7 +788,7 @@ export function CollabAuditPage() {
             >
               {snapshotTrend.map((s) => (
                 <div
-                  key={s.id}
+                  key={s.snapshot_date}
                   title={`${s.period_start} ~ ${s.period_end} ${
                     snapshotMetric === 'delta' ? '新增' : '累计'
                   } ${metricValue(s)}`}
@@ -786,7 +831,7 @@ export function CollabAuditPage() {
                 </thead>
                 <tbody>
                   {(snapshots.data?.items ?? []).slice(0, 10).map((s) => (
-                    <tr key={s.id}>
+                    <tr key={s.snapshot_date}>
                       <td className="mono">
                         {s.period_start === s.period_end
                           ? s.period_start

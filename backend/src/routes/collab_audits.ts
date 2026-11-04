@@ -234,6 +234,42 @@ function aggregateSnapshotRows(rows: any[], bucket: SnapshotBucket): any[] {
   return [...buckets.values()].reverse();
 }
 
+function summarizeSnapshotPeriod(items: any[]) {
+  if (!items.length) return null;
+  const ascending = [...items].reverse();
+  const first = ascending[0];
+  const last = ascending[ascending.length - 1];
+  const sum = (key: string) =>
+    ascending.reduce((acc, row) => acc + (Number(row[key]) || 0), 0);
+  return {
+    start: first.period_start,
+    end: last.period_end,
+    total: last.total,
+    delta_total: sum('delta_total'),
+    delta_notification: sum('delta_notification'),
+    delta_filter_view: sum('delta_filter_view'),
+    delta_export: sum('delta_export'),
+  };
+}
+
+function compareSnapshotPeriods(current: any[], previous: any[]) {
+  const c = summarizeSnapshotPeriod(current);
+  const p = summarizeSnapshotPeriod(previous);
+  if (!c) return null;
+  const change = (key: string) =>
+    (c as any)[key] - ((p as any)?.[key] ?? 0);
+  return {
+    current: c,
+    previous: p,
+    change: {
+      delta_total: change('delta_total'),
+      delta_notification: change('delta_notification'),
+      delta_filter_view: change('delta_filter_view'),
+      delta_export: change('delta_export'),
+    },
+  };
+}
+
 export async function collabAuditRoutes(app: FastifyInstance) {
   app.get('/api/collab-audits', async (req) => {
     assertAuditViewer(req);
@@ -665,9 +701,16 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       .parse(req.query ?? {});
 
     const endDate = localDateInTimezone(await resolveOrgTimezone(auth.org_id));
-    const rows = await loadSnapshotSeries(auth.org_id, days, endDate);
-    const items = aggregateSnapshotRows(rows, bucket);
-    return { items, bucket, total: days, limit: days, offset: 0 };
+    const windowDays = Math.min(days * 2 + 31, 3650);
+    const rows = await loadSnapshotSeries(auth.org_id, windowDays, endDate);
+    const items = aggregateSnapshotRows(rows.slice(0, days), bucket);
+    const allBuckets = aggregateSnapshotRows(rows, bucket);
+    const currentKeys = new Set(items.map((item) => item.snapshot_date));
+    const previous = allBuckets
+      .filter((item) => !currentKeys.has(item.snapshot_date))
+      .slice(0, items.length);
+    const comparison = compareSnapshotPeriods(items, previous);
+    return { items, bucket, comparison, total: days, limit: days, offset: 0 };
   });
 
   app.get('/api/collab-audits/snapshots/export.csv', async (req, reply) => {

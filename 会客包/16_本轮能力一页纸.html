@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>本轮能力一页纸 · 管理层</title>
+<style>
+  @page { size: A4; margin: 10mm; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9ecef;color:#111;
+       font:11px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Heiti SC",sans-serif}
+  .page{width:190mm;min-height:277mm;background:#fff;margin:8mm auto;padding:10mm;
+        box-shadow:0 2px 12px rgba(0,0,0,.15);position:relative}
+  h1{font-size:19px;margin:0;letter-spacing:.3px}
+  .sub{font-size:10.5px;color:#666;margin:3px 0 10px}
+  h2{font-size:11.5px;margin:10px 0 5px;padding:3px 8px;background:#111;color:#fff;
+     border-radius:3px;display:inline-block;letter-spacing:.4px}
+  .grid{display:grid;grid-template-columns:1.12fr .88fr;gap:12px}
+  .cap{margin:0 0 7px}
+  .cap b{display:block;font-size:11.5px;margin-bottom:1px}
+  .cap span{color:#444}
+  .bound{border:1px solid #111;border-radius:4px;padding:7px 9px;background:#fafafa}
+  .bound div{margin:2px 0}
+  .nums{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+  .num-box{border:1px solid #bbb;border-radius:4px;padding:6px 4px;text-align:center}
+  .num-box b{display:block;font-size:17px;line-height:1.2}
+  .num-box span{font-size:9.5px;color:#666}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  th,td{border:1px solid #ccc;padding:3px 5px;text-align:left;vertical-align:top}
+  th{background:#f2f2f2;font-weight:600}
+  ul{margin:3px 0 0 15px;padding:0}
+  li{margin:2px 0}
+  .foot{position:absolute;bottom:7mm;left:10mm;right:10mm;border-top:1px solid #ddd;
+        padding-top:4px;font-size:9px;color:#666;display:flex;justify-content:space-between;gap:8px}
+  .warn{border:1px solid #111;border-radius:4px;padding:6px 9px;font-size:10.5px;margin-top:6px}
+  .small{font-size:9.5px;color:#666}
+  @media print{
+    body{background:#fff}
+    .page{margin:0;box-shadow:none;width:auto;min-height:auto;padding:0}
+    .foot{position:static;margin-top:10px}
+    h2{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>企业 AI 交付平台 · 本轮能力一页纸</h1>
+  <div class="sub">面向管理层 · 2026-11-04 · 试点一：对账单/结算单抽取与差异解释</div>
+
+  <div class="grid">
+    <div>
+      <h2>这轮带来什么</h2>
+      <div class="cap">
+        <b>1 · 多客户隔离可用</b>
+        <span>每个供应商独立组织、账号与数据；角色不同，权限不同；供应商之间互不可见。</span>
+      </div>
+      <div class="cap">
+        <b>2 · 对账先由系统比对</b>
+        <span>按运单逐条核对，自动标出金额、缺行、重复、税额、单价、账期等差异。</span>
+      </div>
+      <div class="cap">
+        <b>3 · 人工判断留痕</b>
+        <span>每条差异可采纳/忽略/待确认并写备注；操作人、时间、依据可追溯。</span>
+      </div>
+      <div class="cap">
+        <b>4 · 差异转风险与待办</b>
+        <span>指定负责人和截止日期，按工作日计算；批量有进度，可重试、取消、继续。</span>
+      </div>
+      <div class="cap">
+        <b>5 · 报告与审计拿得出手</b>
+        <span>Word/PDF 报告含分布与逐条依据；过期报告拦截审批；协作操作有统一台账。</span>
+      </div>
+
+      <h2>AI 与规则的边界</h2>
+      <div class="bound">
+        <div><b>规则</b>：查金额、算差额、定类型、给证据与置信度。</div>
+        <div><b>大模型</b>：读单据字段，写可能原因与建议动作。</div>
+        <div><b>系统</b>：管权限、复核、决策、批量、报告与审计。</div>
+        <div class="small">每条差异都标注来源；模型不可用时自动回退规则模板，流程不中断。</div>
+      </div>
+
+      <div class="warn">
+        <b>试点验收看四件事：</b>差异召回 · 误报率 · 人工耗时 · 可追溯。
+      </div>
+    </div>
+
+    <div>
+      <h2>验证到什么程度</h2>
+      <div class="nums">
+        <div class="num-box"><b>51</b><span>项业务回归</span></div>
+        <div class="num-box"><b>16</b><span>条关键路径</span></div>
+        <div class="num-box"><b>100%</b><span>本轮通过</span></div>
+        <div class="num-box"><b>3</b><span>个服务正常</span></div>
+      </div>
+      <div class="small">从空环境到可用已演练；以上为内部样例与自动化验证。</div>
+
+      <h2>需要贵司配合</h2>
+      <ul>
+        <li>脱敏后的真实对账单/结算单样本</li>
+        <li>合同价、附加费、税额与账期规则</li>
+        <li>财务对账、财务负责人、项目经理各 1 名</li>
+        <li>可选：大模型账号与配额；内网环境与网络策略</li>
+      </ul>
+
+      <h2>建议两周节奏</h2>
+      <table>
+        <tr><th>时间</th><th>事项</th></tr>
+        <tr><td>第 1–2 天</td><td>样本与规则确认、字段对齐</td></tr>
+        <tr><td>第 3–5 天</td><td>抽取与比对跑通、修正识别</td></tr>
+        <tr><td>第 6–8 天</td><td>财务复核、决策、生成风险/待办</td></tr>
+        <tr><td>第 9–10 天</td><td>报告与审计跑通、复盘口径</td></tr>
+        <tr><td>第 11–14 天</td><td>稳定性确认、Go/No-Go</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>结论：读单、比对、留痕、出报告已跑通；是否省时准确，需用真实样本做两周试点回答。</span>
+    <span>v2026.11.04</span>
+  </div>
+</div>
+</body>
+</html>

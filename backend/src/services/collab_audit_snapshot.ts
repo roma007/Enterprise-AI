@@ -3,10 +3,13 @@ import { query, withTransaction } from '../db';
 const EXPORT_ACTION_SQL =
   "('EXPORT copilot-notification-audits','EXPORT copilot-collab-audits','EXPORT copilot-batch-filter-view-audits','EXPORT copilot-collab-merged','EXPORT copilot-collab-archive')";
 
-/** 协作审计口径：通知、筛选视图、协作审计导出。热表与归档表通用。 */
+const DECISION_ACTION = 'DECIDE copilot-reconcile-difference';
+
+/** 协作审计口径：通知、筛选视图、协作审计导出、差异决策。热表与归档表通用。 */
 function collabAuditFilterSql(alias: string): string {
   return `(${alias}.object_type IN ('user_notification','copilot_batch_filter_view')
-    OR ${alias}.action IN ${EXPORT_ACTION_SQL})`;
+    OR ${alias}.action IN ${EXPORT_ACTION_SQL}
+    OR ${alias}.action = '${DECISION_ACTION}')`;
 }
 
 /** IANA 时区是否可用；用 Intl 校验，避免每次请求扫 pg_timezone_names。 */
@@ -90,10 +93,12 @@ export async function retimeCollabSnapshots(orgId: string): Promise<number> {
     await client.query(
       `CREATE TEMP TABLE tmp_collab_snapshots ON COMMIT DROP AS
        SELECT DISTINCT ON (new_date)
-              new_date, total, notification_count, filter_view_count, export_count, created_at
+              new_date, total, notification_count, filter_view_count,
+              export_count, decision_count, created_at
          FROM (
            SELECT (created_at AT TIME ZONE $2)::date AS new_date,
-                  total, notification_count, filter_view_count, export_count, created_at
+                  total, notification_count, filter_view_count,
+                  export_count, decision_count, created_at
              FROM collab_audit_snapshots
             WHERE org_id = $1
          ) x
@@ -105,8 +110,10 @@ export async function retimeCollabSnapshots(orgId: string): Promise<number> {
     ]);
     await client.query(
       `INSERT INTO collab_audit_snapshots
-         (org_id, snapshot_date, total, notification_count, filter_view_count, export_count, created_at)
-       SELECT $1, new_date, total, notification_count, filter_view_count, export_count, created_at
+         (org_id, snapshot_date, total, notification_count, filter_view_count,
+          export_count, decision_count, created_at)
+       SELECT $1, new_date, total, notification_count, filter_view_count,
+              export_count, decision_count, created_at
          FROM tmp_collab_snapshots`,
       [orgId],
     );
@@ -131,12 +138,14 @@ export async function snapshotCollabAudits(onlyOrgId?: string): Promise<number> 
     const snapshotDate = localDateInTimezone(timezone);
     const rows = await query<{ org_id: string }>(
       `INSERT INTO collab_audit_snapshots
-         (org_id, snapshot_date, total, notification_count, filter_view_count, export_count)
+         (org_id, snapshot_date, total, notification_count, filter_view_count,
+          export_count, decision_count)
        SELECT $1, $2::date,
               count(*),
               count(*) FILTER (WHERE event.object_type = 'user_notification'),
               count(*) FILTER (WHERE event.object_type = 'copilot_batch_filter_view'),
-              count(*) FILTER (WHERE event.action IN ${EXPORT_ACTION_SQL})
+              count(*) FILTER (WHERE event.action IN ${EXPORT_ACTION_SQL}),
+              count(*) FILTER (WHERE event.action = '${DECISION_ACTION}')
          FROM (
            SELECT object_type, action
              FROM audit_logs
@@ -151,7 +160,8 @@ export async function snapshotCollabAudits(onlyOrgId?: string): Promise<number> 
        DO UPDATE SET total = EXCLUDED.total,
                      notification_count = EXCLUDED.notification_count,
                      filter_view_count = EXCLUDED.filter_view_count,
-                     export_count = EXCLUDED.export_count
+                     export_count = EXCLUDED.export_count,
+                     decision_count = EXCLUDED.decision_count
        RETURNING org_id`,
       [org.id, snapshotDate],
     );

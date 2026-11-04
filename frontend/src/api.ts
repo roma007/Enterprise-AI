@@ -229,6 +229,7 @@ export interface SnapshotPeriod {
   delta_notification: number;
   delta_filter_view: number;
   delta_export: number;
+  delta_decision: number;
 }
 
 export const api = {
@@ -1212,7 +1213,12 @@ export const api = {
     const qs = params.toString();
     return request<{
       total: number;
-      by_type: { notification: number; filter_view: number; export: number };
+      by_type: {
+        notification: number;
+        filter_view: number;
+        export: number;
+        decision: number;
+      };
       top_actions: Array<{ action: string; count: number }>;
       top_actors: Array<{
         user_id: string | null;
@@ -1224,7 +1230,7 @@ export const api = {
   },
   listCollabAudits: (
     opts: {
-      type?: 'all' | 'notification' | 'filter_view' | 'export';
+      type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
       action?: string;
       from?: string;
       to?: string;
@@ -1251,7 +1257,7 @@ export const api = {
   },
   listCollabAuditsMerged: (
     opts: {
-      type?: 'all' | 'notification' | 'filter_view' | 'export';
+      type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
       action?: string;
       from?: string;
       to?: string;
@@ -1310,6 +1316,8 @@ export const api = {
         delta_notification: number;
         delta_filter_view: number;
         delta_export: number;
+        decision_count: number;
+        delta_decision: number;
         period_start: string;
         period_end: string;
       }>;
@@ -1322,6 +1330,7 @@ export const api = {
           delta_notification: number;
           delta_filter_view: number;
           delta_export: number;
+          delta_decision: number;
         };
       } | null;
       total: number;
@@ -1331,7 +1340,7 @@ export const api = {
   },
   listCollabAuditArchive: (
     opts: {
-      type?: 'all' | 'notification' | 'filter_view' | 'export';
+      type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
       action?: string;
       from?: string;
       to?: string;
@@ -1362,7 +1371,7 @@ export const api = {
     }>(`/api/collab-audits/archive${qs ? `?${qs}` : ''}`);
   },
   exportCollabMergedCsv: (opts: {
-    type?: 'all' | 'notification' | 'filter_view' | 'export';
+    type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
     action?: string;
     from?: string;
     to?: string;
@@ -1396,7 +1405,7 @@ export const api = {
     }>(`/api/collab-audits/archive-runs${qs ? `?${qs}` : ''}`);
   },
   exportCollabArchiveCsv: (opts: {
-    type?: 'all' | 'notification' | 'filter_view' | 'export';
+    type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
     action?: string;
     from?: string;
     to?: string;
@@ -1414,7 +1423,7 @@ export const api = {
     );
   },
   exportCollabAuditsCsv: (opts: {
-    type?: 'all' | 'notification' | 'filter_view' | 'export';
+    type?: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
     action?: string;
     from?: string;
     to?: string;

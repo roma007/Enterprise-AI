@@ -4648,24 +4648,34 @@ async function main() {
         `INSERT INTO audit_logs (org_id, action, object_type, status_code, detail)
          VALUES ($1,'DELETE copilot-notification','user_notification',200,'{}'::jsonb),
                 ($1,'RESTORE copilot-notification','user_notification',200,'{}'::jsonb),
-                ($1,'EXPORT copilot-collab-audits','copilot_reconcile_review',200,'{}'::jsonb)
+                ($1,'EXPORT copilot-collab-audits','copilot_reconcile_review',200,$2::jsonb),
+                ($1,'DECIDE copilot-reconcile-difference','copilot_reconcile_review',200,$3::jsonb)
          RETURNING id`,
-        [orgId],
+        [
+          orgId,
+          JSON.stringify({ rows: 1 }),
+          JSON.stringify({
+            difference_id: 'SNAP-1',
+            decision: '忽略',
+            note: '回归',
+          }),
+        ],
       );
       const ids = inserted.map((row) => row.id);
 
       await snapshotCollabAudits(orgId);
       const first = await one<any>(
-        `SELECT total, notification_count, filter_view_count, export_count
+        `SELECT total, notification_count, filter_view_count, export_count, decision_count
            FROM collab_audit_snapshots
           WHERE org_id = $1 AND snapshot_date = $2`,
         [orgId, date],
       );
       assert.ok(first, '应生成当天快照');
-      assert.equal(first.total, 3, '快照应统计 3 条协作审计');
+      assert.equal(first.total, 4, '快照应统计 4 条协作审计');
       assert.equal(first.notification_count, 2);
       assert.equal(first.filter_view_count, 0);
       assert.equal(first.export_count, 1);
+      assert.equal(first.decision_count, 1, '快照应统计差异决策');
 
       await query(
         `WITH moved AS (
@@ -4684,14 +4694,15 @@ async function main() {
 
       await snapshotCollabAudits(orgId);
       const after = await one<any>(
-        `SELECT total, notification_count, filter_view_count, export_count
+        `SELECT total, notification_count, filter_view_count, export_count, decision_count
            FROM collab_audit_snapshots
           WHERE org_id = $1 AND snapshot_date = $2`,
         [orgId, date],
       );
-      assert.equal(after.total, 3, '归档后累计不应下降');
+      assert.equal(after.total, 4, '归档后累计不应下降');
       assert.equal(after.notification_count, 2);
       assert.equal(after.export_count, 1);
+      assert.equal(after.decision_count, 1, '归档后决策计数不应下降');
 
       const snapshotRows = await query(
         `SELECT id FROM collab_audit_snapshots WHERE org_id = $1`,

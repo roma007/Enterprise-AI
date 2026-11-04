@@ -1249,7 +1249,7 @@ export interface NotificationAudit {
 
 export interface CollabAudit {
   id: string;
-  audit_type: 'notification' | 'filter_view' | 'export';
+  audit_type: 'notification' | 'filter_view' | 'export' | 'decision';
   action: string;
   user_id: string | null;
   actor_name?: string | null;

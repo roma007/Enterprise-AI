@@ -26,12 +26,20 @@ const EXPORT_ACTIONS = [
   'EXPORT copilot-collab-merged',
   'EXPORT copilot-collab-archive',
 ] as const;
+const DECISION_ACTIONS = ['DECIDE copilot-reconcile-difference'] as const;
 const ACTION_VALUES = [
   ...NOTIFICATION_ACTIONS,
   ...VIEW_ACTIONS,
   ...EXPORT_ACTIONS,
+  ...DECISION_ACTIONS,
 ] as const;
-const TYPE_VALUES = ['all', 'notification', 'filter_view', 'export'] as const;
+const TYPE_VALUES = [
+  'all',
+  'notification',
+  'filter_view',
+  'export',
+  'decision',
+] as const;
 
 const ACTION_LABEL: Record<string, string> = {
   'DELETE copilot-notification': '删除通知',
@@ -44,12 +52,14 @@ const ACTION_LABEL: Record<string, string> = {
   'EXPORT copilot-batch-filter-view-audits': '导出视图审计',
   'EXPORT copilot-collab-merged': '导出合并审计',
   'EXPORT copilot-collab-archive': '导出归档审计',
+  'DECIDE copilot-reconcile-difference': '差异决策',
 };
 
 const TYPE_LABEL: Record<string, string> = {
   notification: '通知',
   filter_view: '筛选视图',
   export: '导出',
+  decision: '决策',
 };
 
 const EXPORT_ACTION_SQL =
@@ -62,13 +72,15 @@ function collabCondition(
   if (type === 'notification') return `${alias}.object_type = 'user_notification'`;
   if (type === 'filter_view') return `${alias}.object_type = 'copilot_batch_filter_view'`;
   if (type === 'export') return `${alias}.action IN ${EXPORT_ACTION_SQL}`;
-  return `(${alias}.object_type IN ('user_notification','copilot_batch_filter_view') OR ${alias}.action IN ${EXPORT_ACTION_SQL})`;
+  if (type === 'decision') return `${alias}.action = 'DECIDE copilot-reconcile-difference'`;
+  return `(${alias}.object_type IN ('user_notification','copilot_batch_filter_view') OR ${alias}.action IN ${EXPORT_ACTION_SQL} OR ${alias}.action = 'DECIDE copilot-reconcile-difference')`;
 }
 
 function allowedActionsFor(type: (typeof TYPE_VALUES)[number]): readonly string[] {
   if (type === 'notification') return NOTIFICATION_ACTIONS;
   if (type === 'filter_view') return VIEW_ACTIONS;
   if (type === 'export') return EXPORT_ACTIONS;
+  if (type === 'decision') return DECISION_ACTIONS;
   return ACTION_VALUES;
 }
 
@@ -139,10 +151,12 @@ async function loadSnapshotSeries(
               COALESCE(s.total, 0) AS total,
               COALESCE(s.notification_count, 0) AS notification_count,
               COALESCE(s.filter_view_count, 0) AS filter_view_count,
-              COALESCE(s.export_count, 0) AS export_count
+              COALESCE(s.export_count, 0) AS export_count,
+              COALESCE(s.decision_count, 0) AS decision_count
          FROM days d
          LEFT JOIN LATERAL (
-           SELECT total, notification_count, filter_view_count, export_count
+           SELECT total, notification_count, filter_view_count,
+                  export_count, decision_count
              FROM collab_audit_snapshots
             WHERE org_id = $1 AND snapshot_date <= d.day
             ORDER BY snapshot_date DESC
@@ -154,15 +168,18 @@ async function loadSnapshotSeries(
               LAG(total) OVER (ORDER BY day) AS prev_total,
               LAG(notification_count) OVER (ORDER BY day) AS prev_notification,
               LAG(filter_view_count) OVER (ORDER BY day) AS prev_filter_view,
-              LAG(export_count) OVER (ORDER BY day) AS prev_export
+              LAG(export_count) OVER (ORDER BY day) AS prev_export,
+              LAG(decision_count) OVER (ORDER BY day) AS prev_decision
          FROM filled
      )
      SELECT day::text AS snapshot_date,
             total, notification_count, filter_view_count, export_count,
+            decision_count,
             GREATEST(total - COALESCE(prev_total, total), 0) AS delta_total,
             GREATEST(notification_count - COALESCE(prev_notification, notification_count), 0) AS delta_notification,
             GREATEST(filter_view_count - COALESCE(prev_filter_view, filter_view_count), 0) AS delta_filter_view,
-            GREATEST(export_count - COALESCE(prev_export, export_count), 0) AS delta_export
+            GREATEST(export_count - COALESCE(prev_export, export_count), 0) AS delta_export,
+            GREATEST(decision_count - COALESCE(prev_decision, decision_count), 0) AS delta_decision
        FROM ranked
       ORDER BY day DESC`,
     [orgId, days, endDate],
@@ -216,19 +233,23 @@ function aggregateSnapshotRows(rows: any[], bucket: SnapshotBucket): any[] {
       notification_count: 0,
       filter_view_count: 0,
       export_count: 0,
+      decision_count: 0,
       delta_total: 0,
       delta_notification: 0,
       delta_filter_view: 0,
       delta_export: 0,
+      delta_decision: 0,
     };
     current.total = row.total;
     current.notification_count = row.notification_count;
     current.filter_view_count = row.filter_view_count;
     current.export_count = row.export_count;
+    current.decision_count = row.decision_count;
     current.delta_total += row.delta_total;
     current.delta_notification += row.delta_notification;
     current.delta_filter_view += row.delta_filter_view;
     current.delta_export += row.delta_export;
+    current.delta_decision += row.delta_decision;
     buckets.set(key, current);
   }
   return [...buckets.values()].reverse();
@@ -249,6 +270,7 @@ function summarizeSnapshotPeriod(items: any[]) {
     delta_notification: sum('delta_notification'),
     delta_filter_view: sum('delta_filter_view'),
     delta_export: sum('delta_export'),
+    delta_decision: sum('delta_decision'),
   };
 }
 
@@ -266,6 +288,7 @@ function compareSnapshotPeriods(current: any[], previous: any[]) {
       delta_notification: change('delta_notification'),
       delta_filter_view: change('delta_filter_view'),
       delta_export: change('delta_export'),
+      delta_decision: change('delta_decision'),
     },
   };
 }
@@ -316,6 +339,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                      THEN 'notification'
                      WHEN a.object_type = 'copilot_batch_filter_view'
                      THEN 'filter_view'
+                     WHEN a.action = 'DECIDE copilot-reconcile-difference'
+                     THEN 'decision'
                      ELSE 'export' END AS audit_type
            FROM audit_logs a
            LEFT JOIN users u ON u.id = a.user_id
@@ -374,7 +399,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
         `SELECT count(*)::text AS total,
                 count(*) FILTER (WHERE object_type = 'user_notification')::text AS notification,
                 count(*) FILTER (WHERE object_type = 'copilot_batch_filter_view')::text AS filter_view,
-                count(*) FILTER (WHERE action IN ${EXPORT_ACTION_SQL})::text AS export
+                count(*) FILTER (WHERE action IN ${EXPORT_ACTION_SQL})::text AS export,
+                count(*) FILTER (WHERE action = 'DECIDE copilot-reconcile-difference')::text AS decision
            FROM ${source}
           WHERE ${condition}
             AND ($1::date IS NULL OR a.created_at >= $1::date)
@@ -414,6 +440,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
         notification: Number(typeRows[0]?.notification ?? 0),
         filter_view: Number(typeRows[0]?.filter_view ?? 0),
         export: Number(typeRows[0]?.export ?? 0),
+        decision: Number(typeRows[0]?.decision ?? 0),
       },
       top_actions: actionRows.map((r) => ({
         action: r.action,
@@ -449,6 +476,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     const condition = collabCondition(type);
     const typeCase = `CASE WHEN a.object_type = 'user_notification' THEN 'notification'
                            WHEN a.object_type = 'copilot_batch_filter_view' THEN 'filter_view'
+                           WHEN a.action = 'DECIDE copilot-reconcile-difference' THEN 'decision'
                            ELSE 'export' END`;
 
     const [items, totals] = await Promise.all([
@@ -537,6 +565,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                      THEN 'notification'
                      WHEN a.object_type = 'copilot_batch_filter_view'
                      THEN 'filter_view'
+                     WHEN a.action = 'DECIDE copilot-reconcile-difference'
+                     THEN 'decision'
                      ELSE 'export' END AS audit_type
            FROM audit_logs_archive a
            LEFT JOIN users u ON u.id = a.user_id
@@ -600,6 +630,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     const condition = collabCondition(type);
     const typeCase = `CASE WHEN a.object_type = 'user_notification' THEN 'notification'
                            WHEN a.object_type = 'copilot_batch_filter_view' THEN 'filter_view'
+                           WHEN a.action = 'DECIDE copilot-reconcile-difference' THEN 'decision'
                            ELSE 'export' END`;
     const rows = await query<any>(
       `SELECT c.*, u.name AS actor_name
@@ -638,6 +669,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       const detail = row.detail ?? {};
       const isNotification = row.audit_type === 'notification';
       const isExport = row.audit_type === 'export';
+      const isDecision = row.audit_type === 'decision';
       const filters = detail.filters ?? {};
       const detailText = isExport
         ? [
@@ -658,15 +690,24 @@ export async function collabAuditRoutes(app: FastifyInstance) {
             ]
               .filter(Boolean)
               .join(' · ')
-          : [
-              detail.shared ? '全员' : '',
-              detail.shared_role ? `角色 ${detail.shared_role}` : '',
-              Array.isArray(detail.shared_user_ids) && detail.shared_user_ids.length
-                ? `指定 ${detail.shared_user_ids.length} 人`
-                : '',
-            ]
-              .filter(Boolean)
-              .join(' · ');
+          : isDecision
+            ? [
+                detail.difference_id ? `差异 ${detail.difference_id}` : '',
+                detail.decision ? `决策 ${detail.decision}` : '',
+                detail.mode === 'batch' ? `批量 ${detail.count ?? 0} 条` : '',
+                detail.note ? `备注 ${detail.note}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : [
+                detail.shared ? '全员' : '',
+                detail.shared_role ? `角色 ${detail.shared_role}` : '',
+                Array.isArray(detail.shared_user_ids) && detail.shared_user_ids.length
+                  ? `指定 ${detail.shared_user_ids.length} 人`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' · ');
       lines.push(
         [
           row.created_at ? new Date(row.created_at).toISOString() : '',
@@ -674,14 +715,22 @@ export async function collabAuditRoutes(app: FastifyInstance) {
           TYPE_LABEL[row.audit_type] ?? row.audit_type,
           ACTION_LABEL[row.action] ?? row.action,
           row.actor_name,
-          isExport ? detail.rows ?? '' : detail.count ?? '',
+          isExport
+            ? detail.rows ?? ''
+            : isDecision
+              ? detail.mode === 'batch'
+                ? detail.count ?? 0
+                : 1
+              : detail.count ?? '',
           isExport
             ? '导出'
             : isNotification
               ? detail.mode === 'all'
                 ? '按筛选'
                 : '按 ID'
-              : detail.name,
+              : isDecision
+                ? detail.difference_id ?? ''
+                : detail.name,
           detailText,
           row.archived_at ? new Date(row.archived_at).toISOString() : '',
         ]
@@ -753,6 +802,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       '新增筛选视图',
       '导出',
       '新增导出',
+      '决策',
+      '新增决策',
     ];
     const lines = [header.join(',')];
     for (const row of rows) {
@@ -767,6 +818,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
           row.delta_filter_view,
           row.export_count,
           row.delta_export,
+          row.decision_count,
+          row.delta_decision,
         ]
           .map(csvCell)
           .join(','),
@@ -829,12 +882,14 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       | 'delta_total'
       | 'delta_notification'
       | 'delta_filter_view'
-      | 'delta_export';
+      | 'delta_export'
+      | 'delta_decision';
     const rows: Array<[string, DeltaKey]> = [
       ['总数', 'delta_total'],
       ['通知', 'delta_notification'],
       ['筛选视图', 'delta_filter_view'],
       ['导出', 'delta_export'],
+      ['决策', 'delta_decision'],
     ];
     for (const [label, key] of rows) {
       lines.push(
@@ -947,6 +1002,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                    THEN 'notification'
                    WHEN a.object_type = 'copilot_batch_filter_view'
                    THEN 'filter_view'
+                   WHEN a.action = 'DECIDE copilot-reconcile-difference'
+                   THEN 'decision'
                    ELSE 'export' END AS audit_type
          FROM audit_logs_archive a
          LEFT JOIN users u ON u.id = a.user_id
@@ -974,6 +1031,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       const detail = row.detail ?? {};
       const isNotification = row.audit_type === 'notification';
       const isExport = row.audit_type === 'export';
+      const isDecision = row.audit_type === 'decision';
       const filters = detail.filters ?? {};
       const detailText = isExport
         ? [
@@ -994,29 +1052,46 @@ export async function collabAuditRoutes(app: FastifyInstance) {
             ]
               .filter(Boolean)
               .join(' · ')
-          : [
-              detail.shared ? '全员' : '',
-              detail.shared_role ? `角色 ${detail.shared_role}` : '',
-              Array.isArray(detail.shared_user_ids) && detail.shared_user_ids.length
-                ? `指定 ${detail.shared_user_ids.length} 人`
-                : '',
-            ]
-              .filter(Boolean)
-              .join(' · ');
+          : isDecision
+            ? [
+                detail.difference_id ? `差异 ${detail.difference_id}` : '',
+                detail.decision ? `决策 ${detail.decision}` : '',
+                detail.mode === 'batch' ? `批量 ${detail.count ?? 0} 条` : '',
+                detail.note ? `备注 ${detail.note}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : [
+                detail.shared ? '全员' : '',
+                detail.shared_role ? `角色 ${detail.shared_role}` : '',
+                Array.isArray(detail.shared_user_ids) && detail.shared_user_ids.length
+                  ? `指定 ${detail.shared_user_ids.length} 人`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' · ');
       lines.push(
         [
           row.created_at ? new Date(row.created_at).toISOString() : '',
           TYPE_LABEL[row.audit_type] ?? row.audit_type,
           ACTION_LABEL[row.action] ?? row.action,
           row.actor_name,
-          isExport ? detail.rows ?? '' : detail.count ?? '',
+          isExport
+            ? detail.rows ?? ''
+            : isDecision
+              ? detail.mode === 'batch'
+                ? detail.count ?? 0
+                : 1
+              : detail.count ?? '',
           isExport
             ? '导出'
             : isNotification
               ? detail.mode === 'all'
                 ? '按筛选'
                 : '按 ID'
-              : detail.name,
+              : isDecision
+                ? detail.difference_id ?? ''
+                : detail.name,
           detailText,
           row.archived_at ? new Date(row.archived_at).toISOString() : '',
         ]
@@ -1073,6 +1148,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                    THEN 'notification'
                    WHEN a.object_type = 'copilot_batch_filter_view'
                    THEN 'filter_view'
+                   WHEN a.action = 'DECIDE copilot-reconcile-difference'
+                   THEN 'decision'
                    ELSE 'export' END AS audit_type
          FROM audit_logs a
          LEFT JOIN users u ON u.id = a.user_id
@@ -1100,6 +1177,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       const detail = row.detail ?? {};
       const isNotification = row.audit_type === 'notification';
       const isExport = row.audit_type === 'export';
+      const isDecision = row.audit_type === 'decision';
       const filters = detail.filters ?? {};
       const filterText = isExport
         ? [
@@ -1136,14 +1214,22 @@ export async function collabAuditRoutes(app: FastifyInstance) {
           TYPE_LABEL[row.audit_type] ?? row.audit_type,
           ACTION_LABEL[row.action] ?? row.action,
           row.actor_name,
-          isExport ? detail.rows ?? '' : detail.count ?? '',
+          isExport
+            ? detail.rows ?? ''
+            : isDecision
+              ? detail.mode === 'batch'
+                ? detail.count ?? 0
+                : 1
+              : detail.count ?? '',
           isExport
             ? '导出'
             : isNotification
               ? detail.mode === 'all'
                 ? '按筛选'
                 : '按 ID'
-              : detail.name,
+              : isDecision
+                ? detail.difference_id ?? ''
+                : detail.name,
           filterText,
         ]
           .map(csvCell)

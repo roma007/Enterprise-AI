@@ -28,22 +28,25 @@ const ACTION_LABEL: Record<string, string> = {
   'EXPORT copilot-batch-filter-view-audits': '导出筛选视图审计',
   'EXPORT copilot-collab-merged': '导出合并协作审计',
   'EXPORT copilot-collab-archive': '导出归档审计',
+  'DECIDE copilot-reconcile-difference': '差异决策',
 };
 
 const TYPE_LABEL: Record<string, string> = {
   notification: '通知',
   filter_view: '筛选视图',
   export: '导出',
+  decision: '决策',
 };
 
-const TYPE_TONE: Record<string, 'blue' | 'gray' | 'amber'> = {
+const TYPE_TONE: Record<string, 'blue' | 'gray' | 'amber' | 'green'> = {
   notification: 'blue',
   filter_view: 'gray',
   export: 'amber',
+  decision: 'green',
 };
 
 const ACTION_OPTIONS: Record<
-  'all' | 'notification' | 'filter_view' | 'export',
+  'all' | 'notification' | 'filter_view' | 'export' | 'decision',
   Array<[string, string]>
 > = {
   all: [
@@ -57,6 +60,7 @@ const ACTION_OPTIONS: Record<
     ['EXPORT copilot-batch-filter-view-audits', '导出视图审计'],
     ['EXPORT copilot-collab-merged', '导出合并审计'],
     ['EXPORT copilot-collab-archive', '导出归档审计'],
+    ['DECIDE copilot-reconcile-difference', '差异决策'],
   ],
   notification: [
     ['DELETE copilot-notification', '删除通知'],
@@ -74,6 +78,7 @@ const ACTION_OPTIONS: Record<
     ['EXPORT copilot-collab-merged', '导出合并审计'],
     ['EXPORT copilot-collab-archive', '导出归档审计'],
   ],
+  decision: [['DECIDE copilot-reconcile-difference', '差异决策']],
 };
 
 const COLLAB_KEYS = {
@@ -87,7 +92,7 @@ const COLLAB_KEYS = {
 } as const;
 
 interface CollabUrlState {
-  type: 'all' | 'notification' | 'filter_view' | 'export';
+  type: 'all' | 'notification' | 'filter_view' | 'export' | 'decision';
   action: string;
   from: string;
   to: string;
@@ -162,7 +167,7 @@ export function CollabAuditPage() {
   const [limit] = useState(20);
   const [offset, setOffset] = useState(initial.offset);
   const [type, setType] = useState<
-    'all' | 'notification' | 'filter_view' | 'export'
+    'all' | 'notification' | 'filter_view' | 'export' | 'decision'
   >(initial.type);
   const [action, setAction] = useState(initial.action);
   const [from, setFrom] = useState(initial.from);
@@ -232,7 +237,7 @@ export function CollabAuditPage() {
       rangeError
         ? Promise.resolve({
             total: 0,
-            by_type: { notification: 0, filter_view: 0, export: 0 },
+            by_type: { notification: 0, filter_view: 0, export: 0, decision: 0 },
             top_actions: [],
             top_actors: [],
             retention_days: 0,
@@ -409,6 +414,11 @@ export function CollabAuditPage() {
           tone="amber"
         />
         <Stat label="导出" value={stats.data?.by_type.export ?? 0} tone="green" />
+        <Stat
+          label="决策"
+          value={stats.data?.by_type.decision ?? 0}
+          tone="blue"
+        />
       </div>
       <Card
         title={
@@ -447,7 +457,8 @@ export function CollabAuditPage() {
                   | 'all'
                   | 'notification'
                   | 'filter_view'
-                  | 'export',
+                  | 'export'
+                  | 'decision',
               );
               setAction('');
               setOffset(0);
@@ -458,6 +469,7 @@ export function CollabAuditPage() {
             <option value="notification">通知</option>
             <option value="filter_view">筛选视图</option>
             <option value="export">导出</option>
+            <option value="decision">决策</option>
           </Select>
           <Select
             value={action}
@@ -555,6 +567,7 @@ export function CollabAuditPage() {
                   const filters = detail.filters ?? {};
                   const isNotification = a.audit_type === 'notification';
                   const isExport = a.audit_type === 'export';
+                  const isDecision = a.audit_type === 'decision';
                   const detailText = isExport
                     ? [
                         filters.type ? `类型 ${filters.type}` : '',
@@ -571,6 +584,19 @@ export function CollabAuditPage() {
                         filters.kind ? `类型 ${filters.kind}` : '',
                         filters.from ? `从 ${filters.from}` : '',
                         filters.to ? `到 ${filters.to}` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : isDecision
+                    ? [
+                        detail.difference_id
+                          ? `差异 ${detail.difference_id}`
+                          : '',
+                        detail.decision ? `决策 ${detail.decision}` : '',
+                        detail.mode === 'batch'
+                          ? `批量 ${detail.count ?? 0} 条`
+                          : '',
+                        detail.note ? `备注 ${detail.note}` : '',
                       ]
                         .filter(Boolean)
                         .join(' · ')
@@ -599,9 +625,13 @@ export function CollabAuditPage() {
                       <td>
                         {isExport
                           ? detail.rows ?? '—'
-                          : isNotification
-                            ? detail.count ?? '—'
-                            : detail.name || '—'}
+                          : isDecision
+                            ? detail.mode === 'batch'
+                              ? detail.count ?? 0
+                              : detail.difference_id || '—'
+                            : isNotification
+                              ? detail.count ?? '—'
+                              : detail.name || '—'}
                       </td>
                       <td className="muted">
                         <div className="row" style={{ gap: 6 }}>
@@ -795,6 +825,7 @@ export function CollabAuditPage() {
                       ['通知', 'delta_notification'],
                       ['筛选视图', 'delta_filter_view'],
                       ['导出', 'delta_export'],
+                      ['决策', 'delta_decision'],
                     ] as const
                   ).map(([label, key]) => {
                     const change = snapshotCompare.change[key];
@@ -874,7 +905,7 @@ export function CollabAuditPage() {
                 <thead>
                   <tr>
                     <th>日期</th><th>总数</th><th>新增</th><th>通知</th>
-                    <th>筛选视图</th><th>导出</th>
+                    <th>筛选视图</th><th>导出</th><th>决策</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -890,6 +921,7 @@ export function CollabAuditPage() {
                       <td>{s.notification_count}</td>
                       <td>{s.filter_view_count}</td>
                       <td>{s.export_count}</td>
+                      <td>{s.decision_count}</td>
                     </tr>
                   ))}
                 </tbody>

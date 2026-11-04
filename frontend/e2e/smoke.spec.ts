@@ -270,4 +270,64 @@ test.describe('关键路径冒烟', () => {
     await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: '请求 ID' })).toBeVisible();
   });
+  test('协作审计页展示看板与快照', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    expect(login.status()).toBe(200);
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+
+    await page.goto('/#/collab-audits');
+    await expect(page.getByRole('heading', { name: '协作审计' })).toBeVisible();
+    await expect(page.getByText('对比看板')).toBeVisible();
+    await expect(page.getByText('审计快照')).toBeVisible();
+    await expect(page.getByRole('button', { name: '导出审计报告 Word' })).toBeVisible();
+  });
+
+  test('通知筛选视图可保存并删除', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    expect(login.status()).toBe(200);
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+
+    const name = `E2E视图${Date.now()}`;
+    page.on('dialog', (dialog) => dialog.accept(name));
+    await page.goto('/#/notifications');
+    await expect(page.getByRole('heading', { name: '通知' })).toBeVisible();
+
+    await page.getByRole('button', { name: '保存当前筛选' }).click();
+    const viewSelect = page
+      .locator('select')
+      .filter({ has: page.locator('option', { hasText: '选择已保存视图' }) });
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: '删除视图' })).toBeVisible();
+    await page.getByRole('button', { name: '删除视图' }).click();
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(0);
+  });
+
+  test('POC 页签可打开对账复核并查看差异', async ({ page }) => {
+    await openSeedProject(page);
+    await page.getByRole('button', { name: 'POC 验证' }).click();
+    await expect(page.getByText('ai-copilot 对账复核记录')).toBeVisible();
+    await page.getByRole('button', { name: '查看' }).first().click();
+    await expect(page.getByText('差异明细')).toBeVisible();
+    await expect(page.getByRole('button', { name: '导出复核 Word' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '导出复核 PDF' })).toBeVisible();
+  });
 });
+

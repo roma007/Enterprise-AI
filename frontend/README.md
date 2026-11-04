@@ -64,7 +64,8 @@ npm run dev        # http://127.0.0.1:5173
 ## 冒烟测试（Playwright）
 
 ```bash
-npx playwright install chromium   # 首次
+npx playwright install chromium   # 首次；本机无法下载时可改用已安装的 Edge
+PW_CHANNEL=msedge npm run e2e      # 用系统 Edge 作为浏览器
 npm run e2e                       # 自动启动后端 8788 + 前端 5173
 npm run e2e:ui                    # 交互模式
 ```
@@ -101,4 +102,5 @@ src/
 - 业务流程编辑是 JSON 结构化编辑，不是拖拽画布；机会点依赖图是只读 SVG。
 - 报告 §8.1 的 Mermaid 按需加载渲染（首次约 1MB，之后会话内缓存）；工作台另有 SVG 依赖图。
 - 登录态已有；后端默认 `AUTH_REQUIRED=false`，生产设为 `true` 后前端会强制登录。供应商租户以 `organizations.slug` 区分；数据隔离目前为应用层 `org_id`，RLS 待补。
-- 有 Playwright 冒烟 13 条；没有组件级单测与视觉回归。
+- 有 Playwright 冒烟 16 条（含协作审计、通知视图、POC 复核）；没有组件级单测与视觉回归。
+- 本机无 Chromium 时：`PW_CHANNEL=msedge npm run e2e`；若需 PDF 用例通过，后端启动加 `PDF_CHROME_PATH="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"`。

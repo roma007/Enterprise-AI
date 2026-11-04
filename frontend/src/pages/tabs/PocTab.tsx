@@ -633,6 +633,47 @@ function readBatchViewFromUrl(reviewId: string): string {
   return params.get(BATCH_FILTER_KEYS.view) ?? '';
 }
 
+function readDiffFilters(reviewId: string): {
+  source: string;
+  confidence: string;
+} {
+  if (typeof window === 'undefined') return { source: '', confidence: '' };
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('diff_review') !== reviewId) {
+    return { source: '', confidence: '' };
+  }
+  return {
+    source: params.get('diff_source') ?? '',
+    confidence: params.get('diff_confidence') ?? '',
+  };
+}
+
+function writeDiffFiltersToUrl(
+  reviewId: string,
+  source: string,
+  confidence: string,
+) {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  if (source || confidence) {
+    params.set('diff_review', reviewId);
+    if (source) params.set('diff_source', source);
+    else params.delete('diff_source');
+    if (confidence) params.set('diff_confidence', confidence);
+    else params.delete('diff_confidence');
+  } else {
+    params.delete('diff_review');
+    params.delete('diff_source');
+    params.delete('diff_confidence');
+  }
+  const qs = params.toString();
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+  );
+}
+
 function writeBatchFiltersToUrl(
   reviewId: string,
   filters: BatchFilters,
@@ -822,8 +863,19 @@ function ReconcileReviewDetail({
   const [resumeTarget, setResumeTarget] = useState<ReconcileBatch | null>(null);
   const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(new Set());
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
-  const [diffSourceFilter, setDiffSourceFilter] = useState('');
-  const [diffConfidenceFilter, setDiffConfidenceFilter] = useState('');
+  const [diffSourceFilter, setDiffSourceFilter] = useState(
+    () => readDiffFilters(review.id).source,
+  );
+  const [diffConfidenceFilter, setDiffConfidenceFilter] = useState(
+    () => readDiffFilters(review.id).confidence,
+  );
+  useEffect(() => {
+    writeDiffFiltersToUrl(
+      review.id,
+      diffSourceFilter,
+      diffConfidenceFilter,
+    );
+  }, [review.id, diffSourceFilter, diffConfidenceFilter]);
   const confidenceBucket = (diff: ReconcileDifference) => {
     const value = Number(diff.confidence);
     if (!Number.isFinite(value)) return 'unknown';

@@ -575,6 +575,7 @@ function ReconcileReviewDetail({
   const [actionBusy, setActionBusy] = useState<'risk' | 'issue' | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [exportingDiffs, setExportingDiffs] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     type: 'risk' | 'issue';
     done: number;
@@ -789,6 +790,27 @@ function ReconcileReviewDetail({
         ? new Set()
         : new Set(selectableDiffs.map((d) => d.difference_id as string)),
     );
+  const exportDiffs = async () => {
+    setExportingDiffs(true);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportReconcileDifferencesCsv(review.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `copilot-differences-${review.id}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setActionNotice('差异 CSV 已导出（含来源、置信度与证据）。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingDiffs(false);
+    }
+  };
+
   const riskEligible = selectedDiffs.filter((d) => !actionFor(d.difference_id, 'risk'));
   const issueEligible = selectedDiffs.filter((d) => !actionFor(d.difference_id, 'issue'));
   const docLabel = String(doc.statement_no ?? doc.settlement_no ?? review.document_id ?? review.id);
@@ -1340,7 +1362,13 @@ function ReconcileReviewDetail({
         </table>
       </div>
 
-      <div className="table-wrap" style={{ marginTop: 12 }}>
+      <div className="row" style={{ marginTop: 12, marginBottom: 6 }}>
+        <strong>差异明细</strong>
+        <Button size="sm" disabled={exportingDiffs} onClick={() => void exportDiffs()}>
+          {exportingDiffs ? '导出中…' : '导出差异 CSV'}
+        </Button>
+      </div>
+      <div className="table-wrap">
         <table>
           <thead>
             <tr>

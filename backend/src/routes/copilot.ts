@@ -296,6 +296,8 @@ function diffDetailText(review: any, diff: any): string {
     `- ${label} ${waybill} 差额 ${diff.delta ?? '—'}`,
     `可能原因：${Array.isArray(diff.possible_causes) ? diff.possible_causes.join('；') : '—'}`,
     `建议：${diff.suggested_action || '—'}`,
+    `来源：${diff.source || '—'}${diff.confidence != null ? `（置信度 ${diff.confidence}）` : ''}`,
+    `证据：${Array.isArray(diff.evidence) ? diff.evidence.join('；') : '—'}`,
     `决策：${decision?.decision || '—'}${decision?.note ? `（${decision.note}）` : ''}`,
   ].join('\n');
 }
@@ -888,6 +890,9 @@ async function buildBatchItemsCsv(reviewId: string, rows: any[]): Promise<string
     '对账单金额',
     '系统金额',
     '差额',
+    '来源',
+    '置信度',
+    '证据',
     '可能原因',
     '建议动作',
     '决策',
@@ -920,6 +925,9 @@ async function buildBatchItemsCsv(reviewId: string, rows: any[]): Promise<string
         diff?.statement_amount,
         diff?.system_amount,
         diff?.delta,
+        diff?.source,
+        diff?.confidence,
+        Array.isArray(diff?.evidence) ? diff.evidence.join('；') : '',
         Array.isArray(diff?.possible_causes) ? diff.possible_causes.join('；') : '',
         diff?.suggested_action,
         decision?.decision,
@@ -2072,6 +2080,79 @@ export async function copilotRoutes(app: FastifyInstance) {
           `attachment; filename="copilot-batches-${id}.csv"`,
         )
         .send(csv);
+    },
+  );
+
+  /** 导出复核差异 CSV（含来源、置信度与证据）。 */
+  app.get(
+    '/api/copilot-reconcile-reviews/:id/differences/export.csv',
+    async (req, reply) => {
+      const { id } = z.object({ id: z.uuid() }).parse(req.params);
+      const review = await one<any>(
+        `SELECT differences, decisions FROM copilot_reconcile_reviews WHERE id = $1`,
+        [id],
+      );
+      if (!review) {
+        throw httpError(404, 'NOT_FOUND', '对账复核记录不存在');
+      }
+      const decisions = new Map<string, any>();
+      for (const d of Array.isArray(review.decisions) ? review.decisions : []) {
+        if (d?.difference_id) decisions.set(String(d.difference_id), d);
+      }
+      const diffs = Array.isArray(review.differences) ? review.differences : [];
+      const header = [
+        '差异ID',
+        '类型',
+        '运单/趟次',
+        '对账单金额',
+        '系统金额',
+        '差额',
+        '来源',
+        '置信度',
+        '证据',
+        '可能原因',
+        '建议动作',
+        '决策',
+        '备注',
+      ];
+      const lines = [header.join(',')];
+      for (const diff of diffs) {
+        const decision = diff?.difference_id
+          ? decisions.get(String(diff.difference_id))
+          : undefined;
+        lines.push(
+          [
+            diff?.difference_id,
+            DIFF_LABEL[diff?.type] ?? diff?.type,
+            diff?.waybill_no || diff?.trip_no || '',
+            diff?.statement_amount,
+            diff?.system_amount,
+            diff?.delta,
+            diff?.source,
+            diff?.confidence,
+            Array.isArray(diff?.evidence) ? diff.evidence.join('；') : '',
+            Array.isArray(diff?.possible_causes)
+              ? diff.possible_causes.join('；')
+              : '',
+            diff?.suggested_action,
+            decision?.decision,
+            decision?.note,
+          ]
+            .map(csvCell)
+            .join(','),
+        );
+      }
+      await recordExportAudit(req, 'EXPORT copilot-reconcile-differences', id, {
+        format: 'csv',
+        rows: diffs.length,
+      });
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header(
+          'content-disposition',
+          `attachment; filename="copilot-differences-${id}.csv"`,
+        )
+        .send(`\uFEFF${lines.join('\r\n')}`);
     },
   );
 

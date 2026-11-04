@@ -56,6 +56,14 @@ const BOARD_TYPE: Record<
   delta_decision: 'decision',
 };
 
+const VIEW_ROLE_LABEL: Record<string, string> = {
+  admin: '管理员',
+  director: '总监',
+  pm: '项目经理',
+  consultant: '顾问',
+  tech_lead: '技术负责人',
+};
+
 const ACTION_OPTIONS: Record<
   'all' | 'notification' | 'filter_view' | 'export' | 'decision',
   Array<[string, string]>
@@ -201,6 +209,11 @@ export function CollabAuditPage() {
   const [snapshotMetric, setSnapshotMetric] = useState<'delta' | 'total'>('delta');
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
+  const [shareMode, setShareMode] = useState<'none' | 'all' | 'role' | 'users'>(
+    'none',
+  );
+  const [shareRole, setShareRole] = useState('director');
+  const [shareUsers, setShareUsers] = useState<string[]>([]);
   const [snapshotSeries, setSnapshotSeries] = useState<
     'total' | 'notification' | 'filter_view' | 'export' | 'decision'
   >('total');
@@ -230,6 +243,19 @@ export function CollabAuditPage() {
     setActorId(item.actor_id ?? '');
     setScope(item.scope);
     setOffset(0);
+    if (item.is_owner) {
+      setShareMode(
+        item.shared
+          ? 'all'
+          : item.shared_role
+            ? 'role'
+            : (item.shared_user_ids?.length ?? 0) > 0
+              ? 'users'
+              : 'none',
+      );
+      setShareRole(item.shared_role ?? 'director');
+      setShareUsers(item.shared_user_ids ?? []);
+    }
   };
 
   const saveAuditView = async () => {
@@ -246,6 +272,9 @@ export function CollabAuditPage() {
         to: to || undefined,
         actor_id: actorId || undefined,
         scope,
+        shared: shareMode === 'all',
+        shared_role: shareMode === 'role' ? shareRole : null,
+        shared_user_ids: shareMode === 'users' ? shareUsers : [],
       });
       setSelectedViewId(res.item.id);
       await auditViews.reload();
@@ -846,9 +875,62 @@ export function CollabAuditPage() {
             {(auditViews.data?.items ?? []).map((view) => (
               <option key={view.id} value={view.id}>
                 {view.name}
+                {view.shared
+                  ? '（全员）'
+                  : view.shared_role
+                    ? `（角色：${VIEW_ROLE_LABEL[view.shared_role] ?? view.shared_role}）`
+                    : (view.shared_user_ids?.length ?? 0) > 0
+                      ? `（指定 ${view.shared_user_ids!.length} 人）`
+                      : ''}
+                {view.is_owner ? '' : ` · ${view.owner_name ?? '同事'}`}
               </option>
             ))}
           </Select>
+          <Select
+            value={shareMode}
+            onChange={(e) =>
+              setShareMode(
+                e.target.value as 'none' | 'all' | 'role' | 'users',
+              )
+            }
+            style={{ maxWidth: 130 }}
+          >
+            <option value="none">仅自己</option>
+            <option value="all">共享给全员</option>
+            <option value="role">按角色共享</option>
+            <option value="users">指定同事</option>
+          </Select>
+          {shareMode === 'role' ? (
+            <Select
+              value={shareRole}
+              onChange={(e) => setShareRole(e.target.value)}
+              style={{ maxWidth: 130 }}
+            >
+              <option value="admin">管理员</option>
+              <option value="director">总监</option>
+              <option value="pm">项目经理</option>
+              <option value="consultant">顾问</option>
+              <option value="tech_lead">技术负责人</option>
+            </Select>
+          ) : null}
+          {shareMode === 'users' ? (
+            <Select
+              multiple
+              value={shareUsers}
+              onChange={(e) =>
+                setShareUsers(
+                  Array.from(e.target.selectedOptions).map((o) => o.value),
+                )
+              }
+              style={{ maxWidth: 160, minHeight: 72 }}
+            >
+              {(users.data?.items ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
           <Button
             size="sm"
             disabled={savingView}
@@ -856,7 +938,7 @@ export function CollabAuditPage() {
           >
             {savingView ? '保存中…' : '保存当前筛选'}
           </Button>
-          {selectedViewId ? (
+          {selectedAuditView?.is_owner ? (
             <Button
               size="sm"
               variant="ghost"
@@ -866,7 +948,7 @@ export function CollabAuditPage() {
               重命名
             </Button>
           ) : null}
-          {selectedViewId ? (
+          {selectedAuditView?.is_owner ? (
             <Button
               size="sm"
               variant="ghost"

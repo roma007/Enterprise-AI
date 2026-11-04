@@ -5275,6 +5275,14 @@ async function main() {
       assert.equal(created.json().item.type, 'notification');
       assert.equal(created.json().item.scope, 'all');
 
+      const privateForDirector = (
+        await call(directorToken, 'GET', '/api/collab-audit-filter-views')
+      ).json().items as any[];
+      assert.ok(
+        !privateForDirector.some((v) => v.id === viewId),
+        '未共享的审计视图不应被同事看到',
+      );
+
       const updated = await call(
         adminToken,
         'POST',
@@ -5288,6 +5296,27 @@ async function main() {
       assert.equal(updated.statusCode, 201);
       assert.equal(updated.json().item.id, viewId, '同名保存应覆盖');
       assert.equal(updated.json().item.type, 'decision');
+
+      const sharedUpdate = await call(
+        adminToken,
+        'POST',
+        '/api/collab-audit-filter-views',
+        {
+          name,
+          type: 'decision',
+          action: 'DECIDE copilot-reconcile-difference',
+          shared: true,
+        },
+      );
+      assert.equal(sharedUpdate.statusCode, 201);
+      assert.equal(sharedUpdate.json().item.shared, true);
+      const sharedSeen = (
+        await call(directorToken, 'GET', '/api/collab-audit-filter-views')
+      ).json().items as any[];
+      const sharedItem = sharedSeen.find((v) => v.id === viewId);
+      assert.ok(sharedItem, '共享后同事应看到审计视图');
+      assert.equal(sharedItem.is_owner, false, '同事不是创建者');
+      assert.equal(sharedItem.owner_name, '系统管理员');
 
       const renamedView = await call(
         adminToken,
@@ -5316,16 +5345,36 @@ async function main() {
         '保存后应出现在列表',
       );
 
-      const directorList = await call(
-        directorToken,
-        'GET',
+      const targetedView = await call(
+        adminToken,
+        'POST',
         '/api/collab-audit-filter-views',
+        {
+          name: `${name}-users`,
+          type: 'all',
+          shared_user_ids: [director!.id],
+        },
       );
-      assert.equal(directorList.statusCode, 200);
+      assert.equal(targetedView.statusCode, 201, `指定共享失败：${targetedView.body}`);
+      const targetedId = targetedView.json().item.id;
+      const targetedSeen = (
+        await call(directorToken, 'GET', '/api/collab-audit-filter-views')
+      ).json().items as any[];
       assert.ok(
-        !(directorList.json().items as any[]).some((v) => v.id === viewId),
-        '不应看到他人的审计视图',
+        targetedSeen.some((v) => v.id === targetedId),
+        '被指定同事应看到审计视图',
       );
+      const badShare = await call(
+        adminToken,
+        'POST',
+        '/api/collab-audit-filter-views',
+        {
+          name: `${name}-bad`,
+          shared_user_ids: ['00000000-0000-4000-8000-000000000999'],
+        },
+      );
+      assert.equal(badShare.statusCode, 422);
+      assert.equal(badShare.json().error, 'INVALID_SHARED_USERS');
 
       const deleteOther = await call(
         directorToken,

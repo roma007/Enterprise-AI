@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { one, query } from '../db';
+import { one, query, withTransaction } from '../db';
 import { httpError } from '../services/s1';
 import { csvCell } from '../services/csv';
 import { collabAuditRetentionDays } from '../services/collab_audit_archive';
@@ -1492,6 +1492,12 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     to: dateStr.optional(),
     actor_id: z.uuid().optional(),
     scope: z.enum(['live', 'archive', 'all']).default('live'),
+    shared: z.boolean().optional(),
+    shared_role: z
+      .enum(['admin', 'director', 'pm', 'consultant', 'tech_lead'])
+      .nullable()
+      .optional(),
+    shared_user_ids: z.array(z.uuid()).max(50).optional(),
   });
 
   /** 当前用户保存的协作审计筛选视图。 */
@@ -1499,13 +1505,27 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     assertAuditViewer(req);
     const auth = (req as any).authUser;
     const items = await query(
-      `SELECT id, name, audit_type AS type, action,
-              from_date::text AS "from", to_date::text AS "to",
-              actor_id, scope, created_at, updated_at
-         FROM collab_audit_filter_views
-        WHERE user_id = $1
-        ORDER BY name`,
-      [auth.sub],
+      `SELECT v.id, v.name, v.audit_type AS type, v.action,
+              v.from_date::text AS "from", v.to_date::text AS "to",
+              v.actor_id, v.scope, v.shared, v.shared_role,
+              (v.user_id = $1) AS is_owner,
+              u.name AS owner_name, v.created_at, v.updated_at,
+              COALESCE((
+                SELECT json_agg(s.user_id)
+                  FROM collab_audit_filter_view_shares s
+                 WHERE s.view_id = v.id
+              ), '[]'::json) AS shared_user_ids
+         FROM collab_audit_filter_views v
+         LEFT JOIN users u ON u.id = v.user_id
+        WHERE v.user_id = $1
+           OR v.shared
+           OR v.shared_role = $2
+           OR EXISTS (
+             SELECT 1 FROM collab_audit_filter_view_shares s
+              WHERE s.view_id = v.id AND s.user_id = $1
+           )
+        ORDER BY v.name`,
+      [auth.sub, auth.role ?? ''],
     );
     return { items };
   });
@@ -1518,34 +1538,79 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
     assertActionForType(body.type, body.action);
-    const item = await one(
-      `INSERT INTO collab_audit_filter_views
-         (org_id, user_id, name, audit_type, action, from_date, to_date,
-          actor_id, scope)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       ON CONFLICT (user_id, name)
-       DO UPDATE SET audit_type = EXCLUDED.audit_type,
-                     action = EXCLUDED.action,
-                     from_date = EXCLUDED.from_date,
-                     to_date = EXCLUDED.to_date,
-                     actor_id = EXCLUDED.actor_id,
-                     scope = EXCLUDED.scope,
-                     updated_at = now()
-       RETURNING id, name, audit_type AS type, action,
-                 from_date::text AS "from", to_date::text AS "to",
-                 actor_id, scope, created_at, updated_at`,
-      [
-        auth.org_id,
-        auth.sub,
-        body.name,
-        body.type,
-        body.action ?? null,
-        body.from ?? null,
-        body.to ?? null,
-        body.actor_id ?? null,
-        body.scope,
-      ],
-    );
+    const shareIds = Array.from(new Set(body.shared_user_ids ?? []));
+    const item = await withTransaction(async (client) => {
+      if (shareIds.length) {
+        const found = await client.query(
+          `SELECT id FROM users WHERE org_id = $1 AND id = ANY($2::uuid[])`,
+          [auth.org_id, shareIds],
+        );
+        if (found.rows.length !== shareIds.length) {
+          throw httpError(422, 'INVALID_SHARED_USERS', '共享对象不属于当前组织');
+        }
+      }
+      const inserted = await client.query<any>(
+        `INSERT INTO collab_audit_filter_views
+           (org_id, user_id, name, audit_type, action, from_date, to_date,
+            actor_id, scope, shared, shared_role)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (user_id, name)
+         DO UPDATE SET audit_type = EXCLUDED.audit_type,
+                       action = EXCLUDED.action,
+                       from_date = EXCLUDED.from_date,
+                       to_date = EXCLUDED.to_date,
+                       actor_id = EXCLUDED.actor_id,
+                       scope = EXCLUDED.scope,
+                       shared = EXCLUDED.shared,
+                       shared_role = EXCLUDED.shared_role,
+                       updated_at = now()
+         RETURNING id`,
+        [
+          auth.org_id,
+          auth.sub,
+          body.name,
+          body.type,
+          body.action ?? null,
+          body.from ?? null,
+          body.to ?? null,
+          body.actor_id ?? null,
+          body.scope,
+          body.shared ?? false,
+          body.shared_role ?? null,
+        ],
+      );
+      const viewId = inserted.rows[0].id as string;
+      if (body.shared_user_ids !== undefined) {
+        await client.query(
+          `DELETE FROM collab_audit_filter_view_shares WHERE view_id = $1`,
+          [viewId],
+        );
+        if (shareIds.length) {
+          await client.query(
+            `INSERT INTO collab_audit_filter_view_shares (view_id, user_id)
+             SELECT $1, unnest($2::uuid[])`,
+            [viewId, shareIds],
+          );
+        }
+      }
+      const row = await client.query(
+        `SELECT v.id, v.name, v.audit_type AS type, v.action,
+                v.from_date::text AS "from", v.to_date::text AS "to",
+                v.actor_id, v.scope, v.shared, v.shared_role,
+                true AS is_owner,
+                (SELECT name FROM users WHERE id = v.user_id) AS owner_name,
+                v.created_at, v.updated_at,
+                COALESCE((
+                  SELECT json_agg(s.user_id)
+                    FROM collab_audit_filter_view_shares s
+                   WHERE s.view_id = v.id
+                ), '[]'::json) AS shared_user_ids
+           FROM collab_audit_filter_views v
+          WHERE v.id = $1`,
+        [viewId],
+      );
+      return row.rows[0];
+    });
     return reply.code(201).send({ item });
   });
 
@@ -1562,7 +1627,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
         WHERE id = $1 AND user_id = $3
         RETURNING id, name, audit_type AS type, action,
                   from_date::text AS "from", to_date::text AS "to",
-                  actor_id, scope, created_at, updated_at`,
+                  actor_id, scope, shared, shared_role,
+                  true AS is_owner, created_at, updated_at`,
       [id, body.name, auth.sub],
     );
     if (!item) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');

@@ -1174,6 +1174,9 @@ export const api = {
     to?: string;
     actor_id?: string;
     scope?: 'live' | 'archive' | 'all';
+    shared?: boolean;
+    shared_role?: string | null;
+    shared_user_ids?: string[];
   }) =>
     request<{ item: CollabAuditFilterView }>(
       '/api/collab-audit-filter-views',

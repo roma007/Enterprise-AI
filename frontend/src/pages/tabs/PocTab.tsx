@@ -743,6 +743,19 @@ function statusLabel(status?: string | null): string {
   return ACTION_STATUS_LABEL[status] ?? status;
 }
 
+function groupDifferences<T extends { type?: string | null }>(
+  diffs: T[],
+): Array<[string, T[]]> {
+  const groups = new Map<string, T[]>();
+  for (const diff of diffs) {
+    const key = diff.type ?? 'unknown';
+    const list = groups.get(key) ?? [];
+    list.push(diff);
+    groups.set(key, list);
+  }
+  return [...groups.entries()];
+}
+
 function decisionProgress(review: CopilotReconcileReview): {
   total: number;
   decided: number;
@@ -808,6 +821,14 @@ function ReconcileReviewDetail({
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [resumeTarget, setResumeTarget] = useState<ReconcileBatch | null>(null);
   const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(new Set());
+  const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
+  const toggleDiffType = (type: string) =>
+    setCollapsedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
   const [exportingBatches, setExportingBatches] = useState(false);
   const [exportingItems, setExportingItems] = useState(false);
   const [exportingZip, setExportingZip] = useState(false);
@@ -1823,7 +1844,25 @@ function ReconcileReviewDetail({
           <tbody>
             {review.differences.length === 0 ? (
               <tr><td colSpan={11} className="muted">没有差异</td></tr>
-            ) : review.differences.map((d, i) => {
+            ) : groupDifferences(review.differences).map(([type, diffs]) => (
+              <Fragment key={type}>
+                <tr>
+                  <td
+                    colSpan={11}
+                    style={{ background: 'var(--surface-2)' }}
+                  >
+                    <button
+                      className="link-btn"
+                      onClick={() => toggleDiffType(type)}
+                    >
+                      {collapsedTypes.has(type) ? '▸' : '▾'}{' '}
+                      {RECONCILE_DIFF_LABEL[type] ?? type}（{diffs.length}）
+                    </button>
+                  </td>
+                </tr>
+                {collapsedTypes.has(type)
+                  ? null
+                  : diffs.map((d, i) => {
               const rowKey = d.difference_id || `row-${i}`;
               const decision = d.difference_id ? decisions.get(d.difference_id) : undefined;
               const riskAction = actionFor(d.difference_id, 'risk');
@@ -1955,6 +1994,8 @@ function ReconcileReviewDetail({
                 </Fragment>
               );
             })}
+              </Fragment>
+            ))}
           </tbody>
         </table>
       </div>

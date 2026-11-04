@@ -65,6 +65,32 @@ async function recordNotificationAudit(
 
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+async function viewRecipients(
+  client: any,
+  orgId: string,
+  view: { shared?: boolean; shared_role?: string | null },
+  shareIds: string[],
+): Promise<Set<string>> {
+  const ids = new Set<string>(shareIds);
+  if (view.shared) {
+    const rows = await client.query(
+      `SELECT id FROM users WHERE org_id = $1 AND status = 'active'`,
+      [orgId],
+    );
+    for (const row of rows.rows) ids.add(row.id as string);
+  } else if (view.shared_role) {
+    const rows = await client.query(
+      `SELECT u.id
+         FROM users u
+         JOIN memberships m ON m.user_id = u.id
+        WHERE u.org_id = $1 AND u.status = 'active' AND m.role = $2`,
+      [orgId, view.shared_role],
+    );
+    for (const row of rows.rows) ids.add(row.id as string);
+  }
+  return ids;
+}
+
 export async function notificationRoutes(app: FastifyInstance) {
   app.get('/api/notifications/unread-count', async (req) => {
     const auth = currentUser(req);
@@ -531,6 +557,30 @@ export async function notificationRoutes(app: FastifyInstance) {
           throw httpError(422, 'INVALID_SHARED_USERS', '共享对象不属于当前组织');
         }
       }
+      const existing = await client.query<any>(
+        `SELECT id, shared, shared_role
+           FROM notification_filter_views
+          WHERE user_id = $1 AND name = $2`,
+        [auth.sub, body.name],
+      );
+      let oldRecipients = new Set<string>();
+      let oldShareIds: string[] = [];
+      if (existing.rows[0]) {
+        const existingShares = await client.query(
+          `SELECT user_id FROM notification_filter_view_shares WHERE view_id = $1`,
+          [existing.rows[0].id],
+        );
+        oldShareIds = existingShares.rows.map((row: any) => row.user_id as string);
+        oldRecipients = await viewRecipients(
+          client,
+          auth.org_id,
+          existing.rows[0],
+          oldShareIds,
+        );
+      }
+      const effectiveShareIds =
+        body.shared_user_ids === undefined ? oldShareIds : shareIds;
+
       const inserted = await client.query<any>(
         `INSERT INTO notification_filter_views
            (org_id, user_id, name, kind, unread, from_date, to_date, scope,
@@ -573,6 +623,36 @@ export async function notificationRoutes(app: FastifyInstance) {
           );
         }
       }
+      const newRecipients = await viewRecipients(
+        client,
+        auth.org_id,
+        {
+          shared: body.shared ?? false,
+          shared_role: body.shared_role ?? null,
+        },
+        effectiveShareIds,
+      );
+      const recipients = [...newRecipients].filter(
+        (userId) => userId !== auth.sub && !oldRecipients.has(userId),
+      );
+      if (recipients.length) {
+        await client.query(
+          `INSERT INTO user_notifications
+             (org_id, user_id, actor_id, kind, title, body, link, ref_type, ref_id)
+           SELECT $1, unnest($2::uuid[]), $3,
+                  'copilot_notification_view_shared',
+                  $4, $5, '#/notifications', 'notification_filter_view', $6`,
+          [
+            auth.org_id,
+            recipients,
+            auth.sub,
+            `通知视图已共享：${body.name}`,
+            `${auth.name ?? '同事'} 共享了通知筛选视图「${body.name}」`,
+            viewId,
+          ],
+        );
+      }
+
       const row = await client.query(
         `SELECT v.id, v.name, v.kind, v.unread,
                 v.from_date::text AS "from", v.to_date::text AS "to",

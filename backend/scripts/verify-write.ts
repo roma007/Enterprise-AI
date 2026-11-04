@@ -4446,6 +4446,29 @@ async function main() {
         targetedSeen.some((v) => v.id === targetedId),
         '被指定同事应看到视图',
       );
+      const shareNoticeCount = async () =>
+        Number(
+          (
+            await one<{ count: string }>(
+              `SELECT count(*)::text AS count FROM user_notifications
+                WHERE user_id = $1
+                  AND kind = 'copilot_notification_view_shared'
+                  AND ref_id = $2`,
+              [wangUser!.id, targetedId],
+            )
+          )!.count,
+        );
+      assert.equal(await shareNoticeCount(), 1, '被指定同事应收到共享通知');
+      await call(zhangToken, 'POST', '/api/notification-filter-views', {
+        name: `${name}-users`,
+        unread: true,
+        shared_user_ids: [wangUser!.id],
+      });
+      assert.equal(
+        await shareNoticeCount(),
+        1,
+        '重复保存同一批共享对象不应重复通知',
+      );
       const targetedHidden = (
         await call(liuToken, 'GET', '/api/notification-filter-views')
       ).json().items as any[];
@@ -4492,6 +4515,14 @@ async function main() {
         '删除后不应再出现',
       );
     } finally {
+      await query(
+        `DELETE FROM user_notifications
+          WHERE kind = 'copilot_notification_view_shared'
+            AND ref_id IN (
+              SELECT id FROM notification_filter_views WHERE name LIKE $1
+            )`,
+        [`${name}%`],
+      );
       await query(
         `DELETE FROM notification_filter_views WHERE name LIKE $1`,
         [`${name}%`],

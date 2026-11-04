@@ -53,6 +53,7 @@ import type {
   CopilotReconcileReviewDetail,
   ReconcileBatch,
   ReconcileDecision,
+  ReconcileDiffStats,
   BatchFilterView,
   UserNotification,
   NotificationFilterView,
@@ -1018,6 +1019,10 @@ export const api = {
     request<{ item: Holiday }>('/api/holidays', json('POST', payload)),
   deleteHoliday: (id: string) =>
     request<{ ok: boolean }>(`/api/holidays/${id}`, { method: 'DELETE' }),
+  getReconcileDiffStats: (engagementId: string) =>
+    request<ReconcileDiffStats>(
+      `/api/engagements/${engagementId}/copilot-reconcile-diff-stats`,
+    ),
   listCopilotReconcileReviews: (
     engagementId: string,
     opts: { decision_state?: 'all' | 'pending' | 'ignored' | 'decided' } = {},

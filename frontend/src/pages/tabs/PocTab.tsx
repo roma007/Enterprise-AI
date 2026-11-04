@@ -101,6 +101,13 @@ export function PocTab({
       }),
     [engagementId, reviewDecisionFilter],
   );
+  const diffStats = useLoad(
+    () => api.getReconcileDiffStats(engagementId),
+    [engagementId],
+  );
+  const decisionCount = (key: string) =>
+    diffStats.data?.by_decision.find((row) => row.decision === key)?.count ??
+    0;
   const [selectedReview, setSelectedReview] = useState<CopilotReconcileReviewDetail | null>(null);
   const closeReview = () => {
     setSelectedReview(null);
@@ -366,6 +373,93 @@ export function PocTab({
             </div>
           )
         ) : null}
+      </Card>
+
+      <Card
+        title="差异分布"
+        subtitle="规则命中、解释来源、置信度与决策进度"
+        actions={
+          <Button
+            size="sm"
+            disabled={diffStats.loading}
+            onClick={() => void diffStats.reload()}
+          >
+            刷新
+          </Button>
+        }
+      >
+        {diffStats.data ? (
+          <>
+            <div className="stat-grid" style={{ marginBottom: 10 }}>
+              <Stat label="复核记录" value={diffStats.data.reviews} tone="brand" />
+              <Stat label="差异总数" value={diffStats.data.differences} tone="amber" />
+              <Stat label="已采纳" value={decisionCount('采纳')} tone="green" />
+              <Stat label="已忽略" value={decisionCount('忽略')} tone="gray" />
+            </div>
+            <div className="form-grid">
+              <div>
+                <div className="muted small">按类型</div>
+                {diffStats.data.by_type.length ? (
+                  diffStats.data.by_type.map((row) => (
+                    <div key={row.type} style={{ marginTop: 4 }}>
+                      {RECONCILE_DIFF_LABEL[row.type] ?? row.type}{' '}
+                      <Badge tone="red">{row.count}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="muted">—</div>
+                )}
+              </div>
+              <div>
+                <div className="muted small">按来源</div>
+                {diffStats.data.by_source.length ? (
+                  diffStats.data.by_source.map((row) => (
+                    <div key={row.source} style={{ marginTop: 4 }}>
+                      {DIFF_SOURCE_LABEL[row.source] ?? row.source}{' '}
+                      <Badge tone="blue">{row.count}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="muted">—</div>
+                )}
+              </div>
+              <div>
+                <div className="muted small">按置信度</div>
+                {diffStats.data.by_confidence.map((row) => (
+                  <div key={row.bucket} style={{ marginTop: 4 }}>
+                    {row.bucket === 'high'
+                      ? '高 (≥0.8)'
+                      : row.bucket === 'medium'
+                        ? '中 (0.6–0.8)'
+                        : row.bucket === 'low'
+                          ? '低 (<0.6)'
+                          : '未知'}{' '}
+                    <Badge tone="gray">{row.count}</Badge>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="muted small">决策</div>
+                {diffStats.data.by_decision.length ? (
+                  diffStats.data.by_decision.map((row) => (
+                    <div key={row.decision} style={{ marginTop: 4 }}>
+                      {row.decision}{' '}
+                      <Badge tone={row.decision === '忽略' ? 'gray' : 'green'}>
+                        {row.count}
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="muted">—</div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : diffStats.loading ? (
+          <Spinner />
+        ) : (
+          <Empty title="暂无差异数据" />
+        )}
       </Card>
 
       <Modal

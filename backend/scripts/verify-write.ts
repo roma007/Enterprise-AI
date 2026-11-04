@@ -4859,6 +4859,23 @@ async function main() {
       });
 
     try {
+      const stats = await app.inject({
+        method: 'GET',
+        url: `/api/engagements/${engagementId}/copilot-reconcile-diff-stats`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      assert.equal(stats.statusCode, 200, `差异分布查询失败：${stats.body}`);
+      const statsBody = stats.json();
+      assert.ok(statsBody.differences >= 2, '差异分布应统计到新增差异');
+      assert.ok(
+        (statsBody.by_type as any[]).some((row) => row.type === 'amount_mismatch'),
+        '按类型应包含金额不符',
+      );
+      assert.ok(
+        (statsBody.by_source as any[]).some((row) => row.source === 'rule'),
+        '按来源应包含规则',
+      );
+
       const ignored = await decide({
         difference_id: differenceId,
         decision: '忽略',

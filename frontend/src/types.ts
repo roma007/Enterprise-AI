@@ -1133,6 +1133,18 @@ export interface CopilotReconcileReview {
   received_at: string;
 }
 
+export interface ReconcileDiffStats {
+  reviews: number;
+  differences: number;
+  by_type: Array<{ type: string; count: number }>;
+  by_source: Array<{ source: string; count: number }>;
+  by_confidence: Array<{
+    bucket: 'high' | 'medium' | 'low' | 'unknown';
+    count: number;
+  }>;
+  by_decision: Array<{ decision: string; count: number }>;
+}
+
 export interface ReconcileAction {
   id: string;
   difference_id: string;

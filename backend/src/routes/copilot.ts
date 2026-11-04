@@ -2681,6 +2681,85 @@ export async function copilotRoutes(app: FastifyInstance) {
   });
 
   /** 顾问查看：某个项目收到的对账复核记录。 */
+  /** 项目内对账差异分布：类型、来源、置信度与决策。 */
+  app.get(
+    '/api/engagements/:id/copilot-reconcile-diff-stats',
+    async (req) => {
+      const { id } = engagementParams.parse(req.params);
+      const engagement = await one(
+        `SELECT id FROM engagements WHERE id = $1 AND deleted_at IS NULL`,
+        [id],
+      );
+      if (!engagement) throw httpError(404, 'NOT_FOUND', '项目不存在');
+      const rows = await query<any>(
+        `SELECT differences, decisions
+           FROM copilot_reconcile_reviews
+          WHERE engagement_id = $1`,
+        [id],
+      );
+      const typeCounts = new Map<string, number>();
+      const sourceCounts = new Map<string, number>();
+      const decisionCounts = new Map<string, number>();
+      const confidence = { high: 0, medium: 0, low: 0, unknown: 0 };
+      let total = 0;
+      for (const row of rows) {
+        const decisions = new Map<string, string>();
+        for (const item of Array.isArray(row.decisions) ? row.decisions : []) {
+          if (item?.difference_id) {
+            decisions.set(String(item.difference_id), String(item.decision ?? ''));
+          }
+        }
+        const diffs = Array.isArray(row.differences) ? row.differences : [];
+        for (const diff of diffs) {
+          total += 1;
+          const type = String(diff?.type ?? 'unknown');
+          typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+          const source = String(diff?.source ?? '未知');
+          sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1);
+          const value = Number(diff?.confidence);
+          if (!Number.isFinite(value)) confidence.unknown += 1;
+          else if (value >= 0.8) confidence.high += 1;
+          else if (value >= 0.6) confidence.medium += 1;
+          else confidence.low += 1;
+          const decision = diff?.difference_id
+            ? decisions.get(String(diff.difference_id))
+            : undefined;
+          const key =
+            decision === '采纳' || decision === '忽略' || decision === '待确认'
+              ? decision
+              : '未决';
+          decisionCounts.set(key, (decisionCounts.get(key) ?? 0) + 1);
+        }
+      }
+      const toList = (map: Map<string, number>) =>
+        [...map.entries()]
+          .map(([key, count]) => ({ key, count }))
+          .sort((a, b) => b.count - a.count);
+      return {
+        reviews: rows.length,
+        differences: total,
+        by_type: toList(typeCounts).map((row) => ({
+          type: row.key,
+          count: row.count,
+        })),
+        by_source: toList(sourceCounts).map((row) => ({
+          source: row.key,
+          count: row.count,
+        })),
+        by_confidence: [
+          { bucket: 'high', count: confidence.high },
+          { bucket: 'medium', count: confidence.medium },
+          { bucket: 'low', count: confidence.low },
+          { bucket: 'unknown', count: confidence.unknown },
+        ],
+        by_decision: toList(decisionCounts).map((row) => ({
+          decision: row.key,
+          count: row.count,
+        })),
+      };
+    },
+  );
+
   app.get('/api/engagements/:id/copilot-reconcile-reviews', async (req) => {
     const { id } = engagementParams.parse(req.params);
     const engagement = await one(

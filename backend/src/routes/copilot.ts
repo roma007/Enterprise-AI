@@ -2624,14 +2624,45 @@ export async function copilotRoutes(app: FastifyInstance) {
     );
     if (!engagement) throw httpError(404, 'NOT_FOUND', '项目不存在');
 
+    const { decision_state } = z
+      .object({
+        decision_state: z
+          .enum(['all', 'pending', 'ignored', 'decided'])
+          .default('all'),
+      })
+      .parse(req.query ?? {});
     const items = await query(
-      `SELECT id, kind, document_id, status, summary, differences, decisions,
-              risk_id, issue_id, source, received_at
-         FROM copilot_reconcile_reviews
-        WHERE engagement_id = $1
-        ORDER BY received_at DESC
+      `SELECT x.*
+         FROM (
+           SELECT r.id, r.kind, r.document_id, r.status, r.summary,
+                  r.differences, r.decisions, r.risk_id, r.issue_id,
+                  r.source, r.received_at,
+                  EXISTS (
+                    SELECT 1
+                      FROM jsonb_array_elements(COALESCE(r.differences, '[]'::jsonb)) d
+                     WHERE NOT EXISTS (
+                       SELECT 1
+                         FROM jsonb_array_elements(COALESCE(r.decisions, '[]'::jsonb)) c
+                        WHERE c->>'difference_id' = d->>'difference_id'
+                          AND c->>'decision' IN ('采纳', '忽略')
+                     )
+                  ) AS has_pending,
+                  EXISTS (
+                    SELECT 1
+                      FROM jsonb_array_elements(COALESCE(r.decisions, '[]'::jsonb)) c
+                     WHERE c->>'decision' = '忽略'
+                  ) AS has_ignored
+             FROM copilot_reconcile_reviews r
+            WHERE r.engagement_id = $1
+         ) x
+        WHERE ($2::text = 'all'
+           OR ($2::text = 'pending' AND x.has_pending)
+           OR ($2::text = 'ignored' AND x.has_ignored)
+           OR ($2::text = 'decided' AND NOT x.has_pending
+               AND jsonb_array_length(COALESCE(x.differences, '[]'::jsonb)) > 0))
+        ORDER BY x.received_at DESC
         LIMIT 100`,
-      [id],
+      [id, decision_state],
     );
     return { items };
   });

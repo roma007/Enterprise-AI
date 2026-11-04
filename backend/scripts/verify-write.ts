@@ -4428,6 +4428,7 @@ async function main() {
       return res.json().token as string;
     };
     const token = await login('zhang@hengzhi.ai');
+    const adminToken = await login('admin@hengzhi.ai');
     const authHeaders = { authorization: `Bearer ${token}` };
     const eng = await one<{ org_id: string }>(
       `SELECT org_id FROM engagements WHERE id = $1`,
@@ -4544,6 +4545,69 @@ async function main() {
       assert.equal(detail.json().item.decisions.length, 2, '无效批量不应部分生效');
       assert.equal(detail.json().item.decisions[0].decision, '待确认');
 
+      const listByDecisionState = async (state: string) => {
+        const res = await app.inject({
+          method: 'GET',
+          url: `/api/engagements/${engagementId}/copilot-reconcile-reviews?decision_state=${state}`,
+          headers: { authorization: `Bearer ${adminToken}` },
+        });
+        assert.equal(res.statusCode, 200, `决策筛选失败：${res.body}`);
+        return res.json().items as any[];
+      };
+      const hasReview = (items: any[]) => items.some((item) => item.id === reviewId);
+
+      assert.ok(
+        hasReview(await listByDecisionState('pending')),
+        '存在待确认差异时应出现在未决筛选',
+      );
+      assert.ok(
+        !hasReview(await listByDecisionState('decided')),
+        '存在待确认差异时不应出现在已决筛选',
+      );
+      assert.ok(
+        !hasReview(await listByDecisionState('ignored')),
+        '没有忽略决策时不应出现在忽略筛选',
+      );
+
+      const batchAccept = await app.inject({
+        method: 'POST',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions/batch`,
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          difference_ids: [differenceId, secondDifferenceId],
+          decision: '采纳',
+        }),
+      });
+      assert.equal(batchAccept.statusCode, 200);
+      assert.ok(
+        !hasReview(await listByDecisionState('pending')),
+        '全部采纳后不应再出现在未决筛选',
+      );
+      assert.ok(
+        hasReview(await listByDecisionState('decided')),
+        '全部采纳后应出现在已决筛选',
+      );
+
+      const batchIgnore = await app.inject({
+        method: 'POST',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions/batch`,
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+        payload: JSON.stringify({
+          difference_ids: [differenceId, secondDifferenceId],
+          decision: '忽略',
+        }),
+      });
+      assert.equal(batchIgnore.statusCode, 200);
+      assert.ok(
+        hasReview(await listByDecisionState('ignored')),
+        '批量忽略后应出现在忽略筛选',
+      );
+      assert.equal(
+        batchIgnore.json().decisions[0].note,
+        '重复计费，已确认',
+        '批量忽略仍应保留原备注',
+      );
+
       const missing = await decide({
         difference_id: 'NOT-EXIST',
         decision: '采纳',
@@ -4562,7 +4626,7 @@ async function main() {
           WHERE action = 'DECIDE copilot-reconcile-difference' AND object_id = $1`,
         [reviewId],
       );
-      assert.equal(Number(audits!.count), 3, '单条与批量决策都应写审计');
+      assert.equal(Number(audits!.count), 5, '单条与每次批量决策都应写审计');
     } finally {
       await query(
         `DELETE FROM audit_logs WHERE object_id = $1 AND object_type = 'copilot_reconcile_review'`,

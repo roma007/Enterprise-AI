@@ -86,9 +86,15 @@ export function PocTab({
     [engagementId],
   );
   const g3 = useLoad(() => api.g3Checks(engagementId), [engagementId]);
+  const [reviewDecisionFilter, setReviewDecisionFilter] = useState<
+    'all' | 'pending' | 'ignored' | 'decided'
+  >('all');
   const copilotReviews = useLoad(
-    () => api.listCopilotReconcileReviews(engagementId),
-    [engagementId],
+    () =>
+      api.listCopilotReconcileReviews(engagementId, {
+        decision_state: reviewDecisionFilter,
+      }),
+    [engagementId, reviewDecisionFilter],
   );
   const [selectedReview, setSelectedReview] = useState<CopilotReconcileReviewDetail | null>(null);
   const closeReview = () => {
@@ -266,9 +272,25 @@ export function PocTab({
         title="ai-copilot 对账复核记录"
         subtitle="客户/车队对账单抽取、差异解释与人工决策的回写；由 ai-copilot 复核页推送。"
         actions={
-          <Button size="sm" disabled={copilotReviews.loading} onClick={() => void copilotReviews.reload()}>
-            刷新
-          </Button>
+          <div className="row">
+            <Select
+              value={reviewDecisionFilter}
+              onChange={(e) =>
+                setReviewDecisionFilter(
+                  e.target.value as 'all' | 'pending' | 'ignored' | 'decided',
+                )
+              }
+              style={{ maxWidth: 150 }}
+            >
+              <option value="all">全部决策</option>
+              <option value="pending">有未决差异</option>
+              <option value="ignored">含已忽略</option>
+              <option value="decided">已全部决策</option>
+            </Select>
+            <Button size="sm" disabled={copilotReviews.loading} onClick={() => void copilotReviews.reload()}>
+              刷新
+            </Button>
+          </div>
         }
       >
         {copilotReviews.loading && !copilotReviews.data ? <Spinner /> : null}

@@ -1015,10 +1015,19 @@ export const api = {
     request<{ item: Holiday }>('/api/holidays', json('POST', payload)),
   deleteHoliday: (id: string) =>
     request<{ ok: boolean }>(`/api/holidays/${id}`, { method: 'DELETE' }),
-  listCopilotReconcileReviews: (engagementId: string) =>
-    request<{ items: CopilotReconcileReview[] }>(
-      `/api/engagements/${engagementId}/copilot-reconcile-reviews`,
-    ),
+  listCopilotReconcileReviews: (
+    engagementId: string,
+    opts: { decision_state?: 'all' | 'pending' | 'ignored' | 'decided' } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.decision_state && opts.decision_state !== 'all') {
+      params.set('decision_state', opts.decision_state);
+    }
+    const qs = params.toString();
+    return request<{ items: CopilotReconcileReview[] }>(
+      `/api/engagements/${engagementId}/copilot-reconcile-reviews${qs ? `?${qs}` : ''}`,
+    );
+  },
   getCopilotReconcileReview: (id: string) =>
     request<{ item: CopilotReconcileReviewDetail }>(
       `/api/copilot-reconcile-reviews/${id}`,

@@ -171,7 +171,7 @@ Body:   { idempotency_key, engagement_id | experiment_id, kind,
 - `engagement_id` 或 `experiment_id` 至少一个；后者自动推导组织与项目。
 - 幂等：`idempotency_key` 已存在 → `200 { duplicate: true }`。
 - 存储：`copilot_reconcile_reviews`（RLS 按组织隔离）。
-- 查询：`GET /api/engagements/:id/copilot-reconcile-reviews`；详情：`GET /api/copilot-reconcile-reviews/:id`。详情会联表返回风险/待办当前状态（`actions[].item_status`、`risk_status`、`issue_status`），风险关闭或待办解决后立即反映，不需要额外回写。
+- 查询：`GET /api/engagements/:id/copilot-reconcile-reviews?decision_state=all|pending|ignored|decided`（存在未决 / 含已忽略 / 已全部决策）；详情：`GET /api/copilot-reconcile-reviews/:id`。详情会联表返回风险/待办当前状态（`actions[].item_status`、`risk_status`、`issue_status`），风险关闭或待办解决后立即反映，不需要额外回写。
 - 批量决策：`POST /api/copilot-reconcile-reviews/:id/decisions/batch`，body `{ difference_ids[], decision, note? }`（最多 500 条）。任一差异不存在则整批不生效并返回 `422 DIFFERENCE_NOT_FOUND`；成功后写一条 `DECIDE copilot-reconcile-difference` 审计（`mode=batch`）。
 - 平台决策：`PUT /api/copilot-reconcile-reviews/:id/decisions`，body `{ difference_id, decision: 采纳|忽略|待确认, note? }`。同一差异重复提交会覆盖原记录；未传 `note` 时保留原备注。决策写入 `decisions[]`（含 `source=platform`、`decided_by`、`decided_at`），并写 `DECIDE copilot-reconcile-difference` 审计；差异不存在返回 `422 DIFFERENCE_NOT_FOUND`。
 - 生成风险/待办：`POST /api/copilot-reconcile-reviews/:id/actions`（`type=risk|issue`）。支持整张复核或单条 `difference_id`；每条差异/每类动作最多生成一次。支持 `owner` / `due_date` / `severity`，未传时默认当前用户，并按当前组织可见节假日计算 P0/P1/P2/P3 = 1/3/7/14 个工作日（跳过周末 + 已配置节假日）。风险同样支持 `owner` / `due_date`，风险登记册支持行内修改。

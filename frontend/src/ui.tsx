@@ -1,4 +1,4 @@
-import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { ApiError } from './api';
 import { cn } from './utils';
 
@@ -359,4 +359,97 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
 
 export function Notice({ tone = 'blue', children }: { tone?: Tone; children: ReactNode }) {
   return <div className={cn('notice', `notice-${tone}`)}>{children}</div>;
+}
+
+export function UserMultiSelect({
+  users,
+  value,
+  onChange,
+  emptyHint = '暂无可选成员',
+}: {
+  users: Array<{ id: string; name: string; role?: string | null }>;
+  value: string[];
+  onChange: (ids: string[]) => void;
+  emptyHint?: string;
+}) {
+  const [search, setSearch] = useState('');
+  const selected = new Set(value);
+  const keyword = search.trim().toLowerCase();
+  const filtered = keyword
+    ? users.filter((user) => user.name.toLowerCase().includes(keyword))
+    : users;
+
+  const toggle = (id: string) => {
+    const next = new Set(value);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange([...next]);
+  };
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--line)',
+        borderRadius: 8,
+        padding: 8,
+        minWidth: 220,
+      }}
+    >
+      <Input
+        placeholder="搜索成员"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ marginBottom: 6 }}
+      />
+      <div
+        style={{
+          maxHeight: 140,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+        }}
+      >
+        {users.length === 0 ? (
+          <span className="muted small">{emptyHint}</span>
+        ) : filtered.length === 0 ? (
+          <span className="muted small">无匹配成员</span>
+        ) : (
+          filtered.map((user) => (
+            <label key={user.id} className="row" style={{ gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={selected.has(user.id)}
+                onChange={() => toggle(user.id)}
+              />
+              <span>{user.name}</span>
+            </label>
+          ))
+        )}
+      </div>
+      <div className="row" style={{ marginTop: 6, gap: 6 }}>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!filtered.length}
+          onClick={() => {
+            const next = new Set(value);
+            for (const user of filtered) next.add(user.id);
+            onChange([...next]);
+          }}
+        >
+          全选当前
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!value.length}
+          onClick={() => onChange([])}
+        >
+          清空
+        </Button>
+        <span className="muted small">已选 {value.length} 人</span>
+      </div>
+    </div>
+  );
 }

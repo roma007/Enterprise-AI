@@ -11,6 +11,7 @@ import {
   PageHeader,
   Select,
   Spinner,
+  UserMultiSelect,
 } from '../ui';
 import { fmtDateTime, namesPreview } from '../utils';
 import type { UserNotification } from '../types';
@@ -581,22 +582,11 @@ export function NotificationsPage() {
             </span>
           ) : null}
           {shareMode === 'users' ? (
-            <Select
-              multiple
+            <UserMultiSelect
+              users={users.data?.items ?? []}
               value={shareUsers}
-              onChange={(e) =>
-                setShareUsers(
-                  Array.from(e.target.selectedOptions).map((o) => o.value),
-                )
-              }
-              style={{ maxWidth: 160, minHeight: 72 }}
-            >
-              {(users.data?.items ?? []).map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </Select>
+              onChange={setShareUsers}
+            />
           ) : null}
           <Button
             size="sm"

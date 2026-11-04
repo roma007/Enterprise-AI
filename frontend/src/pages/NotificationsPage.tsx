@@ -586,6 +586,9 @@ export function NotificationsPage() {
               users={users.data?.items ?? []}
               value={shareUsers}
               onChange={setShareUsers}
+              roleOptions={Object.entries(ROLE_LABEL).map(
+                ([value, label]) => ({ value, label }),
+              )}
             />
           ) : null}
           <Button

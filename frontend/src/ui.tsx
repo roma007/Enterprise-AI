@@ -366,18 +366,23 @@ export function UserMultiSelect({
   value,
   onChange,
   emptyHint = '暂无可选成员',
+  roleOptions,
 }: {
   users: Array<{ id: string; name: string; role?: string | null }>;
   value: string[];
   onChange: (ids: string[]) => void;
   emptyHint?: string;
+  roleOptions?: Array<{ value: string; label: string }>;
 }) {
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
   const selected = new Set(value);
   const keyword = search.trim().toLowerCase();
-  const filtered = keyword
-    ? users.filter((user) => user.name.toLowerCase().includes(keyword))
-    : users;
+  const filtered = users.filter((user) => {
+    if (roleFilter && user.role !== roleFilter) return false;
+    if (keyword && !user.name.toLowerCase().includes(keyword)) return false;
+    return true;
+  });
 
   const toggle = (id: string) => {
     const next = new Set(value);
@@ -401,6 +406,20 @@ export function UserMultiSelect({
         onChange={(e) => setSearch(e.target.value)}
         style={{ marginBottom: 6 }}
       />
+      {roleOptions?.length ? (
+        <Select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          style={{ marginBottom: 6 }}
+        >
+          <option value="">全部角色</option>
+          {roleOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      ) : null}
       <div
         style={{
           maxHeight: 140,

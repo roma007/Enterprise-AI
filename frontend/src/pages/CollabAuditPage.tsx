@@ -963,6 +963,10 @@ export function CollabAuditPage() {
               users={viewerUsers}
               value={shareUsers}
               onChange={setShareUsers}
+              roleOptions={[
+                { value: 'admin', label: '管理员' },
+                { value: 'director', label: '总监' },
+              ]}
             />
           ) : null}
           <Button

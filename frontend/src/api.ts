@@ -905,13 +905,14 @@ export const api = {
     request<{ actions: string[]; object_types: string[] }>(
       `/api/audit-logs/facets?scope=${scope}`,
     ),
-  listAuditLogs: (params: { limit?: number; offset?: number; q?: string; action?: string; object_type?: string } = {}) => {
+  listAuditLogs: (params: { limit?: number; offset?: number; q?: string; action?: string; object_type?: string; status?: string } = {}) => {
     const search = new URLSearchParams();
     if (params.limit) search.set('limit', String(params.limit));
     if (params.offset) search.set('offset', String(params.offset));
     if (params.q) search.set('q', params.q);
     if (params.action) search.set('action', params.action);
     if (params.object_type) search.set('object_type', params.object_type);
+    if (params.status) search.set('status', params.status);
     const qs = search.toString();
     return request<{
       items: AuditLog[];
@@ -923,7 +924,7 @@ export const api = {
   },
 
   listArchivedAuditLogs: (
-    params: { limit?: number; offset?: number; q?: string; action?: string; object_type?: string } = {},
+    params: { limit?: number; offset?: number; q?: string; action?: string; object_type?: string; status?: string } = {},
   ) => {
     const search = new URLSearchParams();
     if (params.limit) search.set('limit', String(params.limit));
@@ -931,6 +932,7 @@ export const api = {
     if (params.q) search.set('q', params.q);
     if (params.action) search.set('action', params.action);
     if (params.object_type) search.set('object_type', params.object_type);
+    if (params.status) search.set('status', params.status);
     const qs = search.toString();
     return request<{
       items: AuditLog[];

@@ -5588,6 +5588,24 @@ async function main() {
     assert.ok(auditList.stats.deletes >= 0);
     assert.ok(auditList.stats.failures >= 0);
 
+    const failedList = ok(
+      await req('GET', '/api/audit-logs?status=4xx&limit=5'),
+      200,
+      '状态筛选',
+    );
+    assert.ok(
+      (failedList.items as any[]).every(
+        (item) =>
+          (item.status_code ?? 0) >= 400 && (item.status_code ?? 0) < 500,
+      ),
+      '4xx 筛选应只返回 4xx',
+    );
+    assert.equal(
+      failedList.stats.failures,
+      failedList.stats.total,
+      '4xx 结果中失败数应等于总数',
+    );
+
     const before = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const dryRun = ok(
       await req('POST', '/api/audit-logs/archive', {

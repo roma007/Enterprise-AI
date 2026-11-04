@@ -16,34 +16,44 @@ interface TrashBatch {
   items: TrashItem[];
 }
 
-async function auditFilterStats(
-  table: 'audit_logs' | 'audit_logs_archive',
-  org: string,
-  q: { action?: string; object_type?: string; q?: string },
-) {
-  const rows = await query<any>(
-    `SELECT count(*)::int AS total,
-            count(*) FILTER (WHERE a.action LIKE 'DELETE%')::int AS deletes,
-            count(*) FILTER (WHERE COALESCE(a.status_code, 0) >= 400)::int AS failures
-       FROM ${table} a
-       LEFT JOIN users u ON u.id = a.user_id
-      WHERE a.org_id = $1
+type AuditStatus = '2xx' | '3xx' | '4xx' | '5xx';
+
+interface AuditQuery {
+  q?: string;
+  action?: string;
+  object_type?: string;
+  status?: AuditStatus;
+}
+
+/** 列表、统计、归档查询共用同一组筛选条件。 */
+function auditFilter(org: string, q: AuditQuery) {
+  const where = `a.org_id = $1
         AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
         AND ($3::text IS NULL OR a.object_type = $3)
         AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
              OR a.object_type ILIKE '%' || $4 || '%'
              OR a.ip ILIKE '%' || $4 || '%'
-             OR u.name ILIKE '%' || $4 || '%')`,
-    [org, q.action ?? null, q.object_type ?? null, q.q ?? null],
-  );
-  return (
-    rows[0] ?? {
-      total: 0,
-      deletes: 0,
-      failures: 0,
-    }
-  );
+             OR u.name ILIKE '%' || $4 || '%')
+        AND ($5::text IS NULL
+             OR ($5::text = '2xx' AND a.status_code >= 200 AND a.status_code < 300)
+             OR ($5::text = '3xx' AND a.status_code >= 300 AND a.status_code < 400)
+             OR ($5::text = '4xx' AND a.status_code >= 400 AND a.status_code < 500)
+             OR ($5::text = '5xx' AND a.status_code >= 500 AND a.status_code < 600))`;
+  return {
+    where,
+    params: [
+      org,
+      q.action ?? null,
+      q.object_type ?? null,
+      q.q ?? null,
+      q.status ?? null,
+    ],
+  };
 }
+
+const AUDIT_STATS_SQL = `SELECT count(*)::int AS total,
+       count(*) FILTER (WHERE a.action LIKE 'DELETE%')::int AS deletes,
+       count(*) FILTER (WHERE COALESCE(a.status_code, 0) >= 400)::int AS failures`;
 
 export async function systemRoutes(app: FastifyInstance) {
   app.get('/api/system/storage', async (req) => {
@@ -105,43 +115,36 @@ export async function systemRoutes(app: FastifyInstance) {
         q: z.string().trim().optional(),
         action: z.string().trim().optional(),
         object_type: z.string().trim().optional(),
+        status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
       })
       .parse(req.query);
     const page = parsePage(req.query, 100);
     const org = await requestOrg(req);
+    const { where, params } = auditFilter(org, q);
 
-    const total = await one<{ count: number }>(
-      `SELECT count(*)::int AS count FROM audit_logs_archive a
-        LEFT JOIN users u ON u.id = a.user_id
-        WHERE a.org_id = $1
-          AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
-          AND ($3::text IS NULL OR a.object_type = $3)
-          AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
-               OR a.object_type ILIKE '%' || $4 || '%'
-               OR a.ip ILIKE '%' || $4 || '%'
-               OR u.name ILIKE '%' || $4 || '%')`,
-      [org, q.action ?? null, q.object_type ?? null, q.q ?? null],
-    );
-    const rows = await query(
-      `SELECT a.id, a.org_id, a.user_id, u.name AS user_name,
-              a.action, a.object_type, a.object_id,
-              a.status_code, a.request_id, a.ip, a.user_agent, a.detail,
-              a.created_at, a.archived_at
-         FROM audit_logs_archive a
-         LEFT JOIN users u ON u.id = a.user_id
-        WHERE a.org_id = $1
-          AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
-          AND ($3::text IS NULL OR a.object_type = $3)
-          AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
-               OR a.object_type ILIKE '%' || $4 || '%'
-               OR a.ip ILIKE '%' || $4 || '%'
-               OR u.name ILIKE '%' || $4 || '%')
-        ORDER BY a.created_at DESC
-        LIMIT $5 OFFSET $6`,
-      [org, q.action ?? null, q.object_type ?? null, q.q ?? null, page.limit, page.offset],
-    );
-    const stats = await auditFilterStats('audit_logs_archive', org, q);
-    return { ...pageResult(rows, total?.count ?? 0, page), stats };
+    const [statsRows, rows] = await Promise.all([
+      query<any>(
+        `${AUDIT_STATS_SQL}
+           FROM audit_logs_archive a
+           LEFT JOIN users u ON u.id = a.user_id
+          WHERE ${where}`,
+        params,
+      ),
+      query(
+        `SELECT a.id, a.org_id, a.user_id, u.name AS user_name,
+                a.action, a.object_type, a.object_id,
+                a.status_code, a.request_id, a.ip, a.user_agent, a.detail,
+                a.created_at, a.archived_at
+           FROM audit_logs_archive a
+           LEFT JOIN users u ON u.id = a.user_id
+          WHERE ${where}
+          ORDER BY a.created_at DESC
+          LIMIT $6 OFFSET $7`,
+        [...params, page.limit, page.offset],
+      ),
+    ]);
+    const stats = statsRows[0] ?? { total: 0, deletes: 0, failures: 0 };
+    return { ...pageResult(rows, stats.total, page), stats };
   });
 
   app.post('/api/audit-logs/archive', async (req) => {
@@ -205,42 +208,34 @@ export async function systemRoutes(app: FastifyInstance) {
         q: z.string().trim().optional(),
         action: z.string().trim().optional(),
         object_type: z.string().trim().optional(),
+        status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
       })
       .parse(req.query);
     const page = parsePage(req.query, 100);
     const org = await requestOrg(req);
+    const { where, params } = auditFilter(org, q);
 
-    const total = await one<{ count: number }>(
-      `SELECT count(*)::int AS count FROM audit_logs a
-        LEFT JOIN users u ON u.id = a.user_id
-        WHERE a.org_id = $1
-          AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
-          AND ($3::text IS NULL OR a.object_type = $3)
-          AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
-               OR a.object_type ILIKE '%' || $4 || '%'
-               OR a.ip ILIKE '%' || $4 || '%'
-               OR u.name ILIKE '%' || $4 || '%')`,
-      [org, q.action ?? null, q.object_type ?? null, q.q ?? null],
-    );
-
-    const rows = await query(
-      `SELECT a.id, a.org_id, a.user_id, u.name AS user_name,
-              a.action, a.object_type, a.object_id,
-              a.status_code, a.request_id, a.ip, a.user_agent, a.detail, a.created_at
-         FROM audit_logs a
-         LEFT JOIN users u ON u.id = a.user_id
-        WHERE a.org_id = $1
-          AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
-          AND ($3::text IS NULL OR a.object_type = $3)
-          AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
-               OR a.object_type ILIKE '%' || $4 || '%'
-               OR a.ip ILIKE '%' || $4 || '%'
-               OR u.name ILIKE '%' || $4 || '%')
-        ORDER BY a.created_at DESC
-        LIMIT $5 OFFSET $6`,
-      [org, q.action ?? null, q.object_type ?? null, q.q ?? null, page.limit, page.offset],
-    );
-    const stats = await auditFilterStats('audit_logs', org, q);
-    return { ...pageResult(rows, total?.count ?? 0, page), stats };
+    const [statsRows, rows] = await Promise.all([
+      query<any>(
+        `${AUDIT_STATS_SQL}
+           FROM audit_logs a
+           LEFT JOIN users u ON u.id = a.user_id
+          WHERE ${where}`,
+        params,
+      ),
+      query(
+        `SELECT a.id, a.org_id, a.user_id, u.name AS user_name,
+                a.action, a.object_type, a.object_id,
+                a.status_code, a.request_id, a.ip, a.user_agent, a.detail, a.created_at
+           FROM audit_logs a
+           LEFT JOIN users u ON u.id = a.user_id
+          WHERE ${where}
+          ORDER BY a.created_at DESC
+          LIMIT $6 OFFSET $7`,
+        [...params, page.limit, page.offset],
+      ),
+    ]);
+    const stats = statsRows[0] ?? { total: 0, deletes: 0, failures: 0 };
+    return { ...pageResult(rows, stats.total, page), stats };
   });
 }

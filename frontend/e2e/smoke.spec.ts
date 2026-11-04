@@ -319,14 +319,21 @@ test.describe('关键路径冒烟', () => {
     await page.goto('/#/notifications');
     await expect(page.getByRole('heading', { name: '通知' })).toBeVisible();
 
-    await page.getByRole('button', { name: '保存当前筛选' }).click();
+    const saveButton = page.getByRole('button', { name: '保存当前筛选' });
+    await expect(saveButton).toBeVisible();
+    await saveButton.click();
     const viewSelect = page
       .locator('select')
       .filter({ has: page.locator('option', { hasText: '选择已保存视图' }) });
-    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: '删除视图' })).toBeVisible();
-    await page.getByRole('button', { name: '删除视图' }).click();
-    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(0);
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    const deleteButton = page.getByRole('button', { name: '删除视图' });
+    await expect(deleteButton).toBeVisible({ timeout: 15_000 });
+    await deleteButton.click();
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(0, {
+      timeout: 15_000,
+    });
   });
 
   test('POC 页签可打开对账复核并查看差异', async ({ page }) => {

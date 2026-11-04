@@ -25,6 +25,7 @@ const AUDIT_KEYS = {
   q: 'audit_q',
   action: 'audit_action',
   object: 'audit_object',
+  status: 'audit_status',
   offset: 'audit_offset',
 } as const;
 
@@ -33,12 +34,13 @@ interface AuditUrlState {
   q: string;
   action: string;
   object: string;
+  status: string;
   offset: number;
 }
 
 function readAuditState(): AuditUrlState {
   if (typeof window === 'undefined') {
-    return { mode: 'live', q: '', action: '', object: '', offset: 0 };
+    return { mode: 'live', q: '', action: '', object: '', status: '', offset: 0 };
   }
   const params = new URLSearchParams(window.location.search);
   const rawOffset = Number(params.get(AUDIT_KEYS.offset) ?? '0');
@@ -47,6 +49,7 @@ function readAuditState(): AuditUrlState {
     q: params.get(AUDIT_KEYS.q) ?? '',
     action: params.get(AUDIT_KEYS.action) ?? '',
     object: params.get(AUDIT_KEYS.object) ?? '',
+    status: params.get(AUDIT_KEYS.status) ?? '',
     offset:
       Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0,
   };
@@ -60,6 +63,7 @@ function writeAuditState(state: AuditUrlState) {
     [AUDIT_KEYS.q, state.q],
     [AUDIT_KEYS.action, state.action],
     [AUDIT_KEYS.object, state.object],
+    [AUDIT_KEYS.status, state.status],
     [AUDIT_KEYS.offset, state.offset > 0 ? String(state.offset) : ''],
   ];
   for (const [key, value] of entries) {
@@ -94,6 +98,7 @@ export function AuditPage() {
   const [search, setSearch] = useState(initial.q);
   const [actionFilter, setActionFilter] = useState(initial.action);
   const [objectTypeFilter, setObjectTypeFilter] = useState(initial.object);
+  const [statusFilter, setStatusFilter] = useState(initial.status);
   const dq = useDebouncedValue(search, 300);
   const facets = useLoad(() => api.listAuditFacets(mode), [mode]);
 
@@ -106,6 +111,7 @@ export function AuditPage() {
             q: dq,
             action: actionFilter || undefined,
             object_type: objectTypeFilter || undefined,
+            status: statusFilter || undefined,
           })
         : api.listAuditLogs({
             limit: PAGE_SIZE,
@@ -113,8 +119,9 @@ export function AuditPage() {
             q: dq,
             action: actionFilter || undefined,
             object_type: objectTypeFilter || undefined,
+            status: statusFilter || undefined,
           }),
-    [mode, offset, dq, actionFilter, objectTypeFilter],
+    [mode, offset, dq, actionFilter, objectTypeFilter, statusFilter],
   );
 
   const filtersInitialized = useRef(false);
@@ -124,7 +131,7 @@ export function AuditPage() {
       return;
     }
     setOffset(0);
-  }, [dq, actionFilter, objectTypeFilter]);
+  }, [dq, actionFilter, objectTypeFilter, statusFilter]);
 
   useEffect(() => {
     writeAuditState({
@@ -132,9 +139,10 @@ export function AuditPage() {
       q: search,
       action: actionFilter,
       object: objectTypeFilter,
+      status: statusFilter,
       offset,
     });
-  }, [mode, search, actionFilter, objectTypeFilter, offset]);
+  }, [mode, search, actionFilter, objectTypeFilter, statusFilter, offset]);
 
   const [before, setBefore] = useState(defaultBefore);
   const [archiving, setArchiving] = useState(false);
@@ -153,6 +161,7 @@ export function AuditPage() {
     setSearch('');
     setActionFilter('');
     setObjectTypeFilter('');
+    setStatusFilter('');
     setArchiveNotice(null);
     setArchiveError(null);
   };
@@ -280,6 +289,17 @@ export function AuditPage() {
                       {type}
                     </option>
                   ))}
+                </Select>
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{ maxWidth: 130 }}
+                >
+                  <option value="">全部状态</option>
+                  <option value="2xx">2xx</option>
+                  <option value="3xx">3xx</option>
+                  <option value="4xx">4xx</option>
+                  <option value="5xx">5xx</option>
                 </Select>
                 <Input
                   placeholder="搜索 action / 对象 / 用户"

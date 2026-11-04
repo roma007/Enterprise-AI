@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { one, query } from '../db';
+import { one, query, withTransaction } from '../db';
 import { httpError } from '../services/s1';
 import { csvCell } from '../services/csv';
 import {
@@ -480,6 +480,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       .enum(['admin', 'director', 'pm', 'consultant', 'tech_lead'])
       .nullable()
       .optional(),
+    shared_user_ids: z.array(z.uuid()).max(50).optional(),
   });
 
   /** 当前用户保存的通知筛选视图。 */
@@ -489,12 +490,21 @@ export async function notificationRoutes(app: FastifyInstance) {
       `SELECT v.id, v.name, v.kind, v.unread,
               v.from_date::text AS "from", v.to_date::text AS "to",
               v.scope, v.shared, v.shared_role, (v.user_id = $1) AS is_owner,
-              u.name AS owner_name, v.created_at, v.updated_at
+              u.name AS owner_name, v.created_at, v.updated_at,
+              COALESCE((
+                SELECT json_agg(s.user_id)
+                  FROM notification_filter_view_shares s
+                 WHERE s.view_id = v.id
+              ), '[]'::json) AS shared_user_ids
          FROM notification_filter_views v
          LEFT JOIN users u ON u.id = v.user_id
         WHERE v.user_id = $1
            OR v.shared
            OR v.shared_role = $2
+           OR EXISTS (
+             SELECT 1 FROM notification_filter_view_shares s
+              WHERE s.view_id = v.id AND s.user_id = $1
+           )
         ORDER BY v.name`,
       [auth.sub, auth.role ?? ''],
     );
@@ -510,38 +520,76 @@ export async function notificationRoutes(app: FastifyInstance) {
     if (body.from && body.to && body.from > body.to) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
-    const item = await one(
-      `INSERT INTO notification_filter_views
-         (org_id, user_id, name, kind, unread, from_date, to_date, scope,
-          shared, shared_role)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       ON CONFLICT (user_id, name)
-       DO UPDATE SET kind = EXCLUDED.kind,
-                     unread = EXCLUDED.unread,
-                     from_date = EXCLUDED.from_date,
-                     to_date = EXCLUDED.to_date,
-                     scope = EXCLUDED.scope,
-                     shared = EXCLUDED.shared,
-                     shared_role = EXCLUDED.shared_role,
-                     updated_at = now()
-       RETURNING id, name, kind, unread,
-                 from_date::text AS "from", to_date::text AS "to",
-                 scope, shared, shared_role, true AS is_owner,
-                 (SELECT name FROM users WHERE id = user_id) AS owner_name,
-                 created_at, updated_at`,
-      [
-        auth.org_id,
-        auth.sub,
-        body.name,
-        body.kind || null,
-        body.unread ?? false,
-        body.from ?? null,
-        body.to ?? null,
-        body.scope ?? 'inbox',
-        body.shared ?? false,
-        body.shared_role ?? null,
-      ],
-    );
+    const shareIds = Array.from(new Set(body.shared_user_ids ?? []));
+    const item = await withTransaction(async (client) => {
+      if (shareIds.length) {
+        const found = await client.query(
+          `SELECT id FROM users WHERE org_id = $1 AND id = ANY($2::uuid[])`,
+          [auth.org_id, shareIds],
+        );
+        if (found.rows.length !== shareIds.length) {
+          throw httpError(422, 'INVALID_SHARED_USERS', '共享对象不属于当前组织');
+        }
+      }
+      const inserted = await client.query<any>(
+        `INSERT INTO notification_filter_views
+           (org_id, user_id, name, kind, unread, from_date, to_date, scope,
+            shared, shared_role)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (user_id, name)
+         DO UPDATE SET kind = EXCLUDED.kind,
+                       unread = EXCLUDED.unread,
+                       from_date = EXCLUDED.from_date,
+                       to_date = EXCLUDED.to_date,
+                       scope = EXCLUDED.scope,
+                       shared = EXCLUDED.shared,
+                       shared_role = EXCLUDED.shared_role,
+                       updated_at = now()
+         RETURNING id`,
+        [
+          auth.org_id,
+          auth.sub,
+          body.name,
+          body.kind || null,
+          body.unread ?? false,
+          body.from ?? null,
+          body.to ?? null,
+          body.scope ?? 'inbox',
+          body.shared ?? false,
+          body.shared_role ?? null,
+        ],
+      );
+      const viewId = inserted.rows[0].id as string;
+      if (body.shared_user_ids !== undefined) {
+        await client.query(
+          `DELETE FROM notification_filter_view_shares WHERE view_id = $1`,
+          [viewId],
+        );
+        if (shareIds.length) {
+          await client.query(
+            `INSERT INTO notification_filter_view_shares (view_id, user_id)
+             SELECT $1, unnest($2::uuid[])`,
+            [viewId, shareIds],
+          );
+        }
+      }
+      const row = await client.query(
+        `SELECT v.id, v.name, v.kind, v.unread,
+                v.from_date::text AS "from", v.to_date::text AS "to",
+                v.scope, v.shared, v.shared_role, true AS is_owner,
+                (SELECT name FROM users WHERE id = v.user_id) AS owner_name,
+                v.created_at, v.updated_at,
+                COALESCE((
+                  SELECT json_agg(s.user_id)
+                    FROM notification_filter_view_shares s
+                   WHERE s.view_id = v.id
+                ), '[]'::json) AS shared_user_ids
+           FROM notification_filter_views v
+          WHERE v.id = $1`,
+        [viewId],
+      );
+      return row.rows[0];
+    });
     return reply.code(201).send({ item });
   });
 

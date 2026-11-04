@@ -1165,6 +1165,7 @@ export const api = {
     scope?: 'inbox' | 'trash';
     shared?: boolean;
     shared_role?: string | null;
+    shared_user_ids?: string[];
   }) =>
     request<{ item: NotificationFilterView }>(
       '/api/notification-filter-views',

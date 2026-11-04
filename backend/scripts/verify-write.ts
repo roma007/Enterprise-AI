@@ -4424,6 +4424,47 @@ async function main() {
         '其他角色不应看到角色共享视图',
       );
 
+      const wangUser = await one<{ id: string }>(
+        `SELECT id FROM users WHERE email = 'wang@hengzhi.ai'`,
+      );
+      const targetedView = await call(
+        zhangToken,
+        'POST',
+        '/api/notification-filter-views',
+        {
+          name: `${name}-users`,
+          unread: true,
+          shared_user_ids: [wangUser!.id],
+        },
+      );
+      assert.equal(targetedView.statusCode, 201, `指定共享失败：${targetedView.body}`);
+      const targetedId = targetedView.json().item.id;
+      const targetedSeen = (
+        await call(wangToken, 'GET', '/api/notification-filter-views')
+      ).json().items as any[];
+      assert.ok(
+        targetedSeen.some((v) => v.id === targetedId),
+        '被指定同事应看到视图',
+      );
+      const targetedHidden = (
+        await call(liuToken, 'GET', '/api/notification-filter-views')
+      ).json().items as any[];
+      assert.ok(
+        !targetedHidden.some((v) => v.id === targetedId),
+        '未被指定同事不应看到视图',
+      );
+      const badShare = await call(
+        zhangToken,
+        'POST',
+        '/api/notification-filter-views',
+        {
+          name: `${name}-bad`,
+          shared_user_ids: ['00000000-0000-4000-8000-000000000999'],
+        },
+      );
+      assert.equal(badShare.statusCode, 422);
+      assert.equal(badShare.json().error, 'INVALID_SHARED_USERS');
+
       const deleteOther = await call(
         wangToken,
         'DELETE',

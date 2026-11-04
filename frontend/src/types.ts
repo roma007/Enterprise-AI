@@ -1225,6 +1225,7 @@ export interface NotificationFilterView {
   scope: 'inbox' | 'trash';
   shared: boolean;
   shared_role?: string | null;
+  shared_user_ids?: string[];
   is_owner: boolean;
   owner_name?: string | null;
   created_at: string;

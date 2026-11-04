@@ -99,8 +99,12 @@ export function NotificationsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
-  const [shareMode, setShareMode] = useState<'none' | 'all' | 'role'>('none');
+  const [shareMode, setShareMode] = useState<
+    'none' | 'all' | 'role' | 'users'
+  >('none');
   const [shareRole, setShareRole] = useState('pm');
+  const [shareUsers, setShareUsers] = useState<string[]>([]);
+  const users = useLoad(() => api.listUsers(), []);
   const [selectAll, setSelectAll] = useState(false);
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
@@ -258,9 +262,16 @@ export function NotificationsPage() {
     setSelectAll(false);
     if (item.is_owner) {
       setShareMode(
-        item.shared ? 'all' : item.shared_role ? 'role' : 'none',
+        item.shared
+          ? 'all'
+          : item.shared_role
+            ? 'role'
+            : (item.shared_user_ids?.length ?? 0) > 0
+              ? 'users'
+              : 'none',
       );
       setShareRole(item.shared_role ?? 'pm');
+      setShareUsers(item.shared_user_ids ?? []);
     }
   };
 
@@ -279,6 +290,7 @@ export function NotificationsPage() {
         scope: view,
         shared: shareMode === 'all',
         shared_role: shareMode === 'role' ? shareRole : null,
+        shared_user_ids: shareMode === 'users' ? shareUsers : [],
       });
       setSelectedViewId(res.item.id);
       await savedViews.reload();
@@ -466,7 +478,9 @@ export function NotificationsPage() {
                   ? '（全员）'
                   : v.shared_role
                     ? `（角色：${ROLE_LABEL[v.shared_role] ?? v.shared_role}）`
-                    : ''}
+                    : (v.shared_user_ids?.length ?? 0) > 0
+                      ? `（指定 ${v.shared_user_ids!.length} 人）`
+                      : ''}
                 {v.is_owner ? '' : ` · ${v.owner_name ?? '同事'}`}
               </option>
             ))}
@@ -474,13 +488,16 @@ export function NotificationsPage() {
           <Select
             value={shareMode}
             onChange={(e) =>
-              setShareMode(e.target.value as 'none' | 'all' | 'role')
+              setShareMode(
+              e.target.value as 'none' | 'all' | 'role' | 'users',
+            )
             }
             style={{ maxWidth: 130 }}
           >
             <option value="none">仅自己</option>
             <option value="all">共享给全员</option>
             <option value="role">按角色共享</option>
+            <option value="users">指定同事</option>
           </Select>
           {shareMode === 'role' ? (
             <Select
@@ -493,6 +510,24 @@ export function NotificationsPage() {
               <option value="pm">项目经理</option>
               <option value="consultant">顾问</option>
               <option value="tech_lead">技术负责人</option>
+            </Select>
+          ) : null}
+          {shareMode === 'users' ? (
+            <Select
+              multiple
+              value={shareUsers}
+              onChange={(e) =>
+                setShareUsers(
+                  Array.from(e.target.selectedOptions).map((o) => o.value),
+                )
+              }
+              style={{ maxWidth: 160, minHeight: 72 }}
+            >
+              {(users.data?.items ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
             </Select>
           ) : null}
           <Button

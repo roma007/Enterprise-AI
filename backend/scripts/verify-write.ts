@@ -15,6 +15,10 @@ import { hashPassword } from '../src/services/auth';
 import { findPdfBrowser } from '../src/services/pdf';
 import { resetShareRateLimit } from '../src/services/share_access';
 import { resetLoginGuard } from '../src/services/login_guard';
+import {
+  localDateInTimezone,
+  snapshotCollabAudits,
+} from '../src/services/collab_audit_snapshot';
 
 process.env.LOG_LEVEL = 'silent';
 process.env.PAYMENT_PROVIDER = 'mock';
@@ -4346,6 +4350,76 @@ async function main() {
         reviewId,
       ]);
       await query(`DELETE FROM copilot_reconcile_reviews WHERE id = $1`, [reviewId]);
+    }
+  });
+
+  await check('快照：归档后累计不下降且同日只留一条', async () => {
+    const org = await one<{ id: string }>(
+      `INSERT INTO organizations (name, plan) VALUES ('快照回归组织','free') RETURNING id`,
+    );
+    const orgId = org!.id;
+    const date = localDateInTimezone('Asia/Shanghai');
+
+    try {
+      const inserted = await query<{ id: string }>(
+        `INSERT INTO audit_logs (org_id, action, object_type, status_code, detail)
+         VALUES ($1,'DELETE copilot-notification','user_notification',200,'{}'::jsonb),
+                ($1,'RESTORE copilot-notification','user_notification',200,'{}'::jsonb),
+                ($1,'EXPORT copilot-collab-audits','copilot_reconcile_review',200,'{}'::jsonb)
+         RETURNING id`,
+        [orgId],
+      );
+      const ids = inserted.map((row) => row.id);
+
+      await snapshotCollabAudits(orgId);
+      const first = await one<any>(
+        `SELECT total, notification_count, filter_view_count, export_count
+           FROM collab_audit_snapshots
+          WHERE org_id = $1 AND snapshot_date = $2`,
+        [orgId, date],
+      );
+      assert.ok(first, '应生成当天快照');
+      assert.equal(first.total, 3, '快照应统计 3 条协作审计');
+      assert.equal(first.notification_count, 2);
+      assert.equal(first.filter_view_count, 0);
+      assert.equal(first.export_count, 1);
+
+      await query(
+        `WITH moved AS (
+           DELETE FROM audit_logs WHERE id = ANY($1::uuid[])
+           RETURNING id, org_id, user_id, action, object_type, object_id,
+                     status_code, ip, user_agent, request_id, detail, created_at
+         )
+         INSERT INTO audit_logs_archive
+           (id, org_id, user_id, action, object_type, object_id,
+            status_code, ip, user_agent, request_id, detail, created_at)
+         SELECT id, org_id, user_id, action, object_type, object_id,
+                status_code, ip, user_agent, request_id, detail, created_at
+           FROM moved`,
+        [ids],
+      );
+
+      await snapshotCollabAudits(orgId);
+      const after = await one<any>(
+        `SELECT total, notification_count, filter_view_count, export_count
+           FROM collab_audit_snapshots
+          WHERE org_id = $1 AND snapshot_date = $2`,
+        [orgId, date],
+      );
+      assert.equal(after.total, 3, '归档后累计不应下降');
+      assert.equal(after.notification_count, 2);
+      assert.equal(after.export_count, 1);
+
+      const snapshotRows = await query(
+        `SELECT id FROM collab_audit_snapshots WHERE org_id = $1`,
+        [orgId],
+      );
+      assert.equal(snapshotRows.length, 1, '同一天只应保留一条快照');
+    } finally {
+      await query(`DELETE FROM collab_audit_snapshots WHERE org_id = $1`, [orgId]);
+      await query(`DELETE FROM audit_logs_archive WHERE org_id = $1`, [orgId]);
+      await query(`DELETE FROM audit_logs WHERE org_id = $1`, [orgId]);
+      await query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
     }
   });
 

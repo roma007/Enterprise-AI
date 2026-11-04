@@ -115,11 +115,13 @@ export async function retimeCollabSnapshots(orgId: string): Promise<number> {
   });
 }
 
-/** 写入/更新今天的协作审计快照（按组织时区）。 */
-export async function snapshotCollabAudits(): Promise<number> {
+/** 写入/更新今天的协作审计快照（按组织时区）；可只处理指定组织。 */
+export async function snapshotCollabAudits(onlyOrgId?: string): Promise<number> {
   const orgs = await query<{ id: string; timezone: string }>(
     `SELECT id, COALESCE(NULLIF(settings->>'timezone', ''), 'Asia/Shanghai') AS timezone
-       FROM organizations`,
+       FROM organizations
+      WHERE ($1::uuid IS NULL OR id = $1)`,
+    [onlyOrgId ?? null],
   );
   let updated = 0;
   for (const org of orgs) {

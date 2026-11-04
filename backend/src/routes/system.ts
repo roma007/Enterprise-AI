@@ -763,18 +763,27 @@ export async function systemRoutes(app: FastifyInstance) {
       .parse(req.body ?? {});
     const views = normalizeImportViews(body.views);
 
+    const existingRows = await query<{ name: string }>(
+      `SELECT name FROM audit_filter_views
+        WHERE user_id = $1 AND name = ANY($2::text[])`,
+      [auth.sub, views.map((view) => view.name)],
+    );
+    const existing = new Set(existingRows.map((row) => row.name));
     let skipped = 0;
     let toImport = views;
     if (body.mode === 'skip') {
-      const rows = await query<{ name: string }>(
-        `SELECT name FROM audit_filter_views
-          WHERE user_id = $1 AND name = ANY($2::text[])`,
-        [auth.sub, views.map((view) => view.name)],
-      );
-      const existing = new Set(rows.map((row) => row.name));
       toImport = views.filter((view) => !existing.has(view.name));
       skipped = views.length - toImport.length;
     }
+    const results = views.map((view) =>
+      body.mode === 'skip' && existing.has(view.name)
+        ? { name: view.name, status: 'skipped', reason: '同名视图已存在' }
+        : {
+            name: view.name,
+            status: 'imported',
+            reason: existing.has(view.name) ? '已覆盖同名视图' : '新增',
+          },
+    );
 
     const items: any[] = [];
     for (const view of toImport) {
@@ -815,6 +824,7 @@ export async function systemRoutes(app: FastifyInstance) {
     return reply.code(201).send({
       imported: items.length,
       skipped,
+      results,
       items,
     });
   });

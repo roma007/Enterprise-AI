@@ -1042,6 +1042,11 @@ export const api = {
     request<{
       imported: number;
       skipped: number;
+      results: Array<{
+        name: string;
+        status: 'imported' | 'skipped';
+        reason: string;
+      }>;
       items: AuditFilterView[];
     }>('/api/audit-filter-views/import',
       json('POST', payload),

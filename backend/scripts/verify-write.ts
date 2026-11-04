@@ -6002,6 +6002,11 @@ async function main() {
     );
     assert.equal(skipped.imported, 0);
     assert.equal(skipped.skipped, 1);
+    assert.deepEqual(skipped.results[0], {
+      name: ioNames[0],
+      status: 'skipped',
+      reason: '同名视图已存在',
+    });
     const afterSkip = ok(
       await auditCall('GET', '/api/audit-filter-views'),
       200,
@@ -6024,6 +6029,11 @@ async function main() {
     assert.equal(overwritten.imported, 1);
     assert.equal(overwritten.skipped, 0);
     assert.equal((overwritten.items[0] as any).status, '3xx');
+    assert.deepEqual(overwritten.results[0], {
+      name: ioNames[0],
+      status: 'imported',
+      reason: '已覆盖同名视图',
+    });
 
     const badImportColumns = await auditCall(
       'POST',

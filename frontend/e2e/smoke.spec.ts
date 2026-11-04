@@ -319,6 +319,64 @@ test.describe('关键路径冒烟', () => {
     expect(download.suggestedFilename()).toContain('.csv');
   });
 
+  test('审计视图可导入 JSON 并查看结果', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+    page.on('dialog', (dialog) => dialog.accept());
+
+    const name = `E2E导入视图${Date.now()}`;
+    await page.goto('/#/audit');
+    await expect(
+      page.getByRole('heading', { name: '审计日志', level: 1 }),
+    ).toBeVisible();
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'audit-views.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({
+          version: 1,
+          views: [
+            {
+              name,
+              mode: 'live',
+              status: '4xx',
+              export_columns: ['status'],
+            },
+          ],
+        }),
+      ),
+    });
+
+    const modal = page.locator('.modal');
+    await expect(
+      modal.getByRole('heading', { name: '导入结果' }),
+    ).toBeVisible();
+    await expect(modal.getByText(name)).toBeVisible();
+    await expect(modal.getByText('已导入')).toBeVisible();
+    await modal
+      .locator('footer')
+      .getByRole('button', { name: '关闭' })
+      .click();
+
+    const viewSelect = page
+      .locator('select')
+      .filter({ has: page.locator('option', { hasText: '选择已保存视图' }) })
+      .first();
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(1);
+    await viewSelect.selectOption({ label: name });
+    await page.getByRole('button', { name: '删除视图' }).click();
+    await expect(viewSelect.locator('option', { hasText: name })).toHaveCount(0);
+  });
+
   test('审计筛选视图可保存并删除', async ({ page, request }) => {
     const login = await request.post('/api/auth/login', {
       data: { email: 'admin@hengzhi.ai', password: 'demo1234' },

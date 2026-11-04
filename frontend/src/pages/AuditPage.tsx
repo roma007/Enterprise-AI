@@ -166,6 +166,16 @@ export function AuditPage() {
   const [selectedViewId, setSelectedViewId] = useState('');
   const [importing, setImporting] = useState(false);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
+  const [importReport, setImportReport] = useState<null | {
+    imported: number;
+    skipped: number;
+    results: Array<{
+      name: string;
+      status: 'imported' | 'skipped';
+      reason: string;
+    }>;
+  }>(null);
+  const [importReportOpen, setImportReportOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [savingView, setSavingView] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -420,6 +430,12 @@ export function AuditPage() {
       setViewNotice(
         `已导入 ${res.imported} 个视图${res.skipped ? `，跳过 ${res.skipped} 个` : ''}`,
       );
+      setImportReport({
+        imported: res.imported,
+        skipped: res.skipped,
+        results: res.results,
+      });
+      setImportReportOpen(true);
       await auditViews.reload();
     } catch (err) {
       setViewError(err);
@@ -814,7 +830,20 @@ export function AuditPage() {
               </div>
             }
           >
-            {viewNotice ? <Notice tone="green">{viewNotice}</Notice> : null}
+            {viewNotice ? (
+              <div className="row">
+                <Notice tone="green">{viewNotice}</Notice>
+                {importReport ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setImportReportOpen(true)}
+                  >
+                    查看明细
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             {viewError ? <ErrorBox error={viewError} /> : null}
             {items.length === 0 ? (
               <Empty
@@ -1002,6 +1031,47 @@ export function AuditPage() {
         <p className="hint">
           至少保留一列；「归档时间」只在归档范围可用。
         </p>
+      </Modal>
+
+      <Modal
+        open={importReportOpen}
+        title="导入结果"
+        subtitle={
+          importReport
+            ? `导入 ${importReport.imported} 个，跳过 ${importReport.skipped} 个`
+            : ''
+        }
+        onClose={() => setImportReportOpen(false)}
+        footer={
+          <Button size="sm" onClick={() => setImportReportOpen(false)}>
+            关闭
+          </Button>
+        }
+      >
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>视图</th>
+                <th>结果</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(importReport?.results ?? []).map((row) => (
+                <tr key={row.name}>
+                  <td>{row.name}</td>
+                  <td>
+                    <Badge tone={row.status === 'imported' ? 'green' : 'gray'}>
+                      {row.status === 'imported' ? '已导入' : '已跳过'}
+                    </Badge>
+                  </td>
+                  <td className="muted">{row.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Modal>
 
       <Modal

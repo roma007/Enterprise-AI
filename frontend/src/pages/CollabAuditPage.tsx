@@ -195,6 +195,11 @@ export function CollabAuditPage() {
   const [opError, setOpError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const users = useLoad(() => api.listUsers(), []);
+  const weekly = useLoad(
+    () => api.listCollabSnapshots({ days: 7, bucket: 'day' }),
+    [],
+  );
+  const weeklyComparison = weekly.data?.comparison ?? null;
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
   const { data, error, loading, reload } = useLoad(
@@ -501,6 +506,54 @@ export function CollabAuditPage() {
           tone="blue"
         />
       </div>
+      <Card
+        title="本周 vs 上周"
+        subtitle="按快照新增量 · 最近 7 天"
+        actions={
+          <Button size="sm" disabled={weekly.loading} onClick={() => void weekly.reload()}>
+            刷新
+          </Button>
+        }
+      >
+        {weeklyComparison ? (
+          <div className="stat-grid">
+            {(
+              [
+                ['总数', 'delta_total'],
+                ['通知', 'delta_notification'],
+                ['筛选视图', 'delta_filter_view'],
+                ['导出', 'delta_export'],
+                ['决策', 'delta_decision'],
+              ] as const
+            ).map(([label, key]) => {
+              const current = weeklyComparison.current[key];
+              const change = weeklyComparison.change[key];
+              return (
+                <Stat
+                  key={key}
+                  label={label}
+                  value={current}
+                  hint={`环比 ${change > 0 ? `+${change}` : change}`}
+                  tone={change > 0 ? 'brand' : change < 0 ? 'red' : 'gray'}
+                />
+              );
+            })}
+          </div>
+        ) : weekly.loading ? (
+          <Spinner />
+        ) : (
+          <p className="muted">暂无快照数据。</p>
+        )}
+        {weeklyComparison?.current ? (
+          <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
+            本周期 {weeklyComparison.current.start} ~{' '}
+            {weeklyComparison.current.end}
+            {weeklyComparison.previous
+              ? ` · 上周期 ${weeklyComparison.previous.start} ~ ${weeklyComparison.previous.end}`
+              : ' · 上周期无数据'}
+          </p>
+        ) : null}
+      </Card>
       <Card
         title={
           data

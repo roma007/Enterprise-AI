@@ -292,7 +292,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
 
     const [items, totals] = await Promise.all([
       query<any>(
-        `SELECT a.id, a.action, a.user_id, a.detail, a.created_at,
+        `SELECT a.id, a.action, a.user_id, a.object_id, a.request_id,
+                a.detail, a.created_at,
                 u.name AS actor_name,
                 CASE WHEN a.object_type = 'user_notification'
                      THEN 'notification'
@@ -437,7 +438,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       query<any>(
         `SELECT c.*, u.name AS actor_name
            FROM (
-             SELECT a.id, a.action, a.user_id, a.detail, a.created_at,
+             SELECT a.id, a.action, a.user_id, a.object_id, a.request_id,
+                    a.detail, a.created_at,
                     NULL::timestamptz AS archived_at, false AS is_archived,
                     ${typeCase} AS audit_type
                FROM audit_logs a
@@ -447,7 +449,8 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                 AND ($4::date IS NULL OR a.created_at < ($4::date + interval '1 day'))
                 AND ($5::uuid IS NULL OR a.user_id = $5)
              UNION ALL
-             SELECT a.id, a.action, a.user_id, a.detail, a.created_at,
+             SELECT a.id, a.action, a.user_id, a.object_id, a.request_id,
+                    a.detail, a.created_at,
                     a.archived_at, true AS is_archived,
                     ${typeCase} AS audit_type
                FROM audit_logs_archive a

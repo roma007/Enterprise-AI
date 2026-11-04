@@ -1253,6 +1253,8 @@ export interface CollabAudit {
   action: string;
   user_id: string | null;
   actor_name?: string | null;
+  object_id?: string | null;
+  request_id?: string | null;
   detail: Record<string, any>;
   created_at: string;
   archived_at?: string | null;

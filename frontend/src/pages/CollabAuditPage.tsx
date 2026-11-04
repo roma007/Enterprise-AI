@@ -8,12 +8,14 @@ import {
   Empty,
   ErrorBox,
   Input,
+  Modal,
   PageHeader,
   Select,
   Spinner,
   Stat,
 } from '../ui';
 import { fmtDateTime } from '../utils';
+import type { CollabAudit } from '../types';
 
 const ACTION_LABEL: Record<string, string> = {
   'DELETE copilot-notification': '删除通知',
@@ -21,6 +23,11 @@ const ACTION_LABEL: Record<string, string> = {
   'PURGE copilot-notification': '彻底删除通知',
   'SAVE copilot-batch-filter-view': '保存筛选视图',
   'DELETE copilot-batch-filter-view': '删除筛选视图',
+  'EXPORT copilot-notification-audits': '导出通知审计',
+  'EXPORT copilot-collab-audits': '导出协作审计',
+  'EXPORT copilot-batch-filter-view-audits': '导出筛选视图审计',
+  'EXPORT copilot-collab-merged': '导出合并协作审计',
+  'EXPORT copilot-collab-archive': '导出归档审计',
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -172,6 +179,7 @@ export function CollabAuditPage() {
     'day',
   );
   const [snapshotMetric, setSnapshotMetric] = useState<'delta' | 'total'>('delta');
+  const [detailItem, setDetailItem] = useState<CollabAudit | null>(null);
   const [opError, setOpError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const users = useLoad(() => api.listUsers(), []);
@@ -569,7 +577,14 @@ export function CollabAuditPage() {
                             ? detail.count ?? '—'
                             : detail.name || '—'}
                       </td>
-                      <td className="muted">{detailText || '—'}</td>
+                      <td className="muted">
+                        <div className="row" style={{ gap: 6 }}>
+                          <span>{detailText || '—'}</span>
+                          <Button size="sm" onClick={() => setDetailItem(a)}>
+                            查看
+                          </Button>
+                        </div>
+                      </td>
                       {scope !== 'live' ? (
                         <td className="muted">
                           {a.archived_at ? fmtDateTime(a.archived_at) : '—'}
@@ -850,6 +865,69 @@ export function CollabAuditPage() {
           </>
         )}
       </div>
+      <Modal
+        open={Boolean(detailItem)}
+        onClose={() => setDetailItem(null)}
+        title="协作审计详情"
+        subtitle={
+          detailItem
+            ? `${TYPE_LABEL[detailItem.audit_type] ?? detailItem.audit_type} · ${
+                ACTION_LABEL[detailItem.action] ?? detailItem.action
+              }`
+            : undefined
+        }
+        wide
+        footer={
+          <Button onClick={() => setDetailItem(null)}>关闭</Button>
+        }
+      >
+        {detailItem ? (
+          <div className="form-grid">
+            <div>
+              <div className="muted small">审计 ID</div>
+              <div className="mono small">{detailItem.id}</div>
+            </div>
+            <div>
+              <div className="muted small">对象 ID</div>
+              <div className="mono small">{detailItem.object_id || '—'}</div>
+            </div>
+            <div>
+              <div className="muted small">操作人</div>
+              <div>{detailItem.actor_name || '系统'}</div>
+            </div>
+            <div>
+              <div className="muted small">时间</div>
+              <div>{fmtDateTime(detailItem.created_at)}</div>
+            </div>
+            {detailItem.archived_at ? (
+              <div>
+                <div className="muted small">归档时间</div>
+                <div>{fmtDateTime(detailItem.archived_at)}</div>
+              </div>
+            ) : null}
+            <div>
+              <div className="muted small">请求 ID</div>
+              <div className="mono small">{detailItem.request_id || '—'}</div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div className="muted small">详情</div>
+              <pre
+                className="mono small"
+                style={{
+                  margin: 0,
+                  padding: 8,
+                  background: 'var(--surface-2)',
+                  borderRadius: 6,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {JSON.stringify(detailItem.detail ?? {}, null, 2)}
+              </pre>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

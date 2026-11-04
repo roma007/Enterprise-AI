@@ -4051,8 +4051,8 @@ async function main() {
       );
       assert.equal(
         linkedNotification?.link,
-        `#/engagements/${engagementId}?review=${reviewId}`,
-        '共享通知应直达复核',
+        `#/engagements/${engagementId}?review=${reviewId}&view=${targeted.id}`,
+        '共享通知应直达复核并套用视图',
       );
 
       const resaved = await createView({ name: '指定视图', status: 'failed' });

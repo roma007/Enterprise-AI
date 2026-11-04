@@ -68,12 +68,14 @@ export function PocTab({
   engagementId,
   detail,
   initialReviewId,
+  initialViewId,
   onChanged,
   onGoReports,
 }: {
   engagementId: string;
   detail: EngagementDetail;
   initialReviewId?: string;
+  initialViewId?: string;
   onChanged: () => void;
   onGoReports: () => void;
 }) {
@@ -367,6 +369,7 @@ export function PocTab({
             review={selectedReview}
             engagementId={engagementId}
             users={users}
+            initialViewId={initialViewId}
             onChanged={after}
             onAction={(patch) => setSelectedReview((prev) => (prev ? { ...prev, ...patch } : prev))}
           />
@@ -599,12 +602,14 @@ function ReconcileReviewDetail({
   review,
   engagementId,
   users,
+  initialViewId,
   onChanged,
   onAction,
 }: {
   review: CopilotReconcileReviewDetail;
   engagementId: string;
   users: User[];
+  initialViewId?: string;
   onChanged: () => Promise<void> | void;
   onAction: (patch: Partial<CopilotReconcileReviewDetail>) => void;
 }) {
@@ -658,7 +663,12 @@ function ReconcileReviewDetail({
     urlFilters.to || rememberedFilters?.to || '',
   );
   const [selectedViewId, setSelectedViewId] = useState(urlViewId);
-  const [pendingViewId, setPendingViewId] = useState(urlViewId);
+  const [pendingViewId, setPendingViewId] = useState(
+    initialViewId || urlViewId,
+  );
+  useEffect(() => {
+    if (initialViewId) setPendingViewId(initialViewId);
+  }, [initialViewId]);
   const [shareView, setShareView] = useState(false);
   const [sharedRole, setSharedRole] = useState<
     '' | 'admin' | 'director' | 'pm' | 'consultant' | 'tech_lead'

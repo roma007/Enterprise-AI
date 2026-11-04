@@ -2188,7 +2188,9 @@ export async function copilotRoutes(app: FastifyInstance) {
               auth.sub,
               `筛选视图已共享：${body.name}`,
               `${auth.name ?? '同事'} 共享了筛选视图「${body.name}」`,
-              notificationLink,
+              reviewEngagementId
+                ? `${notificationLink}&view=${viewId}`
+                : '#/',
               viewId,
             ],
           );

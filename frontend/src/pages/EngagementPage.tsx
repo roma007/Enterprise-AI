@@ -116,10 +116,12 @@ export function EngagementPage({
   id,
   onBack,
   review,
+  view,
 }: {
   id: string;
   onBack: () => void;
   review?: string;
+  view?: string;
 }) {
   const [tab, setTab] = useState<TabKey>(() => {
     if (review) return 'poc';
@@ -277,6 +279,7 @@ export function EngagementPage({
           engagementId={id}
           detail={data}
           initialReviewId={review}
+          initialViewId={view}
           onChanged={() => void reload()}
           onGoReports={() => setTab('reports')}
         />

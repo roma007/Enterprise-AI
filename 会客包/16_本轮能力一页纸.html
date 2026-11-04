@@ -7,32 +7,38 @@
   @page { size: A4; margin: 10mm; }
   *{box-sizing:border-box}
   body{margin:0;background:#e9ecef;color:#111;
-       font:11px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Heiti SC",sans-serif}
+       font:12px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Heiti SC",sans-serif}
   .page{width:190mm;min-height:277mm;background:#fff;margin:8mm auto;padding:10mm;
         box-shadow:0 2px 12px rgba(0,0,0,.15);position:relative}
-  h1{font-size:19px;margin:0;letter-spacing:.3px}
-  .sub{font-size:10.5px;color:#666;margin:3px 0 10px}
-  h2{font-size:11.5px;margin:10px 0 5px;padding:3px 8px;background:#111;color:#fff;
+  h1{font-size:22px;margin:0;letter-spacing:.3px}
+  .sub{font-size:11px;color:#666;margin:4px 0 12px}
+  h2{font-size:12px;margin:12px 0 6px;padding:4px 9px;background:#111;color:#fff;
      border-radius:3px;display:inline-block;letter-spacing:.4px}
   .grid{display:grid;grid-template-columns:1.12fr .88fr;gap:12px}
-  .cap{margin:0 0 7px}
-  .cap b{display:block;font-size:11.5px;margin-bottom:1px}
+  .cap{margin:0 0 9px}
+  .cap b{display:block;font-size:12.5px;margin-bottom:2px}
   .cap span{color:#444}
   .bound{border:1px solid #111;border-radius:4px;padding:7px 9px;background:#fafafa}
   .bound div{margin:2px 0}
-  .nums{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+  .nums{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:6px}
   .num-box{border:1px solid #bbb;border-radius:4px;padding:6px 4px;text-align:center}
-  .num-box b{display:block;font-size:17px;line-height:1.2}
-  .num-box span{font-size:9.5px;color:#666}
-  table{width:100%;border-collapse:collapse;font-size:10px}
+  .num-box b{display:block;font-size:19px;line-height:1.2}
+  .num-box span{font-size:10px;color:#666}
+  table{width:100%;border-collapse:collapse;font-size:10.5px}
   th,td{border:1px solid #ccc;padding:3px 5px;text-align:left;vertical-align:top}
   th{background:#f2f2f2;font-weight:600}
   ul{margin:3px 0 0 15px;padding:0}
   li{margin:2px 0}
   .foot{position:absolute;bottom:7mm;left:10mm;right:10mm;border-top:1px solid #ddd;
         padding-top:4px;font-size:9px;color:#666;display:flex;justify-content:space-between;gap:8px}
-  .warn{border:1px solid #111;border-radius:4px;padding:6px 9px;font-size:10.5px;margin-top:6px}
-  .small{font-size:9.5px;color:#666}
+  .warn{border:1px solid #111;border-radius:4px;padding:7px 9px;font-size:11px;margin-top:8px}
+  .small{font-size:10px;color:#666}
+  .roles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:2px}
+  .role{border:1px solid #ccc;border-radius:4px;padding:6px 7px}
+  .role b{display:block;font-size:11px;margin-bottom:2px}
+  .role span{font-size:9.5px;color:#555;line-height:1.4;display:block}
+  .limits{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:2px}
+  .limit{border:1px dashed #999;border-radius:4px;padding:6px 7px;font-size:10px;color:#444}
   @media print{
     body{background:#fff}
     .page{margin:0;box-shadow:none;width:auto;min-height:auto;padding:0}
@@ -111,6 +117,22 @@
         <tr><td>第 11–14 天</td><td>稳定性确认、Go/No-Go</td></tr>
       </table>
     </div>
+  </div>
+
+  <h2>角色视角</h2>
+  <div class="roles">
+    <div class="role"><b>财务对账专员</b><span>看差异与依据，逐条标记决策</span></div>
+    <div class="role"><b>财务负责人</b><span>抽查低置信度与大额，确认报告</span></div>
+    <div class="role"><b>项目经理</b><span>把问题转风险/待办，跟截止日期</span></div>
+    <div class="role"><b>管理层</b><span>看周/月趋势、审计与导出</span></div>
+    <div class="role"><b>客户（只读）</b><span>通过链接看报告，无需账号</span></div>
+  </div>
+
+  <h2>当前不包含</h2>
+  <div class="limits">
+    <div class="limit">真实支付、发票与自动扣费</div>
+    <div class="limit">共享 AI 能力市场与跨客户对比</div>
+    <div class="limit">真实客户数据下的效果承诺</div>
   </div>
 
   <div class="foot">

@@ -913,9 +913,13 @@ export const api = {
     if (params.action) search.set('action', params.action);
     if (params.object_type) search.set('object_type', params.object_type);
     const qs = search.toString();
-    return request<{ items: AuditLog[]; total: number; limit: number; offset: number }>(
-      `/api/audit-logs${qs ? `?${qs}` : ''}`,
-    );
+    return request<{
+      items: AuditLog[];
+      total: number;
+      limit: number;
+      offset: number;
+      stats: { total: number; deletes: number; failures: number };
+    }>(`/api/audit-logs${qs ? `?${qs}` : ''}`);
   },
 
   listArchivedAuditLogs: (
@@ -928,9 +932,13 @@ export const api = {
     if (params.action) search.set('action', params.action);
     if (params.object_type) search.set('object_type', params.object_type);
     const qs = search.toString();
-    return request<{ items: AuditLog[]; total: number; limit: number; offset: number }>(
-      `/api/audit-logs/archive${qs ? `?${qs}` : ''}`,
-    );
+    return request<{
+      items: AuditLog[];
+      total: number;
+      limit: number;
+      offset: number;
+      stats: { total: number; deletes: number; failures: number };
+    }>(`/api/audit-logs/archive${qs ? `?${qs}` : ''}`);
   },
   archiveAuditLogs: (payload: {
     before: string;

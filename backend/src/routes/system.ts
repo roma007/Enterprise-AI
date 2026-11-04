@@ -16,6 +16,35 @@ interface TrashBatch {
   items: TrashItem[];
 }
 
+async function auditFilterStats(
+  table: 'audit_logs' | 'audit_logs_archive',
+  org: string,
+  q: { action?: string; object_type?: string; q?: string },
+) {
+  const rows = await query<any>(
+    `SELECT count(*)::int AS total,
+            count(*) FILTER (WHERE a.action LIKE 'DELETE%')::int AS deletes,
+            count(*) FILTER (WHERE COALESCE(a.status_code, 0) >= 400)::int AS failures
+       FROM ${table} a
+       LEFT JOIN users u ON u.id = a.user_id
+      WHERE a.org_id = $1
+        AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
+        AND ($3::text IS NULL OR a.object_type = $3)
+        AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
+             OR a.object_type ILIKE '%' || $4 || '%'
+             OR a.ip ILIKE '%' || $4 || '%'
+             OR u.name ILIKE '%' || $4 || '%')`,
+    [org, q.action ?? null, q.object_type ?? null, q.q ?? null],
+  );
+  return (
+    rows[0] ?? {
+      total: 0,
+      deletes: 0,
+      failures: 0,
+    }
+  );
+}
+
 export async function systemRoutes(app: FastifyInstance) {
   app.get('/api/system/storage', async (req) => {
     requirePlatformAdmin(req);
@@ -111,7 +140,8 @@ export async function systemRoutes(app: FastifyInstance) {
         LIMIT $5 OFFSET $6`,
       [org, q.action ?? null, q.object_type ?? null, q.q ?? null, page.limit, page.offset],
     );
-    return pageResult(rows, total?.count ?? 0, page);
+    const stats = await auditFilterStats('audit_logs_archive', org, q);
+    return { ...pageResult(rows, total?.count ?? 0, page), stats };
   });
 
   app.post('/api/audit-logs/archive', async (req) => {
@@ -210,6 +240,7 @@ export async function systemRoutes(app: FastifyInstance) {
         LIMIT $5 OFFSET $6`,
       [org, q.action ?? null, q.object_type ?? null, q.q ?? null, page.limit, page.offset],
     );
-    return pageResult(rows, total?.count ?? 0, page);
+    const stats = await auditFilterStats('audit_logs', org, q);
+    return { ...pageResult(rows, total?.count ?? 0, page), stats };
   });
 }

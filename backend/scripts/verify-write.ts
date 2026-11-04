@@ -5578,6 +5578,16 @@ async function main() {
       [eng.org_id],
     );
 
+    const auditList = ok(
+      await req('GET', '/api/audit-logs?limit=3'),
+      200,
+      '审计列表',
+    );
+    assert.ok(auditList.stats, '审计列表应返回统计');
+    assert.equal(auditList.stats.total, auditList.total, '统计总数应与列表一致');
+    assert.ok(auditList.stats.deletes >= 0);
+    assert.ok(auditList.stats.failures >= 0);
+
     const before = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const dryRun = ok(
       await req('POST', '/api/audit-logs/archive', {

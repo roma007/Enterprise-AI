@@ -143,10 +143,9 @@ export function AuditPage() {
   const [archiveError, setArchiveError] = useState<unknown>(null);
 
   const items = data?.items ?? [];
-  const total = data?.total ?? items.length;
-
-  const deletes = items.filter((a) => a.action.startsWith('DELETE')).length;
-  const failures = items.filter((a) => (a.status_code ?? 0) >= 400).length;
+  const total = data?.stats?.total ?? data?.total ?? items.length;
+  const deletes = data?.stats?.deletes ?? 0;
+  const failures = data?.stats?.failures ?? 0;
 
   const switchMode = (next: 'live' | 'archive') => {
     setMode(next);

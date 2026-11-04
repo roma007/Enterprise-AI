@@ -969,6 +969,7 @@ export const api = {
     status?: string;
     from?: string;
     to?: string;
+    columns?: string;
   } = {}) => {
     const search = new URLSearchParams();
     if (params.scope) search.set('scope', params.scope);
@@ -978,6 +979,7 @@ export const api = {
     if (params.status) search.set('status', params.status);
     if (params.from) search.set('from', params.from);
     if (params.to) search.set('to', params.to);
+    if (params.columns) search.set('columns', params.columns);
     const qs = search.toString();
     return requestBlob(`/api/audit-logs/export.csv${qs ? `?${qs}` : ''}`);
   },

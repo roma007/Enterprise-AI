@@ -5698,6 +5698,47 @@ async function main() {
     assert.equal(badExportRange.status, 400);
     assert.equal(badExportRange.body.error, 'INVALID_DATE_RANGE');
 
+    const csvColumns = await app.inject({
+      method: 'GET',
+      url: '/api/audit-logs/export.csv?status=4xx&columns=status,action',
+      headers: { authorization: `Bearer ${auditLogin.token}` },
+    });
+    assert.equal(csvColumns.statusCode, 200, '自定义列导出应成功');
+    const columnLines = csvColumns.body.split('\r\n');
+    assert.equal(
+      columnLines[0].replace(/^\uFEFF/, ''),
+      '"操作","状态码"',
+      '应按固定顺序输出所选列',
+    );
+    assert.ok(
+      columnLines
+        .slice(1)
+        .every((line) => line.split('","').length === 2),
+      '每行应只有两列',
+    );
+
+    const badColumns = await auditCall(
+      'GET',
+      '/api/audit-logs/export.csv?columns=action,password',
+    );
+    assert.equal(badColumns.status, 400);
+    assert.equal(badColumns.body.error, 'INVALID_COLUMNS');
+
+    const archiveOnlyColumn = await auditCall(
+      'GET',
+      '/api/audit-logs/export.csv?columns=action,archived_at',
+    );
+    assert.equal(archiveOnlyColumn.status, 400, '热表不能导出归档时间');
+    assert.equal(archiveOnlyColumn.body.error, 'INVALID_COLUMNS');
+
+    const archiveColumns = await app.inject({
+      method: 'GET',
+      url: '/api/audit-logs/export.csv?scope=archive&columns=action,archived_at',
+      headers: { authorization: `Bearer ${auditLogin.token}` },
+    });
+    assert.equal(archiveColumns.statusCode, 200);
+    assert.ok(archiveColumns.body.includes('"归档时间"'));
+
     const viewName = `审计视图-${Date.now()}`;
     const savedView = ok(
       await auditCall('POST', '/api/audit-filter-views', {

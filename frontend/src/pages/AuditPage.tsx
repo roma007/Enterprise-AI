@@ -111,6 +111,39 @@ const ROLE_LABEL: Record<string, string> = {
   tech_lead: '技术负责人',
 };
 
+const EXPORT_COLUMN_OPTIONS = [
+  { key: 'time', label: '时间' },
+  { key: 'action', label: '操作' },
+  { key: 'object_type', label: '对象类型' },
+  { key: 'object_id', label: '对象 ID' },
+  { key: 'status', label: '状态码' },
+  { key: 'user', label: '操作人' },
+  { key: 'request_id', label: '请求 ID' },
+  { key: 'ip', label: 'IP' },
+  { key: 'user_agent', label: 'User-Agent' },
+  { key: 'detail', label: '详情' },
+  { key: 'archived_at', label: '归档时间' },
+] as const;
+
+const EXPORT_COLUMNS_STORAGE = 'audit_export_columns';
+const DEFAULT_EXPORT_COLUMNS = EXPORT_COLUMN_OPTIONS.map((item) => item.key);
+
+function readExportColumns(): string[] {
+  if (typeof window === 'undefined') return [...DEFAULT_EXPORT_COLUMNS];
+  try {
+    const raw = window.localStorage.getItem(EXPORT_COLUMNS_STORAGE);
+    if (!raw) return [...DEFAULT_EXPORT_COLUMNS];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...DEFAULT_EXPORT_COLUMNS];
+    const valid = parsed.filter((key): key is string =>
+      DEFAULT_EXPORT_COLUMNS.includes(key),
+    );
+    return valid.length ? valid : [...DEFAULT_EXPORT_COLUMNS];
+  } catch {
+    return [...DEFAULT_EXPORT_COLUMNS];
+  }
+}
+
 const PAGE_SIZE = 50;
 const defaultBefore = () =>
   new Date(Date.now() - 180 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -133,6 +166,8 @@ export function AuditPage() {
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [columnPicker, setColumnPicker] = useState(false);
+  const [exportColumns, setExportColumns] = useState<string[]>(readExportColumns);
   const [viewError, setViewError] = useState<unknown>(null);
   const [shareMode, setShareMode] = useState<
     'none' | 'all' | 'role' | 'users'
@@ -145,6 +180,9 @@ export function AuditPage() {
   const roleMembers = memberUsers.filter((u) => u.role === shareRole);
   const selectedView = (auditViews.data?.items ?? []).find(
     (view) => view.id === selectedViewId,
+  );
+  const visibleExportColumns = exportColumns.filter(
+    (key) => key !== 'archived_at' || mode === 'archive',
   );
 
   const { data, error, loading, reload } = useLoad(
@@ -367,6 +405,7 @@ export function AuditPage() {
         status: statusFilter || undefined,
         from: fromFilter || undefined,
         to: toFilter || undefined,
+        columns: visibleExportColumns.join(','),
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -563,7 +602,14 @@ export function AuditPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={exporting}
+                  onClick={() => setColumnPicker(true)}
+                >
+                  列设置
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={exporting || visibleExportColumns.length === 0}
                   onClick={() => void exportCsv()}
                 >
                   {exporting ? '导出中…' : '导出 CSV'}
@@ -801,6 +847,70 @@ export function AuditPage() {
       ) : null}
 
       <Modal
+        open={columnPicker}
+        title="导出列"
+        subtitle="勾选需要写入 CSV 的列，设置保存在本机。"
+        onClose={() => setColumnPicker(false)}
+        footer={
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setExportColumns([...DEFAULT_EXPORT_COLUMNS]);
+                window.localStorage.removeItem(EXPORT_COLUMNS_STORAGE);
+              }}
+            >
+              恢复默认
+            </Button>
+            <Button size="sm" onClick={() => setColumnPicker(false)}>
+              关闭
+            </Button>
+          </>
+        }
+      >
+        <div className="row" style={{ flexWrap: 'wrap', gap: 12 }}>
+          {EXPORT_COLUMN_OPTIONS.map((option) => {
+            const disabled =
+              option.key === 'archived_at' && mode !== 'archive';
+            const checked =
+              exportColumns.includes(option.key) && !disabled;
+            return (
+              <label
+                key={option.key}
+                className="row"
+                style={{ gap: 6, opacity: disabled ? 0.5 : 1 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => {
+                    const next = checked
+                      ? exportColumns.filter((key) => key !== option.key)
+                      : [...exportColumns, option.key];
+                    if (!next.length) return;
+                    const ordered = DEFAULT_EXPORT_COLUMNS.filter((key) =>
+                      next.includes(key),
+                    );
+                    setExportColumns(ordered);
+                    window.localStorage.setItem(
+                      EXPORT_COLUMNS_STORAGE,
+                      JSON.stringify(ordered),
+                    );
+                  }}
+                />
+                <span>{option.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="hint">
+          至少保留一列；「归档时间」只在归档范围可用。
+        </p>
+      </Modal>
+
+      <Modal
         open={Boolean(detailLog)}
         onClose={() => setDetailLog(null)}
         title="审计详情"
@@ -808,7 +918,8 @@ export function AuditPage() {
         wide
         footer={<Button onClick={() => setDetailLog(null)}>关闭</Button>}
       >
-        {detailLog ? (
+  
+      {detailLog ? (
           <div className="form-grid">
             <div>
               <div className="muted small">操作</div>

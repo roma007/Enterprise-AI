@@ -294,6 +294,19 @@ test.describe('关键路径冒烟', () => {
     await expect(
       page.getByRole('heading', { name: '审计日志', level: 1 }),
     ).toBeVisible();
+    await page.getByRole('button', { name: '列设置' }).click();
+    const columnModal = page.locator('.modal');
+    await expect(
+      columnModal.getByRole('heading', { name: '导出列' }),
+    ).toBeVisible();
+    await expect(
+      columnModal.getByRole('checkbox', { name: '归档时间' }),
+    ).toBeDisabled();
+    await columnModal
+      .locator('footer')
+      .getByRole('button', { name: '关闭' })
+      .click();
+
     const status = page
       .locator('select')
       .filter({ has: page.locator('option', { hasText: '全部状态' }) });

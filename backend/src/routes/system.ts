@@ -293,11 +293,51 @@ export async function systemRoutes(app: FastifyInstance) {
         status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        columns: z.string().trim().optional(),
       })
       .parse(req.query);
     if (q.from && q.to && q.from > q.to) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
+
+    const EXPORT_COLUMN_META: Record<string, string> = {
+      time: '时间',
+      action: '操作',
+      object_type: '对象类型',
+      object_id: '对象 ID',
+      status: '状态码',
+      user: '操作人',
+      request_id: '请求 ID',
+      ip: 'IP',
+      user_agent: 'User-Agent',
+      detail: '详情',
+      archived_at: '归档时间',
+    };
+    const allowedColumns = Object.keys(EXPORT_COLUMN_META).filter(
+      (key) => key !== 'archived_at' || q.scope === 'archive',
+    );
+    const defaultColumns = allowedColumns;
+    const requested = q.columns
+      ? Array.from(
+          new Set(
+            q.columns
+              .split(',')
+              .map((key) => key.trim())
+              .filter(Boolean),
+          ),
+        )
+      : defaultColumns;
+    const unknown = requested.filter((key) => !allowedColumns.includes(key));
+    if (!requested.length || unknown.length) {
+      throw httpError(
+        400,
+        'INVALID_COLUMNS',
+        `导出列不合法：${(unknown.length ? unknown : ['(空)']).join(', ')}`,
+      );
+    }
+    // 固定按元数据顺序输出，避免前端传参顺序影响 CSV 列序
+    const columns = allowedColumns.filter((key) => requested.includes(key));
+
     const org = await requestOrg(req);
     const { where, params } = auditFilter(org, q);
     const table = q.scope === 'archive' ? 'audit_logs_archive' : 'audit_logs';
@@ -325,36 +365,40 @@ export async function systemRoutes(app: FastifyInstance) {
       if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
       return `"${text.replace(/"/g, '""')}"`;
     };
-    const header = [
-      '时间',
-      '操作',
-      '对象类型',
-      '对象 ID',
-      '状态码',
-      '操作人',
-      '请求 ID',
-      'IP',
-      'User-Agent',
-      '详情',
-      ...(q.scope === 'archive' ? ['归档时间'] : []),
-    ];
+    const valueFor = (row: any, key: string) => {
+      switch (key) {
+        case 'time':
+          return row.created_at ? new Date(row.created_at).toISOString() : '';
+        case 'action':
+          return row.action;
+        case 'object_type':
+          return row.object_type;
+        case 'object_id':
+          return row.object_id;
+        case 'status':
+          return row.status_code;
+        case 'user':
+          return row.user_name ?? row.user_id;
+        case 'request_id':
+          return row.request_id;
+        case 'ip':
+          return row.ip;
+        case 'user_agent':
+          return row.user_agent;
+        case 'detail':
+          return row.detail;
+        case 'archived_at':
+          return row.archived_at
+            ? new Date(row.archived_at).toISOString()
+            : '';
+        default:
+          return '';
+      }
+    };
+    const header = columns.map((key) => EXPORT_COLUMN_META[key]);
     const lines = [header.map(cell).join(',')];
     for (const row of rows) {
-      lines.push(
-        [
-          cell(row.created_at ? new Date(row.created_at).toISOString() : ''),
-          cell(row.action),
-          cell(row.object_type),
-          cell(row.object_id),
-          cell(row.status_code),
-          cell(row.user_name ?? row.user_id),
-          cell(row.request_id),
-          cell(row.ip),
-          cell(row.user_agent),
-          cell(row.detail),
-          ...(q.scope === 'archive' ? [cell(row.archived_at ? new Date(row.archived_at).toISOString() : '')] : []),
-        ].join(','),
-      );
+      lines.push(columns.map((key) => cell(valueFor(row, key))).join(','));
     }
 
     if (auth?.sub && auth.org_id) {
@@ -376,6 +420,7 @@ export async function systemRoutes(app: FastifyInstance) {
               status: q.status ?? null,
               from: q.from ?? null,
               to: q.to ?? null,
+              columns,
               exported: rows.length,
             }),
           ],

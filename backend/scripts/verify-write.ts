@@ -3919,6 +3919,187 @@ async function main() {
     );
   });
 
+  await check('筛选视图：全员/角色/指定用户共享与仅创建者可删', async () => {
+    const login = async (email: string) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email, password: 'demo1234' },
+      });
+      assert.equal(res.statusCode, 200, `登录失败：${email}`);
+      return res.json().token as string;
+    };
+    const adminToken = await login('admin@hengzhi.ai');
+    const zhangToken = await login('zhang@hengzhi.ai');
+    const wangToken = await login('wang@hengzhi.ai');
+
+    const users = await query<{ id: string; email: string }>(
+      `SELECT id, email FROM users WHERE email = ANY($1::text[])`,
+      [['zhang@hengzhi.ai', 'wang@hengzhi.ai']],
+    );
+    const zhangId = users.find((u) => u.email === 'zhang@hengzhi.ai')!.id;
+
+    const eng = await one<{ org_id: string }>(
+      `SELECT org_id FROM engagements WHERE id = $1`,
+      [engagementId],
+    );
+    const review = await one<{ id: string }>(
+      `INSERT INTO copilot_reconcile_reviews
+         (idempotency_key, org_id, engagement_id, kind, document_id, status, source)
+       VALUES ($1,$2,$3,'statement',$4,'confirmed','verify-write')
+       RETURNING id`,
+      [`verify-fv-${stamp}`, eng!.org_id, engagementId, `FV-${stamp}`],
+    );
+    const reviewId = review!.id;
+    const allViewIds: string[] = [];
+
+    const call = (
+      token: string,
+      method: any,
+      url: string,
+      payload?: any,
+    ) =>
+      app.inject({
+        method,
+        url,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(payload === undefined
+            ? {}
+            : { 'content-type': 'application/json' }),
+        },
+        payload: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+
+    const createView = async (payload: Record<string, unknown>) => {
+      const res = await call(
+        adminToken,
+        'POST',
+        `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-views`,
+        payload,
+      );
+      assert.equal(res.statusCode, 201, `创建视图失败：${res.body}`);
+      const item = res.json().item;
+      if (!allViewIds.includes(item.id)) allViewIds.push(item.id);
+      return item;
+    };
+
+    const listViews = async (token: string) => {
+      const res = await call(
+        token,
+        'GET',
+        `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-views`,
+      );
+      assert.equal(res.statusCode, 200, `查询视图失败：${res.body}`);
+      return res.json().items as any[];
+    };
+
+    const outsiderEmail = `verify-fv-outsider-${stamp}@example.com`;
+
+    try {
+      const privateView = await createView({
+        name: '私密视图',
+        status: 'completed',
+      });
+      assert.equal(privateView.shared, false, '默认应为不共享');
+      assert.ok(
+        !(await listViews(zhangToken)).some((v) => v.id === privateView.id),
+        '未共享视图不应被他人看到',
+      );
+
+      const shared = await createView({ name: '私密视图', shared: true });
+      assert.equal(shared.id, privateView.id, '同名保存应复用同一视图');
+      const seenByZhang = (await listViews(zhangToken)).find(
+        (v) => v.id === privateView.id,
+      );
+      assert.ok(seenByZhang, '全员共享后顾问应能看到');
+      assert.equal(seenByZhang.is_owner, false, '共享视图不应标记为他人所有');
+
+      const roleView = await createView({ name: '角色视图', shared_role: 'pm' });
+      assert.ok(
+        !(await listViews(zhangToken)).some((v) => v.id === roleView.id),
+        '角色外用户不应看到角色共享视图',
+      );
+      assert.ok(
+        (await listViews(wangToken)).some((v) => v.id === roleView.id),
+        '同角色用户应看到角色共享视图',
+      );
+
+      const targeted = await createView({
+        name: '指定视图',
+        shared_user_ids: [zhangId],
+      });
+      assert.ok(
+        (await listViews(zhangToken)).some((v) => v.id === targeted.id),
+        '被指定用户应看到视图',
+      );
+      assert.ok(
+        !(await listViews(wangToken)).some((v) => v.id === targeted.id),
+        '未被指定用户不应看到视图',
+      );
+
+      const resaved = await createView({ name: '指定视图', status: 'failed' });
+      assert.equal(resaved.id, targeted.id, '重新保存应复用同一视图');
+      assert.deepEqual(
+        resaved.shared_user_ids,
+        [zhangId],
+        '未传 shared_user_ids 时应保留原共享对象',
+      );
+
+      const outsider = await one<{ id: string }>(
+        `INSERT INTO users (org_id, name, email, password_hash)
+         VALUES ($1,'外部组织用户',$2,$3) RETURNING id`,
+        [isolatedOrgId, outsiderEmail, hashPassword('demo1234')],
+      );
+      const crossOrg = await call(
+        adminToken,
+        'POST',
+        `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-views`,
+        { name: '跨组织视图', shared_user_ids: [outsider!.id] },
+      );
+      assert.equal(crossOrg.statusCode, 422, '跨组织共享应被拒绝');
+      assert.equal(crossOrg.json().error, 'INVALID_SHARED_USERS');
+
+      const deleteAsZhang = await call(
+        zhangToken,
+        'DELETE',
+        `/api/copilot-batch-filter-views/${targeted.id}`,
+      );
+      assert.equal(deleteAsZhang.statusCode, 404, '非创建者不能删除视图');
+
+      const deleteAsAdmin = await call(
+        adminToken,
+        'DELETE',
+        `/api/copilot-batch-filter-views/${targeted.id}`,
+      );
+      assert.equal(deleteAsAdmin.statusCode, 200, '创建者应能删除视图');
+      assert.ok(
+        !(await listViews(zhangToken)).some((v) => v.id === targeted.id),
+        '删除后不应再出现在列表',
+      );
+    } finally {
+      if (allViewIds.length) {
+        await query(
+          `DELETE FROM user_notifications
+            WHERE ref_type = 'copilot_batch_filter_view'
+              AND ref_id = ANY($1::uuid[])`,
+          [allViewIds],
+        );
+      }
+      await query(
+        `DELETE FROM audit_logs
+          WHERE object_type = 'copilot_batch_filter_view'
+            AND detail->>'review_id' = $1`,
+        [reviewId],
+      );
+      await query(`DELETE FROM copilot_batch_filter_views WHERE review_id = $1`, [
+        reviewId,
+      ]);
+      await query(`DELETE FROM copilot_reconcile_reviews WHERE id = $1`, [reviewId]);
+      await query(`DELETE FROM users WHERE email = $1`, [outsiderEmail]);
+    }
+  });
+
   await check('指标：Prometheus 输出、数据库状态与访问令牌', async () => {
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     assert.equal(health.statusCode, 200);

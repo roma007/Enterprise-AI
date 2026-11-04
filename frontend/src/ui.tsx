@@ -200,6 +200,7 @@ export function Stat({
   tone,
   onClick,
   title,
+  spark,
 }: {
   label: string;
   value: ReactNode;
@@ -207,7 +208,9 @@ export function Stat({
   tone?: Tone;
   onClick?: () => void;
   title?: string;
+  spark?: number[];
 }) {
+  const sparkMax = Math.max(1, ...(spark ?? []));
   return (
     <div
       className={cn('stat', tone && `stat-${tone}`)}
@@ -230,6 +233,36 @@ export function Stat({
       <span className="stat-label">{label}</span>
       <strong className="stat-value">{value}</strong>
       {hint && <span className="stat-hint">{hint}</span>}
+      {spark && spark.length > 1 ? (
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 1,
+            height: 18,
+            marginTop: 4,
+            color: 'currentColor',
+          }}
+        >
+          {spark.map((item, index) => (
+            <span
+              key={index}
+              style={{
+                flex: 1,
+                minWidth: 2,
+                height: `${Math.max(
+                  8,
+                  Math.round((item / sparkMax) * 100),
+                )}%`,
+                background: 'currentColor',
+                opacity: item > 0 ? 0.35 : 0.12,
+                borderRadius: 1,
+              }}
+            />
+          ))}
+        </span>
+      ) : null}
     </div>
   );
 }

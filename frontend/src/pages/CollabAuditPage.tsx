@@ -212,6 +212,19 @@ export function CollabAuditPage() {
     [boardDays],
   );
   const boardComparison = board.data?.comparison ?? null;
+  const boardSpark = (deltaKey: string, maxPoints = 24): number[] => {
+    const rows = [...(board.data?.items ?? [])].reverse();
+    const values = rows.map((row: any) => Number(row[deltaKey] ?? 0));
+    if (values.length <= maxPoints) return values;
+    const size = Math.ceil(values.length / maxPoints);
+    const out: number[] = [];
+    for (let i = 0; i < values.length; i += size) {
+      out.push(
+        values.slice(i, i + size).reduce((sum, item) => sum + item, 0),
+      );
+    }
+    return out;
+  };
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
   const { data, error, loading, reload } = useLoad(
@@ -573,6 +586,7 @@ export function CollabAuditPage() {
                   hint={`环比 ${change > 0 ? `+${change}` : change}`}
                   tone={change > 0 ? 'brand' : change < 0 ? 'red' : 'gray'}
                   title="查看该类型明细"
+                  spark={boardSpark(key)}
                   onClick={() => {
                     setType(BOARD_TYPE[key] ?? 'all');
                     setAction('');

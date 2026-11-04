@@ -1547,22 +1547,24 @@ export async function copilotRoutes(app: FastifyInstance) {
   app.post('/api/copilot-reconcile-reviews/:id/documents', async (req, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const item = await generateReconcileDeliverable(id);
-    const auth = (req as any).authUser;
-    try {
-      await query(
-        `INSERT INTO audit_logs
-           (org_id, user_id, action, object_type, object_id, status_code, detail)
-         VALUES ($1,$2,'GENERATE copilot-reconcile-document',
-                 'copilot_reconcile_review',$3,200,$4::jsonb)`,
-        [
-          auth?.org_id ?? null,
-          auth?.sub ?? null,
-          id,
-          JSON.stringify({ deliverable_id: item.id, version: item.version }),
-        ],
-      );
-    } catch (err) {
-      req.log?.warn?.({ err }, 'reconcile document audit failed');
+    if (!item.reused) {
+      const auth = (req as any).authUser;
+      try {
+        await query(
+          `INSERT INTO audit_logs
+             (org_id, user_id, action, object_type, object_id, status_code, detail)
+           VALUES ($1,$2,'GENERATE copilot-reconcile-document',
+                   'copilot_reconcile_review',$3,200,$4::jsonb)`,
+          [
+            auth?.org_id ?? null,
+            auth?.sub ?? null,
+            id,
+            JSON.stringify({ deliverable_id: item.id, version: item.version }),
+          ],
+        );
+      } catch (err) {
+        req.log?.warn?.({ err }, 'reconcile document audit failed');
+      }
     }
     return reply.code(201).send({ item });
   });

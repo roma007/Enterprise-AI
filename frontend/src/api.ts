@@ -1653,6 +1653,7 @@ export const api = {
         version: number;
         type: string;
         status: string;
+        reused: boolean;
       };
     }>(`/api/copilot-reconcile-reviews/${reviewId}/documents`, json('POST', {})),
   exportReconcileDocumentPdf: (reviewId: string) =>

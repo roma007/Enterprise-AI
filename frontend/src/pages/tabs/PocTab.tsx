@@ -1302,7 +1302,9 @@ function ReconcileReviewDetail({
       const res = await api.generateReconcileDocument(review.id);
       setLatestDoc({ ...res.item, is_stale: false });
       setActionNotice(
-        `已生成交付物《${res.item.title}》v${res.item.version}，请在「报告」页签审批后分享给客户。`,
+        res.item.reused
+          ? `报告内容未变化，已复用现有版本 v${res.item.version}。`
+          : `已生成交付物《${res.item.title}》v${res.item.version}，请在「报告」页签审批后分享给客户。`,
       );
     } catch (err) {
       setActionError(err);

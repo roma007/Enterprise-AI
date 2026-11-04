@@ -4684,6 +4684,12 @@ async function main() {
       assert.equal(firstItem.status, 'draft');
       assert.ok(firstItem.title.includes('对账复核报告'), '标题应含报告名');
 
+      const reused = await generate();
+      assert.equal(reused.statusCode, 201);
+      assert.equal(reused.json().item.reused, true, '内容未变应复用现有版本');
+      assert.equal(reused.json().item.version, 1, '复用不应新增版本');
+      assert.equal(reused.json().item.id, firstItem.id);
+
       const listDocuments = async () => {
         const res = await app.inject({
           method: 'GET',
@@ -4773,6 +4779,7 @@ async function main() {
       const second = await generate();
       assert.equal(second.statusCode, 201);
       assert.equal(second.json().item.version, 2, '再次生成应递增版本');
+      assert.equal(second.json().item.reused, false, '内容变化应生成新版本');
       const refreshedDocs = await listDocuments();
       assert.equal(refreshedDocs[0].version, 2);
       assert.equal(refreshedDocs[0].is_stale, false, '重新生成后应恢复最新');

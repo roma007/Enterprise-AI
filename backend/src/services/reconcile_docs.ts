@@ -327,6 +327,7 @@ export async function generateReconcileDeliverable(
   version: number;
   type: string;
   status: string;
+  reused: boolean;
 }> {
   const bundle = await loadReconcileBundle(reviewId);
   const review = bundle.review;
@@ -335,8 +336,31 @@ export async function generateReconcileDeliverable(
   }
   const rendered = renderReconcileDoc(bundle);
   const engagementId = review.engagement_id as string;
+  const currentHash = reconcileMarkdownHash(rendered.markdown);
 
-  return withTransaction(async (client) => {
+  const latest = await one<any>(
+    `SELECT id, title, version, type, status,
+            generated_from->>'content_hash' AS content_hash
+       FROM deliverables
+      WHERE type = 'data_report'
+        AND deleted_at IS NULL
+        AND generated_from->>'reviewId' = $1
+      ORDER BY version DESC
+      LIMIT 1`,
+    [reviewId],
+  );
+  if (latest && latest.content_hash === currentHash) {
+    return {
+      id: latest.id,
+      title: latest.title,
+      version: latest.version,
+      type: latest.type,
+      status: latest.status,
+      reused: true,
+    };
+  }
+
+  const created = await withTransaction(async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [
       engagementId,
       'reconcile_report',
@@ -365,7 +389,7 @@ export async function generateReconcileDeliverable(
           differences: Array.isArray(review.differences)
             ? review.differences.length
             : 0,
-          content_hash: reconcileMarkdownHash(rendered.markdown),
+          content_hash: currentHash,
         }),
         JSON.stringify({
           asOf: new Date().toISOString(),
@@ -379,4 +403,5 @@ export async function generateReconcileDeliverable(
     );
     return inserted.rows[0];
   });
+  return { ...created, reused: false };
 }

@@ -212,6 +212,13 @@ export function CollabAuditPage() {
     [boardDays],
   );
   const boardComparison = board.data?.comparison ?? null;
+  const scrollToList = () => {
+    window.setTimeout(() => {
+      document
+        .getElementById('collab-audit-list')
+        ?.scrollIntoView({ block: 'start' });
+    }, 80);
+  };
   const boardSpark = (
     deltaKey: string,
     maxPoints = 24,
@@ -570,6 +577,7 @@ export function CollabAuditPage() {
                 setFrom(boardComparison.current.start);
                 setTo(boardComparison.current.end);
                 setOffset(0);
+                scrollToList();
               }}
             >
               查看明细
@@ -612,6 +620,7 @@ export function CollabAuditPage() {
                     setFrom((start ?? '').slice(0, 10));
                     setTo(((end ?? start) ?? '').slice(0, 10));
                     setOffset(0);
+                    scrollToList();
                   }}
                   onClick={() => {
                     setType(BOARD_TYPE[key] ?? 'all');
@@ -619,6 +628,7 @@ export function CollabAuditPage() {
                     setFrom(boardComparison.current.start);
                     setTo(boardComparison.current.end);
                     setOffset(0);
+                    scrollToList();
                   }}
                 />
               );
@@ -640,6 +650,7 @@ export function CollabAuditPage() {
         ) : null}
       </Card>
       <Card
+        id="collab-audit-list"
         title={
           data
             ? `${scope === 'archive' ? '归档' : scope === 'all' ? '全部' : '热表'} · 共 ${total} 条`

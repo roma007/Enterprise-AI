@@ -38,6 +38,7 @@ export function Card({
   children,
   className,
   padded = true,
+  id,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
@@ -45,9 +46,10 @@ export function Card({
   children: ReactNode;
   className?: string;
   padded?: boolean;
+  id?: string;
 }) {
   return (
-    <section className={cn('card', className)}>
+    <section id={id} className={cn('card', className)}>
       {(title || actions) && (
         <header className="card-head">
           <div>

@@ -127,7 +127,7 @@ npm run dev          # http://127.0.0.1:8788
 - `GET /api/audit-logs/archive`：分页查询归档记录。
 - `GET /api/audit-logs/facets?scope=live|archive`：返回可选的操作与对象类型，供页面下拉筛选。
 - 导出：`GET /api/audit-logs/export.csv?scope=live|archive&q=&action=&object_type=&status=&from=&to=&columns=`，最多 5000 条；`columns` 逗号分隔（time/action/object_type/object_id/status/user/request_id/ip/user_agent/detail/archived_at），非法列返回 `400 INVALID_COLUMNS`，`archived_at` 仅归档范围可用；写 `EXPORT audit-logs` 审计事件。
-- 审计筛选视图：`GET/POST /api/audit-filter-views`、`PATCH/DELETE /api/audit-filter-views/:id`（保存关键词/操作/对象/状态/日期/热表或归档，同名覆盖，仅创建者可改/删；`shared=true` 共享给全员，`shared_role=admin|director|pm|consultant|tech_lead` 按角色共享，`shared_user_ids[]` 指定同事（非本组织返回 `422 INVALID_SHARED_USERS`）；新增共享对象写 `copilot_audit_view_shared` 通知，链接 `?audit_view=<viewId>#/audit` 自动套用；`export_columns[]` 一并保存导出列模板，套用视图时恢复）。
+- 审计筛选视图：`GET/POST /api/audit-filter-views`、`PATCH/DELETE /api/audit-filter-views/:id`（保存关键词/操作/对象/状态/日期/热表或归档，同名覆盖，仅创建者可改/删；`shared=true` 共享给全员，`shared_role=admin|director|pm|consultant|tech_lead` 按角色共享，`shared_user_ids[]` 指定同事（非本组织返回 `422 INVALID_SHARED_USERS`）；新增共享对象写 `copilot_audit_view_shared` 通知，链接 `?audit_view=<viewId>#/audit` 自动套用；`export_columns[]` 一并保存导出列模板，套用视图时恢复；`GET /api/audit-filter-views/export.json` 导出本人视图（不含共享关系），`POST /api/audit-filter-views/import` 导入最多 100 个视图（同名覆盖））。
 - 归档只移动、不删除；管理员/总监可操作，其他角色 403。
 - CLI：`npm run audit:archive -- --days=180 --dry-run`，去掉 `--dry-run` 执行；支持 `--batch=1000`。
 - 建议 cron 每日执行，保留 180 天热数据（`AUDIT_RETENTION_DAYS` 可覆盖）。

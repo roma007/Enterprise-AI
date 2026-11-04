@@ -164,6 +164,9 @@ export function AuditPage() {
   const facets = useLoad(() => api.listAuditFacets(mode), [mode]);
   const auditViews = useLoad(() => api.listAuditFilterViews(), []);
   const [selectedViewId, setSelectedViewId] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [viewNotice, setViewNotice] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [savingView, setSavingView] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [columnPicker, setColumnPicker] = useState(false);
@@ -371,6 +374,46 @@ export function AuditPage() {
       `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
     );
   }, [auditViews.data]);
+
+  const exportViewsJson = async () => {
+    setViewError(null);
+    try {
+      const blob = await api.exportAuditFilterViewsJson();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `审计视图-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+      setViewError(err);
+    }
+  };
+
+  const importViewsJson = async (file: File) => {
+    setImporting(true);
+    setViewError(null);
+    setViewNotice(null);
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!Array.isArray(parsed?.views) || !parsed.views.length) {
+        throw new Error('文件缺少 views 数组');
+      }
+      const res = await api.importAuditFilterViews({
+        version: 1,
+        views: parsed.views,
+      });
+      setViewNotice(`已导入 ${res.imported} 个视图（同名覆盖）`);
+      await auditViews.reload();
+    } catch (err) {
+      setViewError(err);
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   const renameCurrentView = async () => {
     if (!selectedViewId) return;
@@ -709,6 +752,31 @@ export function AuditPage() {
                 >
                   {savingView ? '保存中…' : '保存当前筛选'}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void exportViewsJson()}
+                >
+                  导出视图
+                </Button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void importViewsJson(file);
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={importing}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  {importing ? '导入中…' : '导入视图'}
+                </Button>
                 {selectedView ? (
                   <Button
                     size="sm"
@@ -732,6 +800,7 @@ export function AuditPage() {
               </div>
             }
           >
+            {viewNotice ? <Notice tone="green">{viewNotice}</Notice> : null}
             {viewError ? <ErrorBox error={viewError} /> : null}
             {items.length === 0 ? (
               <Empty

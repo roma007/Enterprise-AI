@@ -1004,6 +1004,26 @@ export const api = {
       '/api/audit-filter-views',
       json('POST', payload),
     ),
+  exportAuditFilterViewsJson: () =>
+    requestBlob('/api/audit-filter-views/export.json'),
+  importAuditFilterViews: (payload: {
+    version?: number;
+    views: Array<{
+      name: string;
+      mode?: 'live' | 'archive';
+      q?: string | null;
+      action?: string | null;
+      object_type?: string | null;
+      status?: string | null;
+      from?: string | null;
+      to?: string | null;
+      export_columns?: string[];
+    }>;
+  }) =>
+    request<{ imported: number; items: AuditFilterView[] }>(
+      '/api/audit-filter-views/import',
+      json('POST', payload),
+    ),
   renameAuditFilterView: (id: string, name: string) =>
     request<{ item: AuditFilterView }>(
       `/api/audit-filter-views/${id}`,

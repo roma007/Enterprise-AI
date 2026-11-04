@@ -342,6 +342,8 @@ test.describe('关键路径冒烟', () => {
 
     const saveButton = page.getByRole('button', { name: '保存当前筛选' });
     await expect(saveButton).toBeVisible();
+    await expect(page.getByRole('button', { name: '导出视图' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '导入视图' })).toBeVisible();
     await saveButton.click();
     const viewSelect = page
       .locator('select')

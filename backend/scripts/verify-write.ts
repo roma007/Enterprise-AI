@@ -5928,6 +5928,93 @@ async function main() {
       200,
       '删除审计视图',
     );
+
+    const ioNames = [`${viewName}-io`];
+    const ioView = ok(
+      await auditCall('POST', '/api/audit-filter-views', {
+        name: ioNames[0],
+        mode: 'live',
+        status: '4xx',
+        export_columns: ['time', 'status'],
+      }),
+      201,
+      '创建待导出视图',
+    );
+    const exported = await app.inject({
+      method: 'GET',
+      url: '/api/audit-filter-views/export.json',
+      headers: { authorization: `Bearer ${auditLogin.token}` },
+    });
+    assert.equal(exported.statusCode, 200, '视图导出应成功');
+    const exportedJson = exported.json();
+    assert.equal(exportedJson.version, 1);
+    const exportedItem = (exportedJson.views as any[]).find(
+      (item) => item.name === ioNames[0],
+    );
+    assert.ok(exportedItem, '导出文件应包含视图');
+    assert.deepEqual(exportedItem.export_columns, ['time', 'status']);
+    assert.ok(!('shared' in exportedItem), '导出不应携带共享关系');
+
+    ok(
+      await auditCall(
+        'DELETE',
+        `/api/audit-filter-views/${(ioView.item as any).id}`,
+      ),
+      200,
+      '删除待导入视图',
+    );
+    const imported = ok(
+      await auditCall('POST', '/api/audit-filter-views/import', {
+        version: 1,
+        views: [exportedItem],
+      }),
+      201,
+      '导入视图',
+    );
+    assert.equal(imported.imported, 1);
+    assert.equal((imported.items[0] as any).name, ioNames[0]);
+    assert.equal((imported.items[0] as any).status, '4xx');
+    assert.deepEqual((imported.items[0] as any).export_columns, [
+      'time',
+      'status',
+    ]);
+
+    const badImportColumns = await auditCall(
+      'POST',
+      '/api/audit-filter-views/import',
+      {
+        version: 1,
+        views: [{ name: `${viewName}-bad-import`, export_columns: ['password'] }],
+      },
+    );
+    assert.equal(badImportColumns.status, 400);
+    assert.equal(badImportColumns.body.error, 'INVALID_EXPORT_COLUMNS');
+
+    const tooManyViews = await auditCall(
+      'POST',
+      '/api/audit-filter-views/import',
+      {
+        version: 1,
+        views: Array.from({ length: 101 }, (_, index) => ({
+          name: `${viewName}-many-${index}`,
+        })),
+      },
+    );
+    assert.equal(tooManyViews.status, 400, '一次最多导入 100 个视图');
+
+    for (const name of ioNames) {
+      const row = await one<{ id: string }>(
+        `SELECT id FROM audit_filter_views WHERE user_id = $1 AND name = $2`,
+        [auditLogin.user.id, name],
+      );
+      if (row) {
+        ok(
+          await auditCall('DELETE', `/api/audit-filter-views/${row.id}`),
+          200,
+          '清理导入视图',
+        );
+      }
+    }
     const afterDelete = ok(
       await auditCall('GET', '/api/audit-filter-views'),
       200,

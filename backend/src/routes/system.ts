@@ -32,6 +32,21 @@ const AUDIT_EXPORT_COLUMNS: Record<string, string> = {
   archived_at: '归档时间',
 };
 
+function normalizeAuditExportColumns(input?: string[]): string[] {
+  const columns = Array.from(new Set(input ?? []));
+  const bad = columns.filter(
+    (key) => !Object.keys(AUDIT_EXPORT_COLUMNS).includes(key),
+  );
+  if (bad.length) {
+    throw httpError(
+      400,
+      'INVALID_EXPORT_COLUMNS',
+      `导出列不合法：${bad.join(', ')}`,
+    );
+  }
+  return columns;
+}
+
 interface AuditQuery {
   q?: string;
   action?: string;
@@ -517,17 +532,7 @@ export async function systemRoutes(app: FastifyInstance) {
     if (body.from && body.to && body.from > body.to) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
-    const exportColumns = Array.from(new Set(body.export_columns ?? []));
-    const badExportColumns = exportColumns.filter(
-      (key) => !Object.keys(AUDIT_EXPORT_COLUMNS).includes(key),
-    );
-    if (badExportColumns.length) {
-      throw httpError(
-        400,
-        'INVALID_EXPORT_COLUMNS',
-        `导出列不合法：${badExportColumns.join(', ')}`,
-      );
-    }
+    const exportColumns = normalizeAuditExportColumns(body.export_columns);
     const shareIds = Array.from(new Set(body.shared_user_ids ?? []));
     const result = await withTransaction(async (client) => {
       if (shareIds.length) {
@@ -653,6 +658,120 @@ export async function systemRoutes(app: FastifyInstance) {
       }
     }
     return reply.code(201).send({ item: result.item });
+  });
+
+  app.get('/api/audit-filter-views/export.json', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    const rows = await query<any>(
+      `SELECT name, mode, q, action, object_type, status,
+              from_date::text AS "from", to_date::text AS "to",
+              export_columns
+         FROM audit_filter_views
+        WHERE user_id = $1
+        ORDER BY name`,
+      [auth.sub],
+    );
+    const filename = `audit-views-${new Date().toISOString().slice(0, 10)}.json`;
+    return reply
+      .header('content-type', 'application/json; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${filename}"`)
+      .send({
+        version: 1,
+        exported_at: new Date().toISOString(),
+        views: rows.map((row) => ({
+          name: row.name,
+          mode: row.mode,
+          q: row.q,
+          action: row.action,
+          object_type: row.object_type,
+          status: row.status,
+          from: row.from,
+          to: row.to,
+          export_columns: row.export_columns ?? [],
+        })),
+      });
+  });
+
+  const importViewItem = z.object({
+    name: z.string().trim().min(1).max(80),
+    mode: z.enum(['live', 'archive']).default('live'),
+    q: z.string().trim().max(200).nullable().optional(),
+    action: z.string().trim().max(200).nullable().optional(),
+    object_type: z.string().trim().max(120).nullable().optional(),
+    status: z.enum(['2xx', '3xx', '4xx', '5xx']).nullable().optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    export_columns: z.array(z.string()).max(20).optional(),
+  });
+
+  /** 导入 JSON 视图（同名覆盖），只恢复筛选与导出列，不恢复共享关系。 */
+  app.post('/api/audit-filter-views/import', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const body = z
+      .object({
+        version: z.literal(1).optional(),
+        views: z.array(importViewItem).min(1).max(100),
+      })
+      .parse(req.body ?? {});
+
+    const normalized = body.views.map((view) => {
+      if (view.from && view.to && view.from > view.to) {
+        throw httpError(
+          400,
+          'INVALID_DATE_RANGE',
+          `视图「${view.name}」开始日期不能晚于结束日期`,
+        );
+      }
+      return {
+        ...view,
+        export_columns: normalizeAuditExportColumns(view.export_columns),
+      };
+    });
+    const unique = Array.from(
+      new Map(normalized.map((view) => [view.name, view])).values(),
+    );
+
+    const items: any[] = [];
+    for (const view of unique) {
+      const row = await one(
+        `INSERT INTO audit_filter_views
+           (org_id, user_id, name, mode, q, action, object_type, status,
+            from_date, to_date, export_columns)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+         ON CONFLICT (user_id, name)
+         DO UPDATE SET mode = EXCLUDED.mode,
+                       q = EXCLUDED.q,
+                       action = EXCLUDED.action,
+                       object_type = EXCLUDED.object_type,
+                       status = EXCLUDED.status,
+                       from_date = EXCLUDED.from_date,
+                       to_date = EXCLUDED.to_date,
+                       export_columns = EXCLUDED.export_columns,
+                       updated_at = now()
+         RETURNING id, name, mode, q, action, object_type, status,
+                   from_date::text AS "from", to_date::text AS "to",
+                   export_columns, created_at, updated_at`,
+        [
+          auth.org_id,
+          auth.sub,
+          view.name,
+          view.mode,
+          view.q ?? null,
+          view.action ?? null,
+          view.object_type ?? null,
+          view.status ?? null,
+          view.from ?? null,
+          view.to ?? null,
+          JSON.stringify(view.export_columns),
+        ],
+      );
+      items.push(row);
+    }
+    return reply.code(201).send({ imported: items.length, items });
   });
 
   app.patch('/api/audit-filter-views/:id', async (req) => {

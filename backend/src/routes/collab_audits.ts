@@ -335,6 +335,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
         `SELECT a.id, a.action, a.user_id, a.object_id, a.request_id,
                 a.detail, a.created_at,
                 u.name AS actor_name,
+                rev.engagement_id,
                 CASE WHEN a.object_type = 'user_notification'
                      THEN 'notification'
                      WHEN a.object_type = 'copilot_batch_filter_view'
@@ -344,6 +345,9 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                      ELSE 'export' END AS audit_type
            FROM audit_logs a
            LEFT JOIN users u ON u.id = a.user_id
+           LEFT JOIN copilot_reconcile_reviews rev
+             ON a.action = 'DECIDE copilot-reconcile-difference'
+            AND rev.id = a.object_id
           WHERE ${condition}
             AND ($2::text IS NULL OR a.action = $2)
             AND ($3::date IS NULL OR a.created_at >= $3::date)
@@ -481,7 +485,7 @@ export async function collabAuditRoutes(app: FastifyInstance) {
 
     const [items, totals] = await Promise.all([
       query<any>(
-        `SELECT c.*, u.name AS actor_name
+        `SELECT c.*, u.name AS actor_name, rev.engagement_id
            FROM (
              SELECT a.id, a.action, a.user_id, a.object_id, a.request_id,
                     a.detail, a.created_at,
@@ -506,6 +510,9 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                 AND ($5::uuid IS NULL OR a.user_id = $5)
            ) c
            LEFT JOIN users u ON u.id = c.user_id
+           LEFT JOIN copilot_reconcile_reviews rev
+             ON c.action = 'DECIDE copilot-reconcile-difference'
+            AND rev.id = c.object_id
           ORDER BY c.created_at DESC
           LIMIT $1 OFFSET $6`,
         [limit, action ?? null, from ?? null, to ?? null, actor_id ?? null, offset],
@@ -559,8 +566,9 @@ export async function collabAuditRoutes(app: FastifyInstance) {
 
     const [items, totals, lastRun] = await Promise.all([
       query<any>(
-        `SELECT a.id, a.action, a.user_id, a.detail, a.created_at,
-                a.archived_at, u.name AS actor_name,
+        `SELECT a.id, a.action, a.user_id, a.object_id, a.request_id,
+                a.detail, a.created_at, a.archived_at,
+                u.name AS actor_name, rev.engagement_id,
                 CASE WHEN a.object_type = 'user_notification'
                      THEN 'notification'
                      WHEN a.object_type = 'copilot_batch_filter_view'
@@ -570,6 +578,9 @@ export async function collabAuditRoutes(app: FastifyInstance) {
                      ELSE 'export' END AS audit_type
            FROM audit_logs_archive a
            LEFT JOIN users u ON u.id = a.user_id
+           LEFT JOIN copilot_reconcile_reviews rev
+             ON a.action = 'DECIDE copilot-reconcile-difference'
+            AND rev.id = a.object_id
           WHERE ${condition}
             AND ($2::text IS NULL OR a.action = $2)
             AND ($3::date IS NULL OR a.created_at >= $3::date)

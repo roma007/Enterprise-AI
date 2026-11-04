@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type BatchActionEvent } from '../../api';
 import { getStoredUser } from '../../auth';
 import { useDebouncedValue, useLoad } from '../../hooks';
@@ -67,11 +67,13 @@ const statusTone = (status: string) =>
 export function PocTab({
   engagementId,
   detail,
+  initialReviewId,
   onChanged,
   onGoReports,
 }: {
   engagementId: string;
   detail: EngagementDetail;
+  initialReviewId?: string;
   onChanged: () => void;
   onGoReports: () => void;
 }) {
@@ -116,6 +118,15 @@ export function PocTab({
       setReviewLoading(false);
     }
   };
+
+  const openedInitialReview = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialReviewId) return;
+    if (openedInitialReview.current === initialReviewId) return;
+    openedInitialReview.current = initialReviewId;
+    void openReview(initialReviewId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReviewId]);
 
   const reportable = detail.opportunities.filter(
     (o) => o.targetPhase === 'phase1' || o.targetPhase === 'phase2',

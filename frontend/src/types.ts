@@ -1255,6 +1255,7 @@ export interface CollabAudit {
   actor_name?: string | null;
   object_id?: string | null;
   request_id?: string | null;
+  engagement_id?: string | null;
   detail: Record<string, any>;
   created_at: string;
   archived_at?: string | null;

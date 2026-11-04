@@ -112,8 +112,17 @@ const TAB_KEYS: TabKey[] = [
 
 const tabStorageKey = (id: string) => `ai-delivery:tab:${id}`;
 
-export function EngagementPage({ id, onBack }: { id: string; onBack: () => void }) {
+export function EngagementPage({
+  id,
+  onBack,
+  review,
+}: {
+  id: string;
+  onBack: () => void;
+  review?: string;
+}) {
   const [tab, setTab] = useState<TabKey>(() => {
+    if (review) return 'poc';
     try {
       const saved = window.localStorage.getItem(tabStorageKey(id)) as TabKey | null;
       return saved && TAB_KEYS.includes(saved) ? saved : 'overview';
@@ -121,6 +130,10 @@ export function EngagementPage({ id, onBack }: { id: string; onBack: () => void 
       return 'overview';
     }
   });
+
+  useEffect(() => {
+    if (review) setTab('poc');
+  }, [review]);
 
   useEffect(() => {
     try {
@@ -263,6 +276,7 @@ export function EngagementPage({ id, onBack }: { id: string; onBack: () => void 
         <PocTab
           engagementId={id}
           detail={data}
+          initialReviewId={review}
           onChanged={() => void reload()}
           onGoReports={() => setTab('reports')}
         />

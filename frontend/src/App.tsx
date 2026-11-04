@@ -51,7 +51,7 @@ import { Badge } from './ui';
 
 type Route =
   | { page: 'dashboard' }
-  | { page: 'engagement'; id: string }
+  | { page: 'engagement'; id: string; review?: string }
   | { page: 'login' }
   | { page: 'benchmarks' }
   | { page: 'knowledge' }
@@ -68,8 +68,16 @@ type Route =
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '');
-  const parts = raw.split('/').filter(Boolean);
-  if (parts[0] === 'engagements' && parts[1]) return { page: 'engagement', id: parts[1] };
+  const [path, search] = raw.split('?');
+  const parts = path.split('/').filter(Boolean);
+  const params = new URLSearchParams(search ?? '');
+  if (parts[0] === 'engagements' && parts[1]) {
+    return {
+      page: 'engagement',
+      id: parts[1],
+      review: params.get('review') ?? undefined,
+    };
+  }
   if (parts[0] === 'login') return { page: 'login' };
   if (parts[0] === 'benchmarks') return { page: 'benchmarks' };
   if (parts[0] === 'knowledge') return { page: 'knowledge' };
@@ -363,6 +371,7 @@ export default function App() {
           <EngagementPage
             key={route.id}
             id={route.id}
+            review={route.review}
             onBack={() => navigate('#/')}
           />
         ) : route.page === 'knowledge' ? (

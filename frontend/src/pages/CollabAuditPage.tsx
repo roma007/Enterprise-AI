@@ -667,6 +667,16 @@ export function CollabAuditPage() {
                           <Button size="sm" onClick={() => setDetailItem(a)}>
                             查看
                           </Button>
+                          {isDecision && a.engagement_id ? (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                window.location.hash = `#/engagements/${a.engagement_id}?review=${a.object_id ?? ''}`;
+                              }}
+                            >
+                              查看复核
+                            </Button>
+                          ) : null}
                         </div>
                       </td>
                       {scope !== 'live' ? (

@@ -822,7 +822,31 @@ function ReconcileReviewDetail({
   const [resumeTarget, setResumeTarget] = useState<ReconcileBatch | null>(null);
   const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(new Set());
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
-  const allDiffTypes = groupDifferences(review.differences).map(
+  const [diffSourceFilter, setDiffSourceFilter] = useState('');
+  const [diffConfidenceFilter, setDiffConfidenceFilter] = useState('');
+  const confidenceBucket = (diff: ReconcileDifference) => {
+    const value = Number(diff.confidence);
+    if (!Number.isFinite(value)) return 'unknown';
+    if (value >= 0.8) return 'high';
+    if (value >= 0.6) return 'medium';
+    return 'low';
+  };
+  const diffSources = Array.from(
+    new Set(review.differences.map((diff) => diff.source ?? 'unknown')),
+  );
+  const filteredDifferences = review.differences.filter((diff) => {
+    if (diffSourceFilter && (diff.source ?? 'unknown') !== diffSourceFilter) {
+      return false;
+    }
+    if (
+      diffConfidenceFilter &&
+      confidenceBucket(diff) !== diffConfidenceFilter
+    ) {
+      return false;
+    }
+    return true;
+  });
+  const allDiffTypes = groupDifferences(filteredDifferences).map(
     ([type]) => type,
   );
   const allDiffTypesCollapsed =
@@ -1810,6 +1834,34 @@ function ReconcileReviewDetail({
 
       <div className="row" style={{ marginTop: 12, marginBottom: 6 }}>
         <strong>差异明细</strong>
+        <Select
+          value={diffSourceFilter}
+          onChange={(e) => setDiffSourceFilter(e.target.value)}
+          style={{ maxWidth: 130 }}
+        >
+          <option value="">全部来源</option>
+          {diffSources.map((source) => (
+            <option key={source} value={source}>
+              {DIFF_SOURCE_LABEL[source] ?? source}
+            </option>
+          ))}
+        </Select>
+        <Select
+          value={diffConfidenceFilter}
+          onChange={(e) => setDiffConfidenceFilter(e.target.value)}
+          style={{ maxWidth: 140 }}
+        >
+          <option value="">全部置信度</option>
+          <option value="high">高 (≥0.8)</option>
+          <option value="medium">中 (0.6–0.8)</option>
+          <option value="low">低 (&lt;0.6)</option>
+          <option value="unknown">未知</option>
+        </Select>
+        {review.differences.length !== filteredDifferences.length ? (
+          <span className="muted small">
+            已筛选 {filteredDifferences.length} / 共 {review.differences.length} 条
+          </span>
+        ) : null}
         {allDiffTypes.length > 1 ? (
           <Button
             size="sm"
@@ -1863,9 +1915,15 @@ function ReconcileReviewDetail({
             </tr>
           </thead>
           <tbody>
-            {review.differences.length === 0 ? (
-              <tr><td colSpan={11} className="muted">没有差异</td></tr>
-            ) : groupDifferences(review.differences).map(([type, diffs]) => (
+            {filteredDifferences.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="muted">
+                  {review.differences.length === 0
+                    ? '没有差异'
+                    : '没有符合筛选的差异'}
+                </td>
+              </tr>
+            ) : groupDifferences(filteredDifferences).map(([type, diffs]) => (
               <Fragment key={type}>
                 <tr>
                   <td

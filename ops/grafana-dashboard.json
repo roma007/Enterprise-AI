@@ -698,6 +698,89 @@
       ],
       "title": "5xx 错误率（SLO）",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "title": "PDF 缓存命中率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(pdf_cache_hits_total{job=\"ai-delivery-backend\"}[5m])) / clamp_min(sum(rate(pdf_cache_hits_total{job=\"ai-delivery-backend\"}[5m])) + sum(rate(pdf_cache_misses_total{job=\"ai-delivery-backend\"}[5m])), 0.0001)",
+          "legendFormat": "命中率",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "title": "PDF 缓存命中 / 未命中",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(pdf_cache_hits_total{job=\"ai-delivery-backend\"}[5m]))",
+          "legendFormat": "hit/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(pdf_cache_misses_total{job=\"ai-delivery-backend\"}[5m]))",
+          "legendFormat": "miss/s",
+          "refId": "B"
+        }
+      ]
     }
   ],
   "refresh": "30s",

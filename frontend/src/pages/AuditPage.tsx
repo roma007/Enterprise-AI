@@ -370,6 +370,29 @@ export function AuditPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={
+                    !search &&
+                    !actionFilter &&
+                    !objectTypeFilter &&
+                    !statusFilter &&
+                    !fromFilter &&
+                    !toFilter
+                  }
+                  onClick={() => {
+                    setSearch('');
+                    setActionFilter('');
+                    setObjectTypeFilter('');
+                    setStatusFilter('');
+                    setFromFilter('');
+                    setToFilter('');
+                    setOffset(0);
+                  }}
+                >
+                  清空筛选
+                </Button>
               </div>
             }
           >

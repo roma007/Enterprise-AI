@@ -55,6 +55,7 @@ psql "$DATABASE_URL" -c "select action,status_code,created_at from audit_logs wh
 | `pdf_jobs_pending` / `pdf_jobs_running` | PDF 队列待处理 / 渲染中 |
 | `pdf_jobs_done_24h` / `pdf_jobs_failed_24h` | 24 小时内完成 / 失败任务 |
 | `pdf_jobs_oldest_pending_seconds` | 最老待处理任务等待秒数 |
+| `pdf_cache_hits_total` / `pdf_cache_misses_total` | PDF 缓存命中 / 未命中（进程内） |
 | `ai_delivery_backup_last_success_timestamp_seconds` | 最近一次备份成功时间（node_exporter textfile） |
 | `ai_delivery_restore_drill_last_success_timestamp_seconds` | 最近一次恢复演练成功时间（textfile） |
 

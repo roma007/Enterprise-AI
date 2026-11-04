@@ -268,6 +268,7 @@ export interface Deliverable {
   template_id: string | null;
   template_version: string | null;
   chars?: number;
+  is_stale?: boolean;
   share_count?: number;
   last_shared_at?: string | null;
   created_at: string;

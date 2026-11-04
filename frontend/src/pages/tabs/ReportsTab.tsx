@@ -127,6 +127,12 @@ export function ReportsTab({
   };
 
   const changeStatus = async (d: Deliverable, status: string) => {
+    if (status === 'approved' && d.is_stale) {
+      setError(
+        new Error('复核内容已变更，请重新生成报告后再审批或外发'),
+      );
+      return;
+    }
     try {
       await api.setDeliverableStatus(d.id, status);
       await api.refreshGates(engagementId);
@@ -451,6 +457,9 @@ export function ReportsTab({
                         <option value="shared">已外发</option>
                         <option value="archived">已归档</option>
                       </select>
+                      {d.is_stale ? (
+                        <Badge tone="amber">已过期</Badge>
+                      ) : null}
                     </td>
                     <td>
                       {d.share_count ? (

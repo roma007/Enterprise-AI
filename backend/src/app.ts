@@ -711,9 +711,9 @@ app.get('/api/engagements/:id/deliverables', async (req, reply) => {
         AND ($2::text IS NULL OR title ILIKE '%' || $2 || '%' OR type ILIKE '%' || $2 || '%')`,
     [id, search],
   );
-  const rows = await query(
+  const rows = await query<any>(
     `SELECT d.id, d.type, d.title, d.version, d.status, d.template_id, d.template_version,
-            length(d.content->>'markdown') AS chars, d.created_at,
+            length(d.content->>'markdown') AS chars, d.created_at, d.generated_from,
             (SELECT count(*) FROM deliverable_shares sh WHERE sh.deliverable_id = d.id) AS share_count,
             (SELECT max(sh.shared_at) FROM deliverable_shares sh WHERE sh.deliverable_id = d.id) AS last_shared_at
        FROM deliverables d
@@ -723,7 +723,42 @@ app.get('/api/engagements/:id/deliverables', async (req, reply) => {
       LIMIT $3 OFFSET $4`,
     [id, search, page.limit, page.offset],
   );
-  return pageResult(rows, total?.count ?? 0, page);
+
+  // 复核报告：批量判断是否落后于当前复核内容。
+  const currentHashByReview = new Map<string, string | null>();
+  const staleByKey = new Map<string, boolean>();
+  for (const row of rows) {
+    const reviewId = row.generated_from?.reviewId as string | undefined;
+    const storedHash = row.generated_from?.content_hash as string | undefined;
+    if (!reviewId || !storedHash) continue;
+    if (!currentHashByReview.has(reviewId)) {
+      try {
+        const bundle = await loadReconcileBundle(reviewId);
+        currentHashByReview.set(
+          reviewId,
+          reconcileMarkdownHash(renderReconcileDoc(bundle).markdown),
+        );
+      } catch {
+        currentHashByReview.set(reviewId, null);
+      }
+    }
+    const current = currentHashByReview.get(reviewId) ?? null;
+    staleByKey.set(`${reviewId}|${storedHash}`, current !== null && current !== storedHash);
+  }
+  const items = rows.map((row) => {
+    const { generated_from, ...rest } = row;
+    const reviewId = generated_from?.reviewId as string | undefined;
+    const storedHash = generated_from?.content_hash as string | undefined;
+    return {
+      ...rest,
+      is_stale: Boolean(
+        reviewId && storedHash
+          ? staleByKey.get(`${reviewId}|${storedHash}`)
+          : false,
+      ),
+    };
+  });
+  return pageResult(items, total?.count ?? 0, page);
 });
 
 app.get('/api/engagements/:id/shares', async (req, reply) => {

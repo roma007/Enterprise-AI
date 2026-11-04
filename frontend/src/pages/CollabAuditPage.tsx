@@ -604,6 +604,15 @@ export function CollabAuditPage() {
                   title="查看该类型明细"
                   spark={spark.values}
                   sparkLabels={spark.labels}
+                  onSparkClick={(index) => {
+                    const label = spark.labels[index] ?? '';
+                    const [start, end] = label.split('~');
+                    setType(BOARD_TYPE[key] ?? 'all');
+                    setAction('');
+                    setFrom((start ?? '').slice(0, 10));
+                    setTo(((end ?? start) ?? '').slice(0, 10));
+                    setOffset(0);
+                  }}
                   onClick={() => {
                     setType(BOARD_TYPE[key] ?? 'all');
                     setAction('');

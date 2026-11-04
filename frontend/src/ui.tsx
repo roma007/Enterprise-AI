@@ -202,6 +202,7 @@ export function Stat({
   title,
   spark,
   sparkLabels,
+  onSparkClick,
 }: {
   label: string;
   value: ReactNode;
@@ -211,6 +212,7 @@ export function Stat({
   title?: string;
   spark?: number[];
   sparkLabels?: string[];
+  onSparkClick?: (index: number) => void;
 }) {
   const sparkMax = Math.max(1, ...(spark ?? []));
   return (
@@ -252,12 +254,23 @@ export function Stat({
               key={index}
               title={
                 sparkLabels?.[index]
-                  ? `${sparkLabels[index]}：${item}`
+                  ? `${sparkLabels[index]}：${item}${
+                      onSparkClick ? '（点击筛选）' : ''
+                    }`
+                  : undefined
+              }
+              onClick={
+                onSparkClick
+                  ? (e) => {
+                      e.stopPropagation();
+                      onSparkClick(index);
+                    }
                   : undefined
               }
               style={{
                 flex: 1,
                 minWidth: 2,
+                cursor: onSparkClick ? 'pointer' : undefined,
                 height: `${Math.max(
                   8,
                   Math.round((item / sparkMax) * 100),

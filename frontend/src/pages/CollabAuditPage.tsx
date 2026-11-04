@@ -181,6 +181,7 @@ export function CollabAuditPage() {
   const [exportingSnapshots, setExportingSnapshots] = useState(false);
   const [exportingCompare, setExportingCompare] = useState(false);
   const [exportingFacet, setExportingFacet] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
   const [snapshotDays, setSnapshotDays] = useState(30);
   const [snapshotBucket, setSnapshotBucket] = useState<'day' | 'week' | 'month'>(
     'day',
@@ -336,6 +337,31 @@ export function CollabAuditPage() {
       setOpError(err);
     } finally {
       setExportingSnapshots(false);
+    }
+  };
+
+  const exportReport = async () => {
+    setExportingReport(true);
+    setOpError(null);
+    setNotice(null);
+    try {
+      const blob = await api.exportCollabReportDocx(
+        snapshotDays,
+        snapshotBucket,
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'collab-audit-report.docx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice('协作审计报告已导出 Word。');
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setExportingReport(false);
     }
   };
 
@@ -892,6 +918,13 @@ export function CollabAuditPage() {
             onClick={() => void exportFacets()}
           >
             {exportingFacet ? '导出中…' : '导出分面 CSV'}
+          </Button>
+          <Button
+            size="sm"
+            disabled={exportingReport}
+            onClick={() => void exportReport()}
+          >
+            {exportingReport ? '生成中…' : '导出审计报告 Word'}
           </Button>
         </div>
         <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { query } from '../db';
+import { one, query } from '../db';
 import { httpError } from '../services/s1';
 import { csvCell } from '../services/csv';
 import { collabAuditRetentionDays } from '../services/collab_audit_archive';
@@ -8,6 +8,14 @@ import {
   localDateInTimezone,
   resolveOrgTimezone,
 } from '../services/collab_audit_snapshot';
+import { buildDocx } from '../services/export';
+import { renderCollabAuditReport } from '../services/collab_audit_report';
+
+function reportDisposition(title: string, ext: string): string {
+  const safe = `${title}.${ext}`;
+  const ascii = `collab-audit-report.${ext}`;
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+}
 
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const NOTIFICATION_ACTIONS = [
@@ -860,6 +868,153 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', 'attachment; filename="collab-snapshots.csv"')
       .send(`\uFEFF${lines.join('\r\n')}`);
+  });
+
+  async function loadCollabReport(
+    orgId: string,
+    days: number,
+    bucket: SnapshotBucket,
+  ) {
+    const endDate = localDateInTimezone(await resolveOrgTimezone(orgId));
+    const start = new Date(`${endDate}T00:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - (days - 1));
+    const from = start.toISOString().slice(0, 10);
+
+    const org = await one<{ name: string }>(
+      `SELECT name FROM organizations WHERE id = $1`,
+      [orgId],
+    );
+    const condition = collabCondition('all');
+    const source = `(SELECT object_type, action, user_id, created_at
+                       FROM audit_logs WHERE org_id = $1
+                     UNION ALL
+                     SELECT object_type, action, user_id, created_at
+                       FROM audit_logs_archive WHERE org_id = $1)`;
+    const range = `AND a.created_at >= $2::date
+                   AND a.created_at < ($3::date + interval '1 day')`;
+
+    const [typeRows, actionRows, actorRows, comparisonBundle] =
+      await Promise.all([
+        query<any>(
+          `SELECT count(*)::text AS total,
+                  count(*) FILTER (WHERE a.object_type = 'user_notification')::text AS notification,
+                  count(*) FILTER (WHERE a.object_type = 'copilot_batch_filter_view')::text AS filter_view,
+                  count(*) FILTER (WHERE a.action IN ${EXPORT_ACTION_SQL})::text AS export,
+                  count(*) FILTER (WHERE a.action = 'DECIDE copilot-reconcile-difference')::text AS decision
+             FROM ${source} a
+            WHERE ${condition} ${range}`,
+          [orgId, from, endDate],
+        ),
+        query<{ action: string; count: string }>(
+          `SELECT a.action, count(*)::text AS count
+             FROM ${source} a
+            WHERE ${condition} ${range}
+            GROUP BY a.action
+            ORDER BY count(*) DESC
+            LIMIT 10`,
+          [orgId, from, endDate],
+        ),
+        query<{ actor_name: string | null; count: string }>(
+          `SELECT u.name AS actor_name, count(*)::text AS count
+             FROM ${source} a
+             LEFT JOIN users u ON u.id = a.user_id
+            WHERE ${condition} ${range}
+            GROUP BY a.user_id, u.name
+            ORDER BY count(*) DESC
+            LIMIT 10`,
+          [orgId, from, endDate],
+        ),
+        loadSnapshotComparison(orgId, days, bucket),
+      ]);
+
+    const trend = comparisonBundle.items;
+    return {
+      orgName: org?.name ?? '当前组织',
+      days,
+      bucket,
+      from,
+      to: endDate,
+      byType: {
+        total: Number(typeRows[0]?.total ?? 0),
+        notification: Number(typeRows[0]?.notification ?? 0),
+        filter_view: Number(typeRows[0]?.filter_view ?? 0),
+        export: Number(typeRows[0]?.export ?? 0),
+        decision: Number(typeRows[0]?.decision ?? 0),
+      },
+      comparison: comparisonBundle.comparison,
+      topActions: actionRows.map((row) => ({
+        action: row.action,
+        count: Number(row.count),
+      })),
+      topActors: actorRows.map((row) => ({
+        actor_name: row.actor_name,
+        count: Number(row.count),
+      })),
+      trend,
+    };
+  }
+
+  async function loadReportOrThrow(req: any, days: number, bucket: SnapshotBucket) {
+    const auth = (req as any).authUser;
+    const data = await loadCollabReport(auth.org_id, days, bucket);
+    const rendered = renderCollabAuditReport(data as any);
+    return { auth, rendered };
+  }
+
+  app.get('/api/collab-audits/report.md', async (req, reply) => {
+    assertAuditViewer(req);
+    const { days, bucket } = z
+      .object({
+        days: z.coerce.number().int().min(1).max(365).default(7),
+        bucket: z.enum(['day', 'week', 'month']).default('day'),
+      })
+      .parse(req.query ?? {});
+    const { rendered } = await loadReportOrThrow(req, days, bucket);
+    return reply
+      .header('content-type', 'text/markdown; charset=utf-8')
+      .send(rendered.markdown);
+  });
+
+  app.get('/api/collab-audits/report.docx', async (req, reply) => {
+    assertAuditViewer(req);
+    const { days, bucket } = z
+      .object({
+        days: z.coerce.number().int().min(1).max(365).default(7),
+        bucket: z.enum(['day', 'week', 'month']).default('day'),
+      })
+      .parse(req.query ?? {});
+    const { auth, rendered } = await loadReportOrThrow(req, days, bucket);
+    const buffer = await buildDocx(rendered.markdown, {
+      title: rendered.title,
+      client: rendered.meta.client,
+      project: rendered.meta.project,
+      version: rendered.meta.version,
+    });
+    try {
+      await query(
+        `INSERT INTO audit_logs
+           (org_id, user_id, action, object_type, status_code,
+            ip, user_agent, request_id, detail)
+         VALUES ($1,$2,'EXPORT copilot-collab-report','collab_audit_report',200,$3,$4,$5,$6::jsonb)`,
+        [
+          auth?.org_id ?? null,
+          auth?.sub ?? null,
+          req.ip,
+          String(req.headers['user-agent'] ?? '').slice(0, 500),
+          req.id,
+          JSON.stringify({ format: 'docx', days, bucket }),
+        ],
+      );
+    } catch (err) {
+      req.log?.warn?.({ err }, 'collab report audit failed');
+    }
+    return reply
+      .header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      .header('content-disposition', reportDisposition(rendered.title, 'docx'))
+      .send(buffer);
   });
 
   app.get('/api/collab-audits/snapshots/export-long.csv', async (req, reply) => {

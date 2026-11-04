@@ -1289,6 +1289,13 @@ export const api = {
     requestBlob(
       `/api/collab-audits/snapshots/export.csv?days=${days}&bucket=${bucket}`,
     ),
+  exportCollabReportDocx: (
+    days = 7,
+    bucket: 'day' | 'week' | 'month' = 'day',
+  ) =>
+    requestBlob(
+      `/api/collab-audits/report.docx?days=${days}&bucket=${bucket}`,
+    ),
   exportCollabSnapshotFacetCsv: (
     days = 30,
     bucket: 'day' | 'week' | 'month' = 'day',

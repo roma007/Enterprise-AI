@@ -26,6 +26,8 @@ const AUDIT_KEYS = {
   action: 'audit_action',
   object: 'audit_object',
   status: 'audit_status',
+  from: 'audit_from',
+  to: 'audit_to',
   offset: 'audit_offset',
 } as const;
 
@@ -35,12 +37,23 @@ interface AuditUrlState {
   action: string;
   object: string;
   status: string;
+  from: string;
+  to: string;
   offset: number;
 }
 
 function readAuditState(): AuditUrlState {
   if (typeof window === 'undefined') {
-    return { mode: 'live', q: '', action: '', object: '', status: '', offset: 0 };
+    return {
+      mode: 'live',
+      q: '',
+      action: '',
+      object: '',
+      status: '',
+      from: '',
+      to: '',
+      offset: 0,
+    };
   }
   const params = new URLSearchParams(window.location.search);
   const rawOffset = Number(params.get(AUDIT_KEYS.offset) ?? '0');
@@ -50,6 +63,8 @@ function readAuditState(): AuditUrlState {
     action: params.get(AUDIT_KEYS.action) ?? '',
     object: params.get(AUDIT_KEYS.object) ?? '',
     status: params.get(AUDIT_KEYS.status) ?? '',
+    from: params.get(AUDIT_KEYS.from) ?? '',
+    to: params.get(AUDIT_KEYS.to) ?? '',
     offset:
       Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0,
   };
@@ -64,6 +79,8 @@ function writeAuditState(state: AuditUrlState) {
     [AUDIT_KEYS.action, state.action],
     [AUDIT_KEYS.object, state.object],
     [AUDIT_KEYS.status, state.status],
+    [AUDIT_KEYS.from, state.from],
+    [AUDIT_KEYS.to, state.to],
     [AUDIT_KEYS.offset, state.offset > 0 ? String(state.offset) : ''],
   ];
   for (const [key, value] of entries) {
@@ -99,6 +116,8 @@ export function AuditPage() {
   const [actionFilter, setActionFilter] = useState(initial.action);
   const [objectTypeFilter, setObjectTypeFilter] = useState(initial.object);
   const [statusFilter, setStatusFilter] = useState(initial.status);
+  const [fromFilter, setFromFilter] = useState(initial.from);
+  const [toFilter, setToFilter] = useState(initial.to);
   const dq = useDebouncedValue(search, 300);
   const facets = useLoad(() => api.listAuditFacets(mode), [mode]);
 
@@ -112,6 +131,8 @@ export function AuditPage() {
             action: actionFilter || undefined,
             object_type: objectTypeFilter || undefined,
             status: statusFilter || undefined,
+            from: fromFilter || undefined,
+            to: toFilter || undefined,
           })
         : api.listAuditLogs({
             limit: PAGE_SIZE,
@@ -120,8 +141,19 @@ export function AuditPage() {
             action: actionFilter || undefined,
             object_type: objectTypeFilter || undefined,
             status: statusFilter || undefined,
+            from: fromFilter || undefined,
+            to: toFilter || undefined,
           }),
-    [mode, offset, dq, actionFilter, objectTypeFilter, statusFilter],
+    [
+      mode,
+      offset,
+      dq,
+      actionFilter,
+      objectTypeFilter,
+      statusFilter,
+      fromFilter,
+      toFilter,
+    ],
   );
 
   const filtersInitialized = useRef(false);
@@ -131,7 +163,14 @@ export function AuditPage() {
       return;
     }
     setOffset(0);
-  }, [dq, actionFilter, objectTypeFilter, statusFilter]);
+  }, [
+    dq,
+    actionFilter,
+    objectTypeFilter,
+    statusFilter,
+    fromFilter,
+    toFilter,
+  ]);
 
   useEffect(() => {
     writeAuditState({
@@ -140,9 +179,20 @@ export function AuditPage() {
       action: actionFilter,
       object: objectTypeFilter,
       status: statusFilter,
+      from: fromFilter,
+      to: toFilter,
       offset,
     });
-  }, [mode, search, actionFilter, objectTypeFilter, statusFilter, offset]);
+  }, [
+    mode,
+    search,
+    actionFilter,
+    objectTypeFilter,
+    statusFilter,
+    fromFilter,
+    toFilter,
+    offset,
+  ]);
 
   const [before, setBefore] = useState(defaultBefore);
   const [archiving, setArchiving] = useState(false);
@@ -162,6 +212,8 @@ export function AuditPage() {
     setActionFilter('');
     setObjectTypeFilter('');
     setStatusFilter('');
+    setFromFilter('');
+    setToFilter('');
     setArchiveNotice(null);
     setArchiveError(null);
   };
@@ -301,6 +353,18 @@ export function AuditPage() {
                   <option value="4xx">4xx</option>
                   <option value="5xx">5xx</option>
                 </Select>
+                <Input
+                  type="date"
+                  value={fromFilter}
+                  onChange={(e) => setFromFilter(e.target.value)}
+                  style={{ maxWidth: 150 }}
+                />
+                <Input
+                  type="date"
+                  value={toFilter}
+                  onChange={(e) => setToFilter(e.target.value)}
+                  style={{ maxWidth: 150 }}
+                />
                 <Input
                   placeholder="搜索 action / 对象 / 用户"
                   value={search}

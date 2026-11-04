@@ -23,6 +23,8 @@ interface AuditQuery {
   action?: string;
   object_type?: string;
   status?: AuditStatus;
+  from?: string;
+  to?: string;
 }
 
 /** 列表、统计、归档查询共用同一组筛选条件。 */
@@ -38,7 +40,9 @@ function auditFilter(org: string, q: AuditQuery) {
              OR ($5::text = '2xx' AND a.status_code >= 200 AND a.status_code < 300)
              OR ($5::text = '3xx' AND a.status_code >= 300 AND a.status_code < 400)
              OR ($5::text = '4xx' AND a.status_code >= 400 AND a.status_code < 500)
-             OR ($5::text = '5xx' AND a.status_code >= 500 AND a.status_code < 600))`;
+             OR ($5::text = '5xx' AND a.status_code >= 500 AND a.status_code < 600))
+        AND ($6::date IS NULL OR a.created_at >= $6::date)
+        AND ($7::date IS NULL OR a.created_at < ($7::date + interval '1 day'))`;
   return {
     where,
     params: [
@@ -47,6 +51,8 @@ function auditFilter(org: string, q: AuditQuery) {
       q.object_type ?? null,
       q.q ?? null,
       q.status ?? null,
+      q.from ?? null,
+      q.to ?? null,
     ],
   };
 }
@@ -116,8 +122,13 @@ export async function systemRoutes(app: FastifyInstance) {
         action: z.string().trim().optional(),
         object_type: z.string().trim().optional(),
         status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       })
       .parse(req.query);
+    if (q.from && q.to && q.from > q.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
     const page = parsePage(req.query, 100);
     const org = await requestOrg(req);
     const { where, params } = auditFilter(org, q);
@@ -139,7 +150,7 @@ export async function systemRoutes(app: FastifyInstance) {
            LEFT JOIN users u ON u.id = a.user_id
           WHERE ${where}
           ORDER BY a.created_at DESC
-          LIMIT $6 OFFSET $7`,
+          LIMIT $8 OFFSET $9`,
         [...params, page.limit, page.offset],
       ),
     ]);
@@ -209,8 +220,13 @@ export async function systemRoutes(app: FastifyInstance) {
         action: z.string().trim().optional(),
         object_type: z.string().trim().optional(),
         status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       })
       .parse(req.query);
+    if (q.from && q.to && q.from > q.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
     const page = parsePage(req.query, 100);
     const org = await requestOrg(req);
     const { where, params } = auditFilter(org, q);
@@ -231,7 +247,7 @@ export async function systemRoutes(app: FastifyInstance) {
            LEFT JOIN users u ON u.id = a.user_id
           WHERE ${where}
           ORDER BY a.created_at DESC
-          LIMIT $6 OFFSET $7`,
+          LIMIT $8 OFFSET $9`,
         [...params, page.limit, page.offset],
       ),
     ]);

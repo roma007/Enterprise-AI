@@ -364,7 +364,7 @@ curl -s -X POST http://127.0.0.1:8788/api/deliverables/generate \
 | R6 AI 草稿 | `GET/POST /api/engagements/:id/ai-drafts`、`PATCH/DELETE /api/ai-drafts/:id`、`POST .../confirm`、`POST .../reject`、`GET /api/ai/config`；默认 `rule-based-v1`，配置后可选大模型，必须人工确认 |
 | 标杆维护 | `GET /api/benchmarks?all=1`、`POST /api/benchmarks`、`PATCH/DELETE /api/benchmarks/:id`；p25 ≤ p50 ≤ p75 |
 | 回收站 | `GET /api/trash`、`POST /api/trash/:batch/restore`；客户/项目/交付物按批次恢复 |
-| 审计 | `GET /api/audit-logs?limit=200&action=&object_type=&status=2xx|3xx|4xx|5xx`，返回 `stats`（total / deletes / failures）与选项 `facets`；所有写操作自动留痕 |
+| 审计 | `GET /api/audit-logs?limit=200&action=&object_type=&status=2xx|3xx|4xx|5xx&from=&to=`，返回 `stats`（total / deletes / failures）与选项 `facets`；所有写操作自动留痕 |
 | 字典 | `GET /api/users`（返回 `role`） |
 
 几个关键行为：

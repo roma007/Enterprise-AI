@@ -5606,6 +5606,35 @@ async function main() {
       '4xx 结果中失败数应等于总数',
     );
 
+    const badRange = await req('GET', '/api/audit-logs?from=2026-12-31&to=2026-01-01');
+    assert.equal(badRange.status, 400);
+    assert.equal(badRange.body.error, 'INVALID_DATE_RANGE');
+
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      '0',
+    )}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayList = ok(
+      await req('GET', `/api/audit-logs?from=${today}&to=${today}&limit=5`),
+      200,
+      '日期筛选',
+    );
+    const localDay = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        '0',
+      )}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    assert.ok(
+      (todayList.items as any[]).every(
+        (item) => localDay(item.created_at) === today,
+      ),
+      '日期筛选应只返回当天记录',
+    );
+    assert.equal(todayList.stats.total, todayList.total);
+
     const before = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const dryRun = ok(
       await req('POST', '/api/audit-logs/archive', {

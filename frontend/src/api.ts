@@ -1648,6 +1648,8 @@ export const api = {
         status: string;
       };
     }>(`/api/copilot-reconcile-reviews/${reviewId}/documents`, json('POST', {})),
+  exportReconcileDocumentPdf: (reviewId: string) =>
+    requestBlob(`/api/copilot-reconcile-reviews/${reviewId}/document.pdf`),
   exportReconcileDocumentDocx: (reviewId: string) =>
     requestBlob(`/api/copilot-reconcile-reviews/${reviewId}/document.docx`),
   exportReconcileDifferencesCsv: (reviewId: string) =>

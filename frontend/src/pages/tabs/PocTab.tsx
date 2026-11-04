@@ -756,6 +756,7 @@ function ReconcileReviewDetail({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [exportingDiffs, setExportingDiffs] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [generatingDoc, setGeneratingDoc] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState<string | null>(null);
   const [batchDecisionBusy, setBatchDecisionBusy] = useState<
@@ -1065,6 +1066,28 @@ function ReconcileReviewDetail({
       setActionError(err);
     } finally {
       setDecisionBusy(null);
+    }
+  };
+
+  const exportReviewPdf = async () => {
+    setExportingPdf(true);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportReconcileDocumentPdf(review.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const docNo = String(doc.statement_no ?? doc.settlement_no ?? review.id);
+      link.href = url;
+      link.download = `对账复核-${docNo}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setActionNotice('复核 PDF 已导出。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -1678,6 +1701,9 @@ function ReconcileReviewDetail({
         </Button>
         <Button size="sm" disabled={exportingDocx} onClick={() => void exportReviewDocx()}>
           {exportingDocx ? '生成中…' : '导出复核 Word'}
+        </Button>
+        <Button size="sm" disabled={exportingPdf} onClick={() => void exportReviewPdf()}>
+          {exportingPdf ? '生成中…' : '导出复核 PDF'}
         </Button>
         <Button size="sm" disabled={generatingDoc} onClick={() => void generateReviewDoc()}>
           {generatingDoc ? '生成中…' : '生成报告交付物'}

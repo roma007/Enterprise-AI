@@ -4646,6 +4646,23 @@ async function main() {
       );
       assert.ok(docx.rawPayload.length > 2000, 'Word 内容不应为空');
 
+      const pdf = await app.inject({
+        method: 'GET',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/document.pdf`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (pdf.statusCode === 503) {
+        assert.equal(pdf.json().error, 'PDF_ENGINE_UNAVAILABLE');
+      } else {
+        assert.equal(pdf.statusCode, 200, `PDF 生成失败：${pdf.body}`);
+        assert.equal(pdf.headers['content-type'], 'application/pdf');
+        assert.equal(
+          pdf.rawPayload.slice(0, 4).toString('utf8'),
+          '%PDF',
+          'PDF 文件头应正确',
+        );
+      }
+
       const audit = await one<{ count: string }>(
         `SELECT count(*)::text AS count FROM audit_logs
           WHERE action = 'EXPORT copilot-reconcile-document' AND object_id = $1`,

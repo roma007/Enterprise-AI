@@ -6,7 +6,8 @@ import { httpError } from '../services/s1';
 import { reapStaleBatches } from '../services/copilot_batches';
 import { createZip } from '../services/zip';
 import { csvCell } from '../services/csv';
-import { buildDocx } from '../services/export';
+import { buildDocx, buildPrintHtml } from '../services/export';
+import { htmlToPdf } from '../services/pdf';
 import { DIFF_LABEL } from '../services/reconcile_labels';
 import {
   generateReconcileDeliverable,
@@ -1432,6 +1433,44 @@ export async function copilotRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const items = await listReconcileDocuments(id);
     return { items };
+  });
+
+  /** 复核报告 PDF（无 Chromium 时返回 503）。 */
+  app.get('/api/copilot-reconcile-reviews/:id/document.pdf', async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const bundle = await loadReconcileBundle(id);
+    const rendered = renderReconcileDoc(bundle);
+    const html = buildPrintHtml(
+      rendered.markdown,
+      {
+        title: rendered.title,
+        client: rendered.meta.client,
+        project: rendered.meta.project,
+        version: rendered.meta.version,
+      },
+      false,
+    );
+    try {
+      const buffer = await htmlToPdf(html);
+      await recordExportAudit(req, 'EXPORT copilot-reconcile-document', id, {
+        format: 'pdf',
+      });
+      return reply
+        .header('content-type', 'application/pdf')
+        .header(
+          'content-disposition',
+          docDisposition(rendered.title, 'pdf'),
+        )
+        .send(buffer);
+    } catch (err: any) {
+      if (err?.statusCode === 503) {
+        return reply.code(503).send({
+          error: 'PDF_ENGINE_UNAVAILABLE',
+          message: 'PDF 暂不可用，请下载 Word',
+        });
+      }
+      throw err;
+    }
   });
 
   /** 生成复核报告交付物（data_report），审批后走现有分享流程外发。 */

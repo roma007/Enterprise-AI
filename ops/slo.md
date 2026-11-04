@@ -19,6 +19,7 @@
 | API 延迟 | `slo:http_request_fast_ratio:5m`（<500ms 占比） | ≥ 99% | 30 天 | `HighP95Latency` / `VeryHighP95Latency` |
 | PDF 成功率 | `1 - slo:pdf_job_failure_ratio:24h` | ≥ 99% | 24 小时滚动 | `PdfFailureRate` |
 | PDF 排队时长 | `pdf_jobs_oldest_pending_seconds` | < 15 分钟 | 7 天 | `PdfJobStale` |
+| PDF 缓存命中率 | `slo:pdf_cache_hit_ratio:30m` | ≥ 50% | 30 分钟滚动 | `PdfCacheHitRateLow` |
 | DB 连接池 | `slo:db_pool_utilization:5m` | < 90% | 7 天 | `DbPoolSaturated` / `DbPoolWaiting` |
 | 备份新鲜度 | `ai_delivery_backup_last_success_timestamp_seconds` | < 36 小时 | 每日 | `BackupStale` |
 | 恢复演练 | `ai_delivery_restore_drill_last_success_timestamp_seconds` | < 90 天 | 季度 | `RestoreDrillStale` |
@@ -120,6 +121,17 @@ make drill-restore
 2. 确认 Chromium 可用、磁盘与对象存储正常
 3. 扩容 worker；检查 `pdf_jobs.locked_at` 与租约回收
 4. 失败任务保留 `error`，修复后可重新创建
+
+### PdfCacheHitRateLow
+
+> 命中率 = `hits / (hits + misses)`，按 30 分钟滚动；30 分钟内总请求 < 0.01/s 时不告警，避免无流量误报。
+
+1. 看 `pdf_cache_hits_total` / `pdf_cache_misses_total` 的速率：命中掉了还是未命中涨了
+2. 内容哈希频繁变化会导致未命中：确认最近是否改了报告模板、差异明细或时间戳/随机字段
+3. 检查缓存目录（`PDF_CACHE_DIR`）权限、磁盘剩余空间与对象存储连通性
+4. 确认 `PDF_CACHE_TTL_DAYS` 没被调得过短；默认 30 天
+5. 缓存底层是对象存储：`local` 默认写到 `.pdf-cache`（可用 `PDF_CACHE_DIR` 改），多副本各写本地盘；`s3` 则跨副本共享
+6. 指标是进程内计数器，多副本请按副本分别看，再合计命中/未命中速率
 
 ### DbPoolSaturated / DbPoolWaiting
 

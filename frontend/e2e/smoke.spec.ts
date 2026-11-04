@@ -317,7 +317,9 @@ test.describe('关键路径冒烟', () => {
     const name = `E2E视图${Date.now()}`;
     page.on('dialog', (dialog) => dialog.accept(name));
     await page.goto('/#/notifications');
-    await expect(page.getByRole('heading', { name: '通知' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: '通知', level: 1 }),
+    ).toBeVisible();
 
     const saveButton = page.getByRole('button', { name: '保存当前筛选' });
     await expect(saveButton).toBeVisible();

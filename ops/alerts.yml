@@ -32,6 +32,16 @@ groups:
             1
           )
 
+      - record: slo:pdf_cache_hit_ratio:30m
+        expr: |
+          sum(rate(pdf_cache_hits_total{job="ai-delivery-backend"}[30m]))
+          /
+          clamp_min(
+            sum(rate(pdf_cache_hits_total{job="ai-delivery-backend"}[30m]))
+            + sum(rate(pdf_cache_misses_total{job="ai-delivery-backend"}[30m])),
+            0.001
+          )
+
       - record: slo:db_pool_utilization:5m
         expr: |
           sum(db_pool_total_connections{job="ai-delivery-backend"})
@@ -179,6 +189,22 @@ groups:
         annotations:
           summary: 'PDF 任务 24 小时失败率超过 5%'
           description: '检查 Chromium、字体、对象存储与交付物内容；失败任务保留 error 字段。'
+
+      - alert: PdfCacheHitRateLow
+        expr: |
+          slo:pdf_cache_hit_ratio:30m < 0.5
+          and
+          (
+            sum(rate(pdf_cache_hits_total{job="ai-delivery-backend"}[30m]))
+            + sum(rate(pdf_cache_misses_total{job="ai-delivery-backend"}[30m]))
+          ) >= 0.01
+        for: 1h
+        labels:
+          severity: info
+          service: pdf
+        annotations:
+          summary: 'PDF 缓存命中率低于 50%'
+          description: '检查报告内容是否频繁变化、缓存存储是否可写、PDF_CACHE_TTL_DAYS 是否过短。'
 
       - alert: BackupStale
         expr: (time() - max(ai_delivery_backup_last_success_timestamp_seconds)) > 129600

@@ -294,6 +294,7 @@ export function AuditPage() {
     shared: shareMode === 'all',
     shared_role: shareMode === 'role' ? shareRole : null,
     shared_user_ids: shareMode === 'users' ? shareUsers : [],
+    export_columns: exportColumns,
   });
 
   const saveCurrentView = async () => {
@@ -334,6 +335,16 @@ export function AuditPage() {
     );
     if (view.shared_role) setShareRole(view.shared_role);
     setShareUsers(view.shared_user_ids ?? []);
+    if (view.export_columns?.length) {
+      const ordered = DEFAULT_EXPORT_COLUMNS.filter((key) =>
+        view.export_columns.includes(key),
+      );
+      setExportColumns(ordered);
+      window.localStorage.setItem(
+        EXPORT_COLUMNS_STORAGE,
+        JSON.stringify(ordered),
+      );
+    }
     setOffset(0);
     setArchiveNotice(null);
     setArchiveError(null);

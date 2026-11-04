@@ -18,6 +18,20 @@ interface TrashBatch {
 
 type AuditStatus = '2xx' | '3xx' | '4xx' | '5xx';
 
+const AUDIT_EXPORT_COLUMNS: Record<string, string> = {
+  time: '时间',
+  action: '操作',
+  object_type: '对象类型',
+  object_id: '对象 ID',
+  status: '状态码',
+  user: '操作人',
+  request_id: '请求 ID',
+  ip: 'IP',
+  user_agent: 'User-Agent',
+  detail: '详情',
+  archived_at: '归档时间',
+};
+
 interface AuditQuery {
   q?: string;
   action?: string;
@@ -300,20 +314,7 @@ export async function systemRoutes(app: FastifyInstance) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
 
-    const EXPORT_COLUMN_META: Record<string, string> = {
-      time: '时间',
-      action: '操作',
-      object_type: '对象类型',
-      object_id: '对象 ID',
-      status: '状态码',
-      user: '操作人',
-      request_id: '请求 ID',
-      ip: 'IP',
-      user_agent: 'User-Agent',
-      detail: '详情',
-      archived_at: '归档时间',
-    };
-    const allowedColumns = Object.keys(EXPORT_COLUMN_META).filter(
+    const allowedColumns = Object.keys(AUDIT_EXPORT_COLUMNS).filter(
       (key) => key !== 'archived_at' || q.scope === 'archive',
     );
     const defaultColumns = allowedColumns;
@@ -395,7 +396,7 @@ export async function systemRoutes(app: FastifyInstance) {
           return '';
       }
     };
-    const header = columns.map((key) => EXPORT_COLUMN_META[key]);
+    const header = columns.map((key) => AUDIT_EXPORT_COLUMNS[key]);
     const lines = [header.map(cell).join(',')];
     for (const row of rows) {
       lines.push(columns.map((key) => cell(valueFor(row, key))).join(','));
@@ -454,11 +455,13 @@ export async function systemRoutes(app: FastifyInstance) {
       .nullable()
       .optional(),
     shared_user_ids: z.array(z.uuid()).max(50).optional(),
+    export_columns: z.array(z.string()).max(20).optional(),
   });
 
   const AUDIT_VIEW_COLUMNS = `v.id, v.name, v.mode, v.q, v.action,
               v.object_type, v.status,
               v.from_date::text AS "from", v.to_date::text AS "to",
+              v.export_columns,
               v.shared, v.shared_role, (v.user_id = $1) AS is_owner,
               u.name AS owner_name,
               v.created_at, v.updated_at`;
@@ -467,6 +470,7 @@ export async function systemRoutes(app: FastifyInstance) {
     `SELECT v.id, v.name, v.mode, v.q, v.action,
             v.object_type, v.status,
             v.from_date::text AS "from", v.to_date::text AS "to",
+            v.export_columns,
             v.shared, v.shared_role, true AS is_owner,
             (SELECT name FROM users WHERE id = v.user_id) AS owner_name,
             v.created_at, v.updated_at,
@@ -513,6 +517,17 @@ export async function systemRoutes(app: FastifyInstance) {
     if (body.from && body.to && body.from > body.to) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
+    const exportColumns = Array.from(new Set(body.export_columns ?? []));
+    const badExportColumns = exportColumns.filter(
+      (key) => !Object.keys(AUDIT_EXPORT_COLUMNS).includes(key),
+    );
+    if (badExportColumns.length) {
+      throw httpError(
+        400,
+        'INVALID_EXPORT_COLUMNS',
+        `导出列不合法：${badExportColumns.join(', ')}`,
+      );
+    }
     const shareIds = Array.from(new Set(body.shared_user_ids ?? []));
     const result = await withTransaction(async (client) => {
       if (shareIds.length) {
@@ -551,8 +566,8 @@ export async function systemRoutes(app: FastifyInstance) {
       const inserted = await client.query<any>(
         `INSERT INTO audit_filter_views
            (org_id, user_id, name, mode, q, action, object_type, status,
-            from_date, to_date, shared, shared_role)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            from_date, to_date, shared, shared_role, export_columns)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
          ON CONFLICT (user_id, name)
          DO UPDATE SET mode = EXCLUDED.mode,
                        q = EXCLUDED.q,
@@ -563,6 +578,7 @@ export async function systemRoutes(app: FastifyInstance) {
                        to_date = EXCLUDED.to_date,
                        shared = EXCLUDED.shared,
                        shared_role = EXCLUDED.shared_role,
+                       export_columns = EXCLUDED.export_columns,
                        updated_at = now()
          RETURNING id`,
         [
@@ -578,6 +594,7 @@ export async function systemRoutes(app: FastifyInstance) {
           body.to ?? null,
           body.shared ?? false,
           body.shared_role ?? null,
+          JSON.stringify(exportColumns),
         ],
       );
       const viewId = inserted.rows[0].id as string;
@@ -651,7 +668,7 @@ export async function systemRoutes(app: FastifyInstance) {
         WHERE id = $1 AND user_id = $3
         RETURNING id, name, mode, q, action, object_type, status,
                   from_date::text AS "from", to_date::text AS "to",
-                  shared, shared_role, created_at, updated_at`,
+                  export_columns, shared, shared_role, created_at, updated_at`,
       [id, body.name, auth.sub],
     );
     if (!item) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');

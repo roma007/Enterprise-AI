@@ -5748,6 +5748,7 @@ async function main() {
         status: '4xx',
         from: today,
         to: today,
+        export_columns: ['time', 'status'],
       }),
       201,
       '保存审计筛选视图',
@@ -5755,6 +5756,10 @@ async function main() {
     const viewId = (savedView.item as any).id as string;
     assert.equal((savedView.item as any).status, '4xx');
     assert.equal((savedView.item as any).from, today);
+    assert.deepEqual((savedView.item as any).export_columns, [
+      'time',
+      'status',
+    ]);
 
     const upserted = ok(
       await auditCall('POST', '/api/audit-filter-views', {

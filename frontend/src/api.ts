@@ -998,6 +998,7 @@ export const api = {
     shared?: boolean;
     shared_role?: string | null;
     shared_user_ids?: string[];
+    export_columns?: string[];
   }) =>
     request<{ item: AuditFilterView }>(
       '/api/audit-filter-views',

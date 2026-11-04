@@ -1274,6 +1274,7 @@ export interface AuditFilterView {
   status: string | null;
   from: string | null;
   to: string | null;
+  export_columns: string[];
   shared: boolean;
   shared_role?: string | null;
   shared_user_ids?: string[];

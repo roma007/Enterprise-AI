@@ -468,6 +468,80 @@ export async function notificationRoutes(app: FastifyInstance) {
     return { ok: true, updated: rows.length };
   });
 
+  const savedViewBody = z.object({
+    name: z.string().trim().min(1).max(80),
+    kind: z.string().trim().max(80).nullable().optional(),
+    unread: z.boolean().optional(),
+    from: dateStr.nullable().optional(),
+    to: dateStr.nullable().optional(),
+    scope: z.enum(['inbox', 'trash']).optional(),
+  });
+
+  /** 当前用户保存的通知筛选视图。 */
+  app.get('/api/notification-filter-views', async (req) => {
+    const auth = currentUser(req);
+    const items = await query(
+      `SELECT id, name, kind, unread,
+              from_date::text AS "from", to_date::text AS "to",
+              scope, created_at, updated_at
+         FROM notification_filter_views
+        WHERE user_id = $1
+        ORDER BY name`,
+      [auth.id],
+    );
+    return { items };
+  });
+
+  app.post('/api/notification-filter-views', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const body = savedViewBody.parse(req.body ?? {});
+    if (body.from && body.to && body.from > body.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
+    const item = await one(
+      `INSERT INTO notification_filter_views
+         (org_id, user_id, name, kind, unread, from_date, to_date, scope)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (user_id, name)
+       DO UPDATE SET kind = EXCLUDED.kind,
+                     unread = EXCLUDED.unread,
+                     from_date = EXCLUDED.from_date,
+                     to_date = EXCLUDED.to_date,
+                     scope = EXCLUDED.scope,
+                     updated_at = now()
+       RETURNING id, name, kind, unread,
+                 from_date::text AS "from", to_date::text AS "to",
+                 scope, created_at, updated_at`,
+      [
+        auth.org_id,
+        auth.sub,
+        body.name,
+        body.kind || null,
+        body.unread ?? false,
+        body.from ?? null,
+        body.to ?? null,
+        body.scope ?? 'inbox',
+      ],
+    );
+    return reply.code(201).send({ item });
+  });
+
+  app.delete('/api/notification-filter-views/:id', async (req) => {
+    const auth = currentUser(req);
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const row = await one(
+      `DELETE FROM notification_filter_views
+        WHERE id = $1 AND user_id = $2
+        RETURNING id`,
+      [id, auth.id],
+    );
+    if (!row) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');
+    return { ok: true };
+  });
+
   app.post('/api/notifications/read-all', async (req) => {
     const auth = currentUser(req);
     const rows = await query(

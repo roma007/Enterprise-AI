@@ -1215,6 +1215,18 @@ export interface BatchFilterView {
   updated_at: string;
 }
 
+export interface NotificationFilterView {
+  id: string;
+  name: string;
+  kind: string | null;
+  unread: boolean;
+  from: string | null;
+  to: string | null;
+  scope: 'inbox' | 'trash';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserNotification {
   id: string;
   kind: string;

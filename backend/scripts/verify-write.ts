@@ -4342,6 +4342,99 @@ async function main() {
     }
   });
 
+  await check('通知筛选视图：按用户保存、覆盖与归属校验', async () => {
+    const login = async (email: string) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email, password: 'demo1234' },
+      });
+      assert.equal(res.statusCode, 200, `登录失败：${email}`);
+      return res.json().token as string;
+    };
+    const zhangToken = await login('zhang@hengzhi.ai');
+    const wangToken = await login('wang@hengzhi.ai');
+    const call = (token: string, method: any, url: string, payload?: any) =>
+      app.inject({
+        method,
+        url,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(payload === undefined
+            ? {}
+            : { 'content-type': 'application/json' }),
+        },
+        payload: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+    const name = `回归视图-${stamp}`;
+
+    try {
+      const created = await call(zhangToken, 'POST', '/api/notification-filter-views', {
+        name,
+        unread: true,
+        kind: 'copilot_batch_filter_view_shared',
+        scope: 'inbox',
+      });
+      assert.equal(created.statusCode, 201, `保存筛选视图失败：${created.body}`);
+      const viewId = created.json().item.id;
+
+      const updated = await call(zhangToken, 'POST', '/api/notification-filter-views', {
+        name,
+        unread: false,
+        scope: 'trash',
+      });
+      assert.equal(updated.statusCode, 201);
+      assert.equal(updated.json().item.id, viewId, '同名保存应覆盖');
+      assert.equal(updated.json().item.unread, false);
+      assert.equal(updated.json().item.scope, 'trash');
+
+      const listed = await call(zhangToken, 'GET', '/api/notification-filter-views');
+      assert.equal(listed.statusCode, 200);
+      assert.ok(
+        (listed.json().items as any[]).some((v) => v.id === viewId),
+        '保存后应出现在列表',
+      );
+
+      const otherList = await call(wangToken, 'GET', '/api/notification-filter-views');
+      assert.ok(
+        !(otherList.json().items as any[]).some((v) => v.id === viewId),
+        '不应看到他人的筛选视图',
+      );
+
+      const deleteOther = await call(
+        wangToken,
+        'DELETE',
+        `/api/notification-filter-views/${viewId}`,
+      );
+      assert.equal(deleteOther.statusCode, 404, '不能删除他人视图');
+
+      const badRange = await call(zhangToken, 'POST', '/api/notification-filter-views', {
+        name: `${name}-坏日期`,
+        from: '2026-12-31',
+        to: '2026-01-01',
+      });
+      assert.equal(badRange.statusCode, 400);
+      assert.equal(badRange.json().error, 'INVALID_DATE_RANGE');
+
+      const removed = await call(
+        zhangToken,
+        'DELETE',
+        `/api/notification-filter-views/${viewId}`,
+      );
+      assert.equal(removed.statusCode, 200, '创建者应能删除');
+      const after = await call(zhangToken, 'GET', '/api/notification-filter-views');
+      assert.ok(
+        !(after.json().items as any[]).some((v) => v.id === viewId),
+        '删除后不应再出现',
+      );
+    } finally {
+      await query(
+        `DELETE FROM notification_filter_views WHERE name LIKE $1`,
+        [`${name}%`],
+      );
+    }
+  });
+
   await check('对账复核 Word：含差异依据并写导出审计', async () => {
     const login = async (email: string) => {
       const res = await app.inject({

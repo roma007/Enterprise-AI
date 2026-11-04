@@ -89,6 +89,8 @@ export function NotificationsPage() {
   const [to, setTo] = useState(initial.to);
   const [view, setView] = useState<'inbox' | 'trash'>(initial.view);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedViewId, setSelectedViewId] = useState('');
+  const [savingView, setSavingView] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
@@ -227,6 +229,61 @@ export function NotificationsPage() {
       }
     }
     window.location.href = n.link;
+  };
+
+  const savedViews = useLoad(() => api.listNotificationFilterViews(), []);
+
+  const applySavedView = (id: string) => {
+    setSelectedViewId(id);
+    if (!id) return;
+    const item = (savedViews.data?.items ?? []).find((v) => v.id === id);
+    if (!item) return;
+    setKind(item.kind ?? '');
+    setUnreadOnly(item.unread);
+    setFrom(item.from ?? '');
+    setTo(item.to ?? '');
+    setView(item.scope === 'trash' ? 'trash' : 'inbox');
+    setOffset(0);
+    setSelected(new Set());
+    setSelectAll(false);
+  };
+
+  const saveCurrentView = async () => {
+    const name = window.prompt('视图名称（同名会覆盖）')?.trim();
+    if (!name) return;
+    setSavingView(true);
+    setOpError(null);
+    try {
+      const res = await api.saveNotificationFilterView({
+        name,
+        kind: kind || null,
+        unread: unreadOnly,
+        from: from || null,
+        to: to || null,
+        scope: view,
+      });
+      setSelectedViewId(res.item.id);
+      await savedViews.reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const deleteCurrentView = async () => {
+    if (!selectedViewId) return;
+    setSavingView(true);
+    setOpError(null);
+    try {
+      await api.deleteNotificationFilterView(selectedViewId);
+      setSelectedViewId('');
+      await savedViews.reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setSavingView(false);
+    }
   };
 
   const markAll = async () => {
@@ -378,6 +435,35 @@ export function NotificationsPage() {
           <Button size="sm" onClick={clearFilters}>
             清空筛选
           </Button>
+          <Select
+            value={selectedViewId}
+            onChange={(e) => applySavedView(e.target.value)}
+            style={{ maxWidth: 180 }}
+          >
+            <option value="">选择已保存视图</option>
+            {(savedViews.data?.items ?? []).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </Select>
+          <Button
+            size="sm"
+            disabled={busy || savingView}
+            onClick={() => void saveCurrentView()}
+          >
+            {savingView ? '保存中…' : '保存当前筛选'}
+          </Button>
+          {selectedViewId ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={savingView}
+              onClick={() => void deleteCurrentView()}
+            >
+              删除视图
+            </Button>
+          ) : null}
           {rangeError ? (
             <span style={{ color: '#b42318' }}>{rangeError}</span>
           ) : null}

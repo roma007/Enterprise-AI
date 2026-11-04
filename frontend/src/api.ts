@@ -55,6 +55,7 @@ import type {
   ReconcileDecision,
   BatchFilterView,
   UserNotification,
+  NotificationFilterView,
   BatchFilterViewAudit,
   NotificationAudit,
   CollabAudit,
@@ -1151,6 +1152,26 @@ export const api = {
   },
   markNotificationRead: (id: string) =>
     request<{ ok: boolean }>(`/api/notifications/${id}/read`, json('POST', {})),
+  listNotificationFilterViews: () =>
+    request<{ items: NotificationFilterView[] }>(
+      '/api/notification-filter-views',
+    ),
+  saveNotificationFilterView: (payload: {
+    name: string;
+    kind?: string | null;
+    unread?: boolean;
+    from?: string | null;
+    to?: string | null;
+    scope?: 'inbox' | 'trash';
+  }) =>
+    request<{ item: NotificationFilterView }>(
+      '/api/notification-filter-views',
+      json('POST', payload),
+    ),
+  deleteNotificationFilterView: (id: string) =>
+    request<{ ok: boolean }>(`/api/notification-filter-views/${id}`, {
+      method: 'DELETE',
+    }),
   markNotificationsRead: (
     payload:
       | { ids: string[] }

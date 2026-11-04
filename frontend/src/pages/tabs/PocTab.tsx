@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api, type BatchActionEvent } from '../../api';
 import { getStoredUser } from '../../auth';
 import { useDebouncedValue, useLoad } from '../../hooks';
@@ -351,6 +351,12 @@ const RECONCILE_DIFF_LABEL: Record<string, string> = {
   customer_mismatch: '主体不符',
   rounding: '舍入',
   no_rate: '无合同价',
+};
+
+const DIFF_SOURCE_LABEL: Record<string, string> = {
+  'llm+rule': '模型 + 规则',
+  rule: '规则',
+  llm: '模型',
 };
 
 function localDate(d: Date): string {
@@ -767,6 +773,7 @@ function ReconcileReviewDetail({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(selectableDiffs.map((d) => d.difference_id as string)),
   );
+  const [expandedDiff, setExpandedDiff] = useState<string | null>(null);
   const selectedDiffs = selectableDiffs.filter((d) => selectedIds.has(d.difference_id as string));
   const allSelected = selectableDiffs.length > 0 && selectedDiffs.length === selectableDiffs.length;
   const toggleDiff = (differenceId: string) =>
@@ -821,6 +828,10 @@ function ReconcileReviewDetail({
           `- ${label} ${d.waybill_no || d.trip_no || ''} 差额 ${d.delta ?? '—'}`,
           `可能原因：${d.possible_causes?.join('；') || '—'}`,
           `建议：${d.suggested_action || '—'}`,
+          `来源：${DIFF_SOURCE_LABEL[d.source ?? ''] ?? d.source ?? '—'}${
+            d.confidence != null ? `（置信度 ${d.confidence}）` : ''
+          }`,
+          `证据：${d.evidence?.join('；') || '—'}`,
           `决策：${decision?.decision || '—'}${decision?.note ? `（${decision.note}）` : ''}`,
         ].join('；');
       })
@@ -1350,63 +1361,105 @@ function ReconcileReviewDetail({
             {review.differences.length === 0 ? (
               <tr><td colSpan={11} className="muted">没有差异</td></tr>
             ) : review.differences.map((d, i) => {
+              const rowKey = d.difference_id || `row-${i}`;
               const decision = d.difference_id ? decisions.get(d.difference_id) : undefined;
               const riskAction = actionFor(d.difference_id, 'risk');
               const issueAction = actionFor(d.difference_id, 'issue');
               const riskStatus = review.risk_id ? review.risk_status : riskAction?.item_status;
               const issueStatus = review.issue_id ? review.issue_status : issueAction?.item_status;
               return (
-                <tr key={d.difference_id || i}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`选择差异 ${d.difference_id ?? i + 1}`}
-                      checked={Boolean(d.difference_id && selectedIds.has(d.difference_id))}
-                      disabled={!d.difference_id || decision?.decision === '忽略'}
-                      title={decision?.decision === '忽略' ? '已标记忽略，不参与批量生成' : undefined}
-                      onChange={() => d.difference_id && toggleDiff(d.difference_id)}
-                    />
-                  </td>
-                  <td><Badge tone="red">{RECONCILE_DIFF_LABEL[d.type] ?? d.type}</Badge></td>
-                  <td>{d.waybill_no || d.trip_no || '—'}</td>
-                  <td>{d.statement_amount ?? '—'}</td>
-                  <td>{d.system_amount ?? '—'}</td>
-                  <td>{d.delta ?? '—'}</td>
-                  <td className="muted">{d.possible_causes?.join('；') || '—'}</td>
-                  <td className="muted">{d.suggested_action || '—'}</td>
-                  <td>{decision?.decision || '—'}</td>
-                  <td className="muted">{decision?.note || '—'}</td>
-                  <td className="actions-cell">
-                    <Button
-                      size="sm"
-                      disabled={
-                        !d.difference_id ||
-                        actionBusy !== null ||
-                        Boolean(review.risk_id) ||
-                        Boolean(actionFor(d.difference_id, 'risk'))
-                      }
-                      onClick={() => void createRisk(d)}
-                    >
-                      {actionFor(d.difference_id, 'risk') || review.risk_id
-                        ? `风险·${statusLabel(riskStatus)}`
-                        : '风险'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={
-                        !d.difference_id ||
-                        actionBusy !== null ||
-                        Boolean(review.issue_id) ||
-                        Boolean(actionFor(d.difference_id, 'issue'))
-                      }
-                      onClick={() => void createIssue(d)}
-                    >
-                      {actionFor(d.difference_id, 'issue') || review.issue_id
-                        ? `待办·${statusLabel(issueStatus)}`
-                        : '待办'}
-                    </Button>
-                  </td>
-                </tr>
+                <Fragment key={rowKey}>
+                  <tr>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择差异 ${d.difference_id ?? i + 1}`}
+                        checked={Boolean(d.difference_id && selectedIds.has(d.difference_id))}
+                        disabled={!d.difference_id || decision?.decision === '忽略'}
+                        title={decision?.decision === '忽略' ? '已标记忽略，不参与批量生成' : undefined}
+                        onChange={() => d.difference_id && toggleDiff(d.difference_id)}
+                      />
+                    </td>
+                    <td>
+                      <Badge tone="red">{RECONCILE_DIFF_LABEL[d.type] ?? d.type}</Badge>
+                      <div>
+                        <button
+                          className="link-btn"
+                          onClick={() =>
+                            setExpandedDiff(expandedDiff === rowKey ? null : rowKey)
+                          }
+                        >
+                          {expandedDiff === rowKey ? '收起依据' : '依据'}
+                        </button>
+                      </div>
+                    </td>
+                    <td>{d.waybill_no || d.trip_no || '—'}</td>
+                    <td>{d.statement_amount ?? '—'}</td>
+                    <td>{d.system_amount ?? '—'}</td>
+                    <td>{d.delta ?? '—'}</td>
+                    <td className="muted">{d.possible_causes?.join('；') || '—'}</td>
+                    <td className="muted">{d.suggested_action || '—'}</td>
+                    <td>{decision?.decision || '—'}</td>
+                    <td className="muted">{decision?.note || '—'}</td>
+                    <td className="actions-cell">
+                      <Button
+                        size="sm"
+                        disabled={
+                          !d.difference_id ||
+                          actionBusy !== null ||
+                          Boolean(review.risk_id) ||
+                          Boolean(actionFor(d.difference_id, 'risk'))
+                        }
+                        onClick={() => void createRisk(d)}
+                      >
+                        {actionFor(d.difference_id, 'risk') || review.risk_id
+                          ? `风险·${statusLabel(riskStatus)}`
+                          : '风险'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={
+                          !d.difference_id ||
+                          actionBusy !== null ||
+                          Boolean(review.issue_id) ||
+                          Boolean(actionFor(d.difference_id, 'issue'))
+                        }
+                        onClick={() => void createIssue(d)}
+                      >
+                        {actionFor(d.difference_id, 'issue') || review.issue_id
+                          ? `待办·${statusLabel(issueStatus)}`
+                          : '待办'}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expandedDiff === rowKey ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="muted"
+                        style={{ background: 'var(--surface-2)' }}
+                      >
+                        <div>
+                          来源：
+                          <strong>
+                            {DIFF_SOURCE_LABEL[d.source ?? ''] ?? d.source ?? '—'}
+                          </strong>
+                          {' · '}置信度：
+                          <strong>{d.confidence != null ? d.confidence : '—'}</strong>
+                        </div>
+                        {d.evidence?.length ? (
+                          <ul style={{ margin: '4px 0 0 18px' }}>
+                            {d.evidence.map((item, idx) => (
+                              <li key={idx}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div>无证据条目</div>
+                        )}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>

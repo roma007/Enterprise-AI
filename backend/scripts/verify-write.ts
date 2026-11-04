@@ -4417,6 +4417,118 @@ async function main() {
     }
   });
 
+  await check('对账决策：平台可改、覆盖保留备注与校验', async () => {
+    const login = async (email: string) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email, password: 'demo1234' },
+      });
+      assert.equal(res.statusCode, 200, `登录失败：${email}`);
+      return res.json().token as string;
+    };
+    const token = await login('zhang@hengzhi.ai');
+    const authHeaders = { authorization: `Bearer ${token}` };
+    const eng = await one<{ org_id: string }>(
+      `SELECT org_id FROM engagements WHERE id = $1`,
+      [engagementId],
+    );
+    const differenceId = `DECIDE-${stamp}-1`;
+    const review = await one<{ id: string }>(
+      `INSERT INTO copilot_reconcile_reviews
+         (idempotency_key, org_id, engagement_id, kind, document_id, status,
+          source, differences, decisions)
+       VALUES ($1,$2,$3,'statement',$4,'confirmed','verify-write',$5::jsonb,'[]'::jsonb)
+       RETURNING id`,
+      [
+        `verify-decide-${stamp}`,
+        eng!.org_id,
+        engagementId,
+        `DECIDE-${stamp}`,
+        JSON.stringify([
+          {
+            difference_id: differenceId,
+            type: 'amount_mismatch',
+            waybill_no: 'HY-DECIDE-1',
+            delta: 10,
+            source: 'rule',
+          },
+        ]),
+      ],
+    );
+    const reviewId = review!.id;
+
+    const decide = (payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions`,
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+        payload: JSON.stringify(payload),
+      });
+
+    try {
+      const ignored = await decide({
+        difference_id: differenceId,
+        decision: '忽略',
+        note: '重复计费，已确认',
+      });
+      assert.equal(ignored.statusCode, 200, `决策保存失败：${ignored.body}`);
+      assert.equal(ignored.json().decisions.length, 1);
+      const first = ignored.json().decisions[0];
+      assert.equal(first.decision, '忽略');
+      assert.equal(first.note, '重复计费，已确认');
+      assert.equal(first.source, 'platform');
+      assert.ok(first.decided_by, '应记录决策人');
+
+      const accepted = await decide({
+        difference_id: differenceId,
+        decision: '采纳',
+      });
+      assert.equal(accepted.statusCode, 200);
+      assert.equal(accepted.json().decisions.length, 1, '同一差异不应重复追加');
+      assert.equal(accepted.json().decisions[0].decision, '采纳');
+      assert.equal(
+        accepted.json().decisions[0].note,
+        '重复计费，已确认',
+        '未传备注时应保留原备注',
+      );
+
+      const detail = await app.inject({
+        method: 'GET',
+        url: `/api/copilot-reconcile-reviews/${reviewId}`,
+        headers: authHeaders,
+      });
+      assert.equal(detail.statusCode, 200);
+      assert.equal(detail.json().item.decisions[0].decision, '采纳');
+
+      const missing = await decide({
+        difference_id: 'NOT-EXIST',
+        decision: '采纳',
+      });
+      assert.equal(missing.statusCode, 422);
+      assert.equal(missing.json().error, 'DIFFERENCE_NOT_FOUND');
+
+      const invalid = await decide({
+        difference_id: differenceId,
+        decision: '通过',
+      });
+      assert.equal(invalid.statusCode, 400);
+
+      const audits = await one<{ count: string }>(
+        `SELECT count(*)::text AS count FROM audit_logs
+          WHERE action = 'DECIDE copilot-reconcile-difference' AND object_id = $1`,
+        [reviewId],
+      );
+      assert.equal(Number(audits!.count), 2, '每次决策都应写审计');
+    } finally {
+      await query(
+        `DELETE FROM audit_logs WHERE object_id = $1 AND object_type = 'copilot_reconcile_review'`,
+        [reviewId],
+      );
+      await query(`DELETE FROM copilot_reconcile_reviews WHERE id = $1`, [reviewId]);
+    }
+  });
+
   await check('快照：归档后累计不下降且同日只留一条', async () => {
     const org = await one<{ id: string }>(
       `INSERT INTO organizations (name, plan) VALUES ('快照回归组织','free') RETURNING id`,

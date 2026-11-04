@@ -52,6 +52,7 @@ import type {
   CopilotReconcileReview,
   CopilotReconcileReviewDetail,
   ReconcileBatch,
+  ReconcileDecision,
   BatchFilterView,
   UserNotification,
   BatchFilterViewAudit,
@@ -1499,6 +1500,14 @@ export const api = {
       filters: BatchExportFilters;
     }>(
       `/api/copilot-reconcile-reviews/${reviewId}/action-batches/export-estimate${batchExportQuery(filters)}`,
+    ),
+  decideReconcileDifference: (
+    reviewId: string,
+    payload: { difference_id: string; decision: string; note?: string | null },
+  ) =>
+    request<{ decisions: ReconcileDecision[] }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/decisions`,
+      json('PUT', payload),
     ),
   listReconcileDocuments: (reviewId: string) =>
     request<{

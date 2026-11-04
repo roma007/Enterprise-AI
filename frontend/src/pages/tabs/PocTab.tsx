@@ -582,6 +582,7 @@ function ReconcileReviewDetail({
   const [exportingDiffs, setExportingDiffs] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [generatingDoc, setGeneratingDoc] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState<string | null>(null);
   const [latestDoc, setLatestDoc] = useState<{
     id: string;
     title: string;
@@ -839,6 +840,29 @@ function ReconcileReviewDetail({
       alive = false;
     };
   }, [review.id, decisionsKey]);
+
+  const saveDecision = async (
+    diff: ReconcileDifference,
+    decision: string,
+    note: string,
+  ) => {
+    if (!diff.difference_id) return;
+    setDecisionBusy(diff.difference_id);
+    setActionError(null);
+    try {
+      const res = await api.decideReconcileDifference(review.id, {
+        difference_id: diff.difference_id,
+        decision,
+        note: note.trim() ? note.trim() : null,
+      });
+      onAction({ decisions: res.decisions });
+      setActionNotice('决策已保存。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setDecisionBusy(null);
+    }
+  };
 
   const exportReviewDocx = async () => {
     setExportingDocx(true);
@@ -1507,8 +1531,38 @@ function ReconcileReviewDetail({
                     <td>{d.delta ?? '—'}</td>
                     <td className="muted">{d.possible_causes?.join('；') || '—'}</td>
                     <td className="muted">{d.suggested_action || '—'}</td>
-                    <td>{decision?.decision || '—'}</td>
-                    <td className="muted">{decision?.note || '—'}</td>
+                    <td>
+                      <Select
+                        value={decision?.decision || '待确认'}
+                        disabled={!d.difference_id || decisionBusy === d.difference_id}
+                        onChange={(e) =>
+                          void saveDecision(d, e.target.value, decision?.note ?? '')
+                        }
+                        style={{ minWidth: 96 }}
+                      >
+                        <option value="待确认">待确认</option>
+                        <option value="采纳">采纳</option>
+                        <option value="忽略">忽略</option>
+                      </Select>
+                    </td>
+                    <td>
+                      <Input
+                        key={`${rowKey}-${decision?.note ?? ''}`}
+                        defaultValue={decision?.note ?? ''}
+                        placeholder="备注"
+                        disabled={!d.difference_id || decisionBusy === d.difference_id}
+                        style={{ minWidth: 120 }}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim();
+                          if (next === (decision?.note ?? '')) return;
+                          void saveDecision(
+                            d,
+                            decision?.decision || '待确认',
+                            next,
+                          );
+                        }}
+                      />
+                    </td>
                     <td className="actions-cell">
                       <Button
                         size="sm"

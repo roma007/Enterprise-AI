@@ -1025,12 +1025,16 @@ export const api = {
     ),
   listCopilotReconcileReviews: (
     engagementId: string,
-    opts: { decision_state?: 'all' | 'pending' | 'ignored' | 'decided' } = {},
+    opts: {
+      decision_state?: 'all' | 'pending' | 'ignored' | 'decided';
+      q?: string;
+    } = {},
   ) => {
     const params = new URLSearchParams();
     if (opts.decision_state && opts.decision_state !== 'all') {
       params.set('decision_state', opts.decision_state);
     }
+    if (opts.q) params.set('q', opts.q);
     const qs = params.toString();
     return request<{ items: CopilotReconcileReview[] }>(
       `/api/engagements/${engagementId}/copilot-reconcile-reviews${qs ? `?${qs}` : ''}`,

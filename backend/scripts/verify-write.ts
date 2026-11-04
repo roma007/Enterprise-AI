@@ -4876,6 +4876,32 @@ async function main() {
         '按来源应包含规则',
       );
 
+      const listReviews = async (query: string) => {
+        const res = await app.inject({
+          method: 'GET',
+          url: `/api/engagements/${engagementId}/copilot-reconcile-reviews?${query}`,
+          headers: { authorization: `Bearer ${adminToken}` },
+        });
+        assert.equal(res.statusCode, 200, `复核列表查询失败：${res.body}`);
+        return res.json().items as any[];
+      };
+      assert.ok(
+        (await listReviews(`q=${encodeURIComponent(`DECIDE-${stamp}`)}`)).some(
+          (item) => item.id === reviewId,
+        ),
+        '按单据号搜索应命中',
+      );
+      assert.ok(
+        (await listReviews('q=HY-DECIDE-1')).some((item) => item.id === reviewId),
+        '按运单号搜索应命中',
+      );
+      assert.ok(
+        !(await listReviews('q=NO-SUCH-REVIEW')).some(
+          (item) => item.id === reviewId,
+        ),
+        '无匹配时不应命中',
+      );
+
       const ignored = await decide({
         difference_id: differenceId,
         decision: '忽略',

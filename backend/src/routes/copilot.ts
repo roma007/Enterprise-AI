@@ -2768,13 +2768,15 @@ export async function copilotRoutes(app: FastifyInstance) {
     );
     if (!engagement) throw httpError(404, 'NOT_FOUND', '项目不存在');
 
-    const { decision_state } = z
+    const { decision_state, q } = z
       .object({
         decision_state: z
           .enum(['all', 'pending', 'ignored', 'decided'])
           .default('all'),
+        q: z.string().trim().max(80).optional(),
       })
       .parse(req.query ?? {});
+    const search = q || null;
     const items = await query(
       `SELECT x.*
          FROM (
@@ -2798,6 +2800,16 @@ export async function copilotRoutes(app: FastifyInstance) {
                   ) AS has_ignored
              FROM copilot_reconcile_reviews r
             WHERE r.engagement_id = $1
+              AND (
+                $3::text IS NULL
+                OR r.document_id ILIKE '%' || $3 || '%'
+                OR EXISTS (
+                  SELECT 1
+                    FROM jsonb_array_elements(COALESCE(r.differences, '[]'::jsonb)) d
+                   WHERE d->>'waybill_no' ILIKE '%' || $3 || '%'
+                      OR d->>'trip_no' ILIKE '%' || $3 || '%'
+                )
+              )
          ) x
         WHERE ($2::text = 'all'
            OR ($2::text = 'pending' AND x.has_pending)
@@ -2806,7 +2818,7 @@ export async function copilotRoutes(app: FastifyInstance) {
                AND jsonb_array_length(COALESCE(x.differences, '[]'::jsonb)) > 0))
         ORDER BY x.received_at DESC
         LIMIT 100`,
-      [id, decision_state],
+      [id, decision_state, search],
     );
     return { items };
   });

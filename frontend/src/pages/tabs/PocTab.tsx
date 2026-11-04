@@ -94,12 +94,15 @@ export function PocTab({
   const [reviewDecisionFilter, setReviewDecisionFilter] = useState<
     'all' | 'pending' | 'ignored' | 'decided'
   >('all');
+  const [reviewSearch, setReviewSearch] = useState('');
+  const debouncedReviewSearch = useDebouncedValue(reviewSearch, 300);
   const copilotReviews = useLoad(
     () =>
       api.listCopilotReconcileReviews(engagementId, {
         decision_state: reviewDecisionFilter,
+        q: debouncedReviewSearch.trim() || undefined,
       }),
-    [engagementId, reviewDecisionFilter],
+    [engagementId, reviewDecisionFilter, debouncedReviewSearch],
   );
   const diffStats = useLoad(
     () => api.getReconcileDiffStats(engagementId),
@@ -294,6 +297,12 @@ export function PocTab({
         subtitle="客户/车队对账单抽取、差异解释与人工决策的回写；由 ai-copilot 复核页推送。"
         actions={
           <div className="row">
+            <Input
+              placeholder="单据号 / 运单号"
+              value={reviewSearch}
+              onChange={(e) => setReviewSearch(e.target.value)}
+              style={{ maxWidth: 160 }}
+            />
             <Select
               value={reviewDecisionFilter}
               onChange={(e) =>

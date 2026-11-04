@@ -270,6 +270,23 @@ function compareSnapshotPeriods(current: any[], previous: any[]) {
   };
 }
 
+async function loadSnapshotComparison(
+  orgId: string,
+  days: number,
+  bucket: SnapshotBucket,
+) {
+  const endDate = localDateInTimezone(await resolveOrgTimezone(orgId));
+  const windowDays = Math.min(days * 2 + 31, 3650);
+  const rows = await loadSnapshotSeries(orgId, windowDays, endDate);
+  const items = aggregateSnapshotRows(rows.slice(0, days), bucket);
+  const allBuckets = aggregateSnapshotRows(rows, bucket);
+  const currentKeys = new Set(items.map((item) => item.snapshot_date));
+  const previous = allBuckets
+    .filter((item) => !currentKeys.has(item.snapshot_date))
+    .slice(0, items.length);
+  return { items, comparison: compareSnapshotPeriods(items, previous) };
+}
+
 export async function collabAuditRoutes(app: FastifyInstance) {
   app.get('/api/collab-audits', async (req) => {
     assertAuditViewer(req);
@@ -703,16 +720,11 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       })
       .parse(req.query ?? {});
 
-    const endDate = localDateInTimezone(await resolveOrgTimezone(auth.org_id));
-    const windowDays = Math.min(days * 2 + 31, 3650);
-    const rows = await loadSnapshotSeries(auth.org_id, windowDays, endDate);
-    const items = aggregateSnapshotRows(rows.slice(0, days), bucket);
-    const allBuckets = aggregateSnapshotRows(rows, bucket);
-    const currentKeys = new Set(items.map((item) => item.snapshot_date));
-    const previous = allBuckets
-      .filter((item) => !currentKeys.has(item.snapshot_date))
-      .slice(0, items.length);
-    const comparison = compareSnapshotPeriods(items, previous);
+    const { items, comparison } = await loadSnapshotComparison(
+      auth.org_id,
+      days,
+      bucket,
+    );
     return { items, bucket, comparison, total: days, limit: days, offset: 0 };
   });
 
@@ -783,6 +795,87 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', 'attachment; filename="collab-snapshots.csv"')
+      .send(`\uFEFF${lines.join('\r\n')}`);
+  });
+
+  app.get('/api/collab-audits/snapshots/comparison/export.csv', async (req, reply) => {
+    assertAuditViewer(req);
+    const auth = (req as any).authUser;
+    const { days, bucket } = z
+      .object({
+        days: z.coerce.number().int().min(1).max(365).default(30),
+        bucket: z.enum(['day', 'week', 'month']).default('day'),
+      })
+      .parse(req.query ?? {});
+    const { comparison } = await loadSnapshotComparison(
+      auth.org_id,
+      days,
+      bucket,
+    );
+    const current = comparison?.current;
+    const previous = comparison?.previous ?? null;
+    const change = comparison?.change;
+
+    const header = [
+      '指标',
+      '本周期区间',
+      '上周期区间',
+      '本周期新增',
+      '上周期新增',
+      '环比',
+    ];
+    const lines = [header.join(',')];
+    type DeltaKey =
+      | 'delta_total'
+      | 'delta_notification'
+      | 'delta_filter_view'
+      | 'delta_export';
+    const rows: Array<[string, DeltaKey]> = [
+      ['总数', 'delta_total'],
+      ['通知', 'delta_notification'],
+      ['筛选视图', 'delta_filter_view'],
+      ['导出', 'delta_export'],
+    ];
+    for (const [label, key] of rows) {
+      lines.push(
+        [
+          label,
+          current ? `${current.start} ~ ${current.end}` : '',
+          previous ? `${previous.start} ~ ${previous.end}` : '无数据',
+          current ? current[key] : 0,
+          previous ? previous[key] : 0,
+          change ? change[key] : 0,
+        ]
+          .map(csvCell)
+          .join(','),
+      );
+    }
+
+    try {
+      await query(
+        `INSERT INTO audit_logs
+           (org_id, user_id, action, object_type, status_code,
+            ip, user_agent, request_id, detail)
+         VALUES ($1,$2,'EXPORT copilot-collab-snapshots','collab_audit_snapshot',200,$3,$4,$5,$6::jsonb)`,
+        [
+          auth?.org_id ?? null,
+          auth?.sub ?? null,
+          req.ip,
+          String(req.headers['user-agent'] ?? '').slice(0, 500),
+          req.id,
+          JSON.stringify({ kind: 'comparison', days, bucket, rows: rows.length }),
+        ],
+      );
+    } catch (err) {
+      req.log?.warn?.({ err }, 'snapshot comparison export audit failed');
+    }
+
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header(
+        'content-disposition',
+        'attachment; filename="collab-snapshot-comparison.csv"',
+      )
       .send(`\uFEFF${lines.join('\r\n')}`);
   });
 

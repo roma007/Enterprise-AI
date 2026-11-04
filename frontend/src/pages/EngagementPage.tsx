@@ -117,14 +117,19 @@ export function EngagementPage({
   onBack,
   review,
   view,
+  initialTab,
 }: {
   id: string;
   onBack: () => void;
   review?: string;
   view?: string;
+  initialTab?: string;
 }) {
   const [tab, setTab] = useState<TabKey>(() => {
     if (review) return 'poc';
+    if (initialTab && TAB_KEYS.includes(initialTab as TabKey)) {
+      return initialTab as TabKey;
+    }
     try {
       const saved = window.localStorage.getItem(tabStorageKey(id)) as TabKey | null;
       return saved && TAB_KEYS.includes(saved) ? saved : 'overview';
@@ -134,8 +139,14 @@ export function EngagementPage({
   });
 
   useEffect(() => {
-    if (review) setTab('poc');
-  }, [review]);
+    if (review) {
+      setTab('poc');
+      return;
+    }
+    if (initialTab && TAB_KEYS.includes(initialTab as TabKey)) {
+      setTab(initialTab as TabKey);
+    }
+  }, [review, initialTab]);
 
   useEffect(() => {
     try {

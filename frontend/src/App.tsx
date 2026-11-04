@@ -51,7 +51,13 @@ import { Badge } from './ui';
 
 type Route =
   | { page: 'dashboard' }
-  | { page: 'engagement'; id: string; review?: string; view?: string }
+  | {
+      page: 'engagement';
+      id: string;
+      review?: string;
+      view?: string;
+      tab?: string;
+    }
   | { page: 'login' }
   | { page: 'benchmarks' }
   | { page: 'knowledge' }
@@ -77,6 +83,7 @@ function parseHash(): Route {
       id: parts[1],
       review: params.get('review') ?? undefined,
       view: params.get('view') ?? undefined,
+      tab: params.get('tab') ?? undefined,
     };
   }
   if (parts[0] === 'login') return { page: 'login' };
@@ -374,6 +381,7 @@ export default function App() {
             id={route.id}
             review={route.review}
             view={route.view}
+            initialTab={route.tab}
             onBack={() => navigate('#/')}
           />
         ) : route.page === 'knowledge' ? (

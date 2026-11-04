@@ -4424,17 +4424,53 @@ async function main() {
       assert.equal(freshDocs.length, 1);
       assert.equal(freshDocs[0].is_stale, false, '刚生成的交付物不应过期');
 
-      await query(
-        `UPDATE copilot_reconcile_reviews SET decisions = $2::jsonb WHERE id = $1`,
-        [
-          reviewId,
-          JSON.stringify([
-            { difference_id: `WORD-${stamp}-1`, decision: '忽略', note: '回归测试' },
-          ]),
-        ],
-      );
+      const decisionChange = await app.inject({
+        method: 'PUT',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: JSON.stringify({
+          difference_id: `WORD-${stamp}-1`,
+          decision: '忽略',
+          note: '回归测试',
+        }),
+      });
+      assert.equal(decisionChange.statusCode, 200, `决策变更失败：${decisionChange.body}`);
       const staleDocs = await listDocuments();
       assert.equal(staleDocs[0].is_stale, true, '复核变更后交付物应标记过期');
+
+      const staleNoticeCount = async () =>
+        Number(
+          (
+            await one<{ count: string }>(
+              `SELECT count(*)::text AS count FROM user_notifications
+                WHERE user_id = (SELECT id FROM users WHERE email = 'admin@hengzhi.ai')
+                  AND kind = 'copilot_reconcile_report_stale'
+                  AND ref_id = $1
+                  AND read_at IS NULL
+                  AND deleted_at IS NULL`,
+              [reviewId],
+            )
+          )!.count,
+        );
+      assert.equal(await staleNoticeCount(), 1, '报告过期应通知管理员');
+
+      await app.inject({
+        method: 'PUT',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/decisions`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        payload: JSON.stringify({
+          difference_id: `WORD-${stamp}-1`,
+          decision: '待确认',
+          note: '第二次变更',
+        }),
+      });
+      assert.equal(await staleNoticeCount(), 1, '未读过期提醒不应重复堆积');
 
       const listedDeliverables = await app.inject({
         method: 'GET',
@@ -4494,6 +4530,11 @@ async function main() {
       );
       assert.equal(Number(generateAudit!.count), 2, '每次生成都应写审计');
     } finally {
+      await query(
+        `DELETE FROM user_notifications
+          WHERE kind = 'copilot_reconcile_report_stale' AND ref_id = $1`,
+        [reviewId],
+      );
       await query(
         `DELETE FROM deliverables WHERE generated_from->>'reviewId' = $1`,
         [reviewId],

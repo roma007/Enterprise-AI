@@ -1213,6 +1213,61 @@ export async function copilotRoutes(app: FastifyInstance) {
     return { item: { ...review, actions } };
   });
 
+  /** 复核报告过期时通知本组织管理员/总监/项目经理；同一未读提醒不重复。 */
+  async function notifyStaleReconcileReports(
+    reviewId: string,
+    auth: any,
+    log?: any,
+  ): Promise<void> {
+    try {
+      const docs = await listReconcileDocuments(reviewId);
+      if (!docs.some((doc) => doc.is_stale)) return;
+      const review = await one<any>(
+        `SELECT engagement_id, document_id
+           FROM copilot_reconcile_reviews WHERE id = $1`,
+        [reviewId],
+      );
+      if (!review?.engagement_id || !auth?.org_id) return;
+      const recipients = await query<{ id: string }>(
+        `SELECT u.id
+           FROM users u
+           JOIN memberships m ON m.user_id = u.id
+          WHERE u.org_id = $1
+            AND u.status = 'active'
+            AND m.role IN ('admin', 'director', 'pm')
+            AND u.id <> $2`,
+        [auth.org_id, auth.sub],
+      );
+      for (const recipient of recipients) {
+        await query(
+          `INSERT INTO user_notifications
+             (org_id, user_id, actor_id, kind, title, body, link, ref_type, ref_id)
+           SELECT $1,$2,$3,'copilot_reconcile_report_stale',$4,$5,$6,
+                  'copilot_reconcile_review',$7
+            WHERE NOT EXISTS (
+              SELECT 1 FROM user_notifications n
+               WHERE n.user_id = $2
+                 AND n.kind = 'copilot_reconcile_report_stale'
+                 AND n.ref_id = $7
+                 AND n.read_at IS NULL
+                 AND n.deleted_at IS NULL
+            )`,
+          [
+            auth.org_id,
+            recipient.id,
+            auth.sub,
+            '复核报告已过期',
+            `复核 ${review.document_id ?? reviewId} 的报告需要重新生成`,
+            `#/engagements/${review.engagement_id}?tab=reports`,
+            reviewId,
+          ],
+        );
+      }
+    } catch (err) {
+      log?.warn?.({ err }, 'stale report notification failed');
+    }
+  }
+
   /** 在交付平台记录单条差异的决策（采纳 / 忽略 / 待确认）。 */
   app.put('/api/copilot-reconcile-reviews/:id/decisions', async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
@@ -1277,6 +1332,7 @@ export async function copilotRoutes(app: FastifyInstance) {
     } catch (err) {
       req.log?.warn?.({ err }, 'decision audit failed');
     }
+    await notifyStaleReconcileReports(id, auth, req.log);
 
     return { decisions };
   });
@@ -1356,6 +1412,7 @@ export async function copilotRoutes(app: FastifyInstance) {
     } catch (err) {
       req.log?.warn?.({ err }, 'decision audit failed');
     }
+    await notifyStaleReconcileReports(id, auth, req.log);
 
     return { decisions, updated: unique.length };
   });

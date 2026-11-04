@@ -16,6 +16,7 @@ import { fmtDateTime } from '../utils';
 
 const KIND_LABEL: Record<string, string> = {
   copilot_batch_filter_view_shared: '视图共享',
+  copilot_reconcile_report_stale: '报告过期',
 };
 
 const NOTIF_KEYS = {

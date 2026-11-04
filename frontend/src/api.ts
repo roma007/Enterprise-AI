@@ -1151,6 +1151,15 @@ export const api = {
   },
   markNotificationRead: (id: string) =>
     request<{ ok: boolean }>(`/api/notifications/${id}/read`, json('POST', {})),
+  markNotificationsRead: (
+    payload:
+      | { ids: string[] }
+      | { all: true; kind?: string; from?: string; to?: string },
+  ) =>
+    request<{ ok: boolean; updated: number }>(
+      '/api/notifications/read',
+      json('POST', payload),
+    ),
   markAllNotificationsRead: () =>
     request<{ ok: boolean; updated: number }>(
       '/api/notifications/read-all',

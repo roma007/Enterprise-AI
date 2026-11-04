@@ -420,6 +420,54 @@ export async function notificationRoutes(app: FastifyInstance) {
     return { ok: true, deleted: purged.length };
   });
 
+  /** 批量标为已读：按 ID 或按当前筛选。 */
+  app.post('/api/notifications/read', async (req) => {
+    const auth = currentUser(req);
+    const body = z
+      .union([
+        z.object({ ids: z.array(z.uuid()).min(1).max(100) }),
+        z.object({
+          all: z.literal(true),
+          kind: z.string().trim().max(80).optional(),
+          from: dateStr.optional(),
+          to: dateStr.optional(),
+        }),
+      ])
+      .parse(req.body ?? {});
+
+    if ('ids' in body) {
+      const uniqueIds = Array.from(new Set(body.ids));
+      const rows = await query(
+        `UPDATE user_notifications
+            SET read_at = now()
+          WHERE user_id = $1
+            AND deleted_at IS NULL
+            AND read_at IS NULL
+            AND id = ANY($2::uuid[])
+          RETURNING id`,
+        [auth.id, uniqueIds],
+      );
+      return { ok: true, updated: rows.length };
+    }
+
+    if (body.from && body.to && body.from > body.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
+    const rows = await query(
+      `UPDATE user_notifications
+          SET read_at = now()
+        WHERE user_id = $1
+          AND deleted_at IS NULL
+          AND read_at IS NULL
+          AND ($2::text IS NULL OR kind = $2)
+          AND ($3::date IS NULL OR created_at >= $3::date)
+          AND ($4::date IS NULL OR created_at < ($4::date + interval '1 day'))
+        RETURNING id`,
+      [auth.id, body.kind || null, body.from ?? null, body.to ?? null],
+    );
+    return { ok: true, updated: rows.length };
+  });
+
   app.post('/api/notifications/read-all', async (req) => {
     const auth = currentUser(req);
     const rows = await query(

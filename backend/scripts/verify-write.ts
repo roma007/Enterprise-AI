@@ -4288,6 +4288,39 @@ async function main() {
       });
       assert.equal(tooMany.statusCode, 400, '超过 100 条 ID 应拒绝');
 
+      const readIds = [
+        await createNotification(zhangId, 'verify_read', '批量已读一'),
+        await createNotification(zhangId, 'verify_read', '批量已读二'),
+      ];
+      createdIds.push(...readIds);
+      const readOne = await call(zhangToken, 'POST', '/api/notifications/read', {
+        ids: [readIds[0]],
+      });
+      assert.equal(readOne.statusCode, 200);
+      assert.equal(readOne.json().updated, 1, '按 ID 标为已读只命中未读');
+      const readAgain = await call(zhangToken, 'POST', '/api/notifications/read', {
+        ids: [readIds[0]],
+      });
+      assert.equal(readAgain.json().updated, 0, '重复标为已读应为 0');
+      const readByFilter = await call(
+        zhangToken,
+        'POST',
+        '/api/notifications/read',
+        { all: true, kind: 'verify_read' },
+      );
+      assert.equal(
+        readByFilter.json().updated,
+        1,
+        '按类型批量已读应命中剩余 1 条',
+      );
+      const readTooMany = await call(zhangToken, 'POST', '/api/notifications/read', {
+        ids: Array.from(
+          { length: 101 },
+          (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        ),
+      });
+      assert.equal(readTooMany.statusCode, 400, '批量已读超过 100 条应拒绝');
+
       const auditForbidden = await call(zhangToken, 'GET', '/api/notification-audits');
       assert.equal(auditForbidden.statusCode, 403, '顾问不应查看通知审计');
       const auditForAdmin = await call(adminToken, 'GET', '/api/notification-audits?limit=5');

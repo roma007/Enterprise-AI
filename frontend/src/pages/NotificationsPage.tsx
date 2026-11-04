@@ -13,6 +13,7 @@ import {
   Spinner,
 } from '../ui';
 import { fmtDateTime } from '../utils';
+import type { UserNotification } from '../types';
 
 const KIND_LABEL: Record<string, string> = {
   copilot_batch_filter_view_shared: '视图共享',
@@ -189,6 +190,45 @@ export function NotificationsPage() {
     }
   };
 
+  const markSelected = async () => {
+    if (!selectedCount) return;
+    setBusy(true);
+    setOpError(null);
+    try {
+      if (selectAll) {
+        await api.markNotificationsRead({
+          all: true,
+          kind: kind || undefined,
+          from: from || undefined,
+          to: to || undefined,
+        });
+      } else {
+        await api.markNotificationsRead({ ids: [...selected] });
+      }
+      setSelected(new Set());
+      setSelectAll(false);
+      await reload();
+      window.dispatchEvent(new Event('notifications-updated'));
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openNotification = async (n: UserNotification) => {
+    if (!n.link) return;
+    if (!n.read_at && !n.deleted_at) {
+      try {
+        await api.markNotificationRead(n.id);
+        window.dispatchEvent(new Event('notifications-updated'));
+      } catch {
+        // 标记失败不影响跳转
+      }
+    }
+    window.location.href = n.link;
+  };
+
   const markAll = async () => {
     setBusy(true);
     setOpError(null);
@@ -362,6 +402,15 @@ export function NotificationsPage() {
               ) : null}
               <Button
                 size="sm"
+                disabled={
+                  busy || Boolean(rangeError) || selectedCount === 0
+                }
+                onClick={() => void markSelected()}
+              >
+                标为已读（{selectedCount}）
+              </Button>
+              <Button
+                size="sm"
                 variant="danger"
                 disabled={busy || Boolean(rangeError) || selectedCount === 0}
                 onClick={() => void deleteSelected()}
@@ -452,7 +501,16 @@ export function NotificationsPage() {
                     </td>
                     <td className="actions-cell">
                       {n.link ? (
-                        <a className="link-btn" href={n.link} style={{ marginRight: 8 }}>
+                        <a
+                          className="link-btn"
+                          href={n.link}
+                          style={{ marginRight: 8 }}
+                          onClick={(e) => {
+                            if (n.read_at || n.deleted_at) return;
+                            e.preventDefault();
+                            void openNotification(n);
+                          }}
+                        >
                           查看
                         </a>
                       ) : null}

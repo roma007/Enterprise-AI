@@ -4669,6 +4669,18 @@ async function main() {
           [reviewId],
         );
         assert.equal(Number(pdfAudit!.count), 1, '应写一条 PDF 导出审计');
+
+        const pdfAgain = await app.inject({
+          method: 'GET',
+          url: `/api/copilot-reconcile-reviews/${reviewId}/document.pdf`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(pdfAgain.statusCode, 200);
+        assert.equal(
+          pdfAgain.headers['x-pdf-cache'],
+          'HIT',
+          '重复导出应命中 PDF 缓存',
+        );
       }
 
       const audit = await one<{ count: string }>(

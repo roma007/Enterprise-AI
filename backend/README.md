@@ -124,6 +124,7 @@ npm run dev          # http://127.0.0.1:8788
 - 热表 `audit_logs` + 归档表 `audit_logs_archive`（同构，多 `archived_at`）。
 - `POST /api/audit-logs/archive`：`{ before, dry_run, confirm }`；默认 dry-run，执行需 `confirm=ARCHIVE`。
 - `GET /api/audit-logs/archive`：分页查询归档记录。
+- `GET /api/audit-logs/facets?scope=live|archive`：返回可选的操作与对象类型，供页面下拉筛选。
 - 归档只移动、不删除；管理员/总监可操作，其他角色 403。
 - CLI：`npm run audit:archive -- --days=180 --dry-run`，去掉 `--dry-run` 执行；支持 `--batch=1000`。
 - 建议 cron 每日执行，保留 180 天热数据（`AUDIT_RETENTION_DAYS` 可覆盖）。
@@ -185,7 +186,7 @@ Body:   { idempotency_key, engagement_id | experiment_id, kind,
 - 导出汇总：`GET /api/copilot-reconcile-reviews/:id/action-batches/export.csv` 导出该复核的全部批次（CSV，UTF-8 BOM），包含父子 ID、类型、状态、请求/成功/跳过/失败数、级别、截止日期、取消原因/取消人、创建人、创建/完成时间。
 - 导出差异：`GET /api/copilot-reconcile-reviews/:id/differences/export.csv` 导出该复核的全部差异（差异 ID、类型、运单/趟次、金额、差额、`source` / `confidence` / `evidence`、可能原因、建议动作、决策与备注），并写 `EXPORT copilot-reconcile-differences` 审计事件。
 - 生成复核报告交付物：`POST /api/copilot-reconcile-reviews/:id/documents` 把报告写入 `deliverables`（`type=data_report`、`status=draft`、按项目版本化），内容未变化时重复生成会复用现有版本（返回 `reused=true`，不新增版本、不写生成审计）；审批/外发前会对比报告哈希与当前复核，过期返回 `409 DELIVERABLE_STALE`，需重新生成；审批后可复用现有交付物分享流程生成客户只读链接；写 `GENERATE copilot-reconcile-document` 审计事件。`GET /api/copilot-reconcile-reviews/:id/documents` 返回该复核生成的交付物列表（版本、状态、`is_stale`），按报告内容哈希与当前复核比对判断是否过期；项目交付物列表也会对复核报告返回 `is_stale` 与 `review_id`，可用于一键重新生成。决策变更导致报告过期时，会向本组织管理员/总监/项目经理发送 `copilot_reconcile_report_stale` 通知（同一复核未读提醒不重复），链接为 `#/engagements/<id>?tab=reports`。
-- 导出复核报告：`GET /api/copilot-reconcile-reviews/:id/document.docx` 生成 Word（`.../document.pdf` 生成 PDF，无 Chromium 时返回 `503 PDF_ENGINE_UNAVAILABLE`；同源 Markdown：`GET .../document`），含单据信息、差异分布（类型 / 来源 / 置信度 / 决策）、差异汇总、逐条差异依据（来源 / 置信度 / 证据 / 原因 / 建议 / 决策）与已生成风险/待办，并写 `EXPORT copilot-reconcile-document` 审计事件。
+- 导出复核报告：`GET /api/copilot-reconcile-reviews/:id/document.docx` 生成 Word（`.../document.pdf` 生成 PDF，按报告内容哈希缓存并返回 `x-pdf-cache`，无 Chromium 时返回 `503 PDF_ENGINE_UNAVAILABLE`；同源 Markdown：`GET .../document`），含单据信息、差异分布（类型 / 来源 / 置信度 / 决策）、差异汇总、逐条差异依据（来源 / 置信度 / 证据 / 原因 / 建议 / 决策）与已生成风险/待办，并写 `EXPORT copilot-reconcile-document` 审计事件。
 - 导出明细：`GET /api/copilot-reconcile-reviews/:id/action-batches/export-items.csv` 按批次逐条导出差异（批次/父批次、批次状态、差异 ID、来源/置信度/证据、明细状态、目标/动作 ID、待办编号、失败码/原因、时间、取消信息、创建人）。两套 CSV 都对 `= + - @` 开头的内容加 `'` 前缀，防止 Excel 公式注入；批量导出成功会写独立审计事件 `EXPORT copilot-batch-summary` / `EXPORT copilot-batch-items` / `EXPORT copilot-batch-zip`，包含行数、格式与筛选条件。
 - 筛选导出：列表、预估、CSV 与 ZIP 共用 `?status=running|completed|failed|cancelled&action_type=risk|issue&from=YYYY-MM-DD&to=YYYY-MM-DD`，日期按批次创建时间过滤。筛选按**批次组**：组内任一批次命中即整组显示/导出。`from > to` 返回 `400 INVALID_DATE_RANGE`，列表、预估、CSV、ZIP 一致校验。
 - 打包导出：`GET /api/copilot-reconcile-reviews/:id/action-batches/export.zip` 返回 ZIP，内含 `batch-summary.csv` 与 `batch-items.csv`，两个文件使用同一组筛选条件。

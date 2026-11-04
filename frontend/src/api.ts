@@ -901,6 +901,10 @@ export const api = {
       `/api/trash/${batch}/restore`,
       { method: 'POST' },
     ),
+  listAuditFacets: (scope: 'live' | 'archive' = 'live') =>
+    request<{ actions: string[]; object_types: string[] }>(
+      `/api/audit-logs/facets?scope=${scope}`,
+    ),
   listAuditLogs: (params: { limit?: number; offset?: number; q?: string; action?: string; object_type?: string } = {}) => {
     const search = new URLSearchParams();
     if (params.limit) search.set('limit', String(params.limit));

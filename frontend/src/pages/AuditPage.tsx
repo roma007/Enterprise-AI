@@ -14,6 +14,7 @@ import {
   Modal,
   Notice,
   PageHeader,
+  Select,
   Spinner,
   Stat,
 } from '../ui';
@@ -36,19 +37,34 @@ export function AuditPage() {
   const [mode, setMode] = useState<'live' | 'archive'>('live');
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [objectTypeFilter, setObjectTypeFilter] = useState('');
   const dq = useDebouncedValue(search, 300);
+  const facets = useLoad(() => api.listAuditFacets(mode), [mode]);
 
   const { data, error, loading, reload } = useLoad(
     () =>
       mode === 'archive'
-        ? api.listArchivedAuditLogs({ limit: PAGE_SIZE, offset, q: dq })
-        : api.listAuditLogs({ limit: PAGE_SIZE, offset, q: dq }),
-    [mode, offset, dq],
+        ? api.listArchivedAuditLogs({
+            limit: PAGE_SIZE,
+            offset,
+            q: dq,
+            action: actionFilter || undefined,
+            object_type: objectTypeFilter || undefined,
+          })
+        : api.listAuditLogs({
+            limit: PAGE_SIZE,
+            offset,
+            q: dq,
+            action: actionFilter || undefined,
+            object_type: objectTypeFilter || undefined,
+          }),
+    [mode, offset, dq, actionFilter, objectTypeFilter],
   );
 
   useEffect(() => {
     setOffset(0);
-  }, [dq]);
+  }, [dq, actionFilter, objectTypeFilter]);
 
   const [before, setBefore] = useState(defaultBefore);
   const [archiving, setArchiving] = useState(false);
@@ -66,6 +82,8 @@ export function AuditPage() {
     setMode(next);
     setOffset(0);
     setSearch('');
+    setActionFilter('');
+    setObjectTypeFilter('');
     setArchiveNotice(null);
     setArchiveError(null);
   };
@@ -169,11 +187,37 @@ export function AuditPage() {
                 : '按时间倒序；可按 action、对象类型或操作人过滤。'
             }
             actions={
-              <Input
-                placeholder="搜索 action / 对象 / 用户"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <div className="row">
+                <Select
+                  value={actionFilter}
+                  onChange={(e) => setActionFilter(e.target.value)}
+                  style={{ maxWidth: 180 }}
+                >
+                  <option value="">全部操作</option>
+                  {(facets.data?.actions ?? []).map((action) => (
+                    <option key={action} value={action}>
+                      {action}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  value={objectTypeFilter}
+                  onChange={(e) => setObjectTypeFilter(e.target.value)}
+                  style={{ maxWidth: 160 }}
+                >
+                  <option value="">全部对象</option>
+                  {(facets.data?.object_types ?? []).map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  placeholder="搜索 action / 对象 / 用户"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             }
           >
             {items.length === 0 ? (

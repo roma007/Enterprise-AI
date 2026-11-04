@@ -139,6 +139,36 @@ export async function systemRoutes(app: FastifyInstance) {
     return { ...result, remaining: remaining?.count ?? 0 };
   });
 
+  app.get('/api/audit-logs/facets', async (req) => {
+    const { scope } = z
+      .object({ scope: z.enum(['live', 'archive']).default('live') })
+      .parse(req.query ?? {});
+    const org = await requestOrg(req);
+    const table = scope === 'archive' ? 'audit_logs_archive' : 'audit_logs';
+    const [actions, objectTypes] = await Promise.all([
+      query<{ value: string }>(
+        `SELECT DISTINCT action AS value
+           FROM ${table}
+          WHERE org_id = $1
+          ORDER BY action
+          LIMIT 300`,
+        [org],
+      ),
+      query<{ value: string }>(
+        `SELECT DISTINCT object_type AS value
+           FROM ${table}
+          WHERE org_id = $1 AND object_type IS NOT NULL
+          ORDER BY object_type
+          LIMIT 100`,
+        [org],
+      ),
+    ]);
+    return {
+      actions: actions.map((row) => row.value),
+      object_types: objectTypes.map((row) => row.value),
+    };
+  });
+
   app.get('/api/audit-logs', async (req) => {
     const q = z
       .object({

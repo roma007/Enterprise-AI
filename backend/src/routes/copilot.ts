@@ -8,11 +8,13 @@ import { createZip } from '../services/zip';
 import { csvCell } from '../services/csv';
 import { buildDocx, buildPrintHtml } from '../services/export';
 import { htmlToPdf } from '../services/pdf';
+import { cachedPdf, pdfCacheKey } from '../services/pdf_cache';
 import { DIFF_LABEL, DIFF_SOURCE_LABEL } from '../services/reconcile_labels';
 import {
   generateReconcileDeliverable,
   listReconcileDocuments,
   loadReconcileBundle,
+  reconcileMarkdownHash,
   renderReconcileDoc,
 } from '../services/reconcile_docs';
 
@@ -1521,12 +1523,18 @@ export async function copilotRoutes(app: FastifyInstance) {
       false,
     );
     try {
-      const buffer = await htmlToPdf(html);
+      const key = pdfCacheKey([
+        id,
+        'reconcile-report',
+        reconcileMarkdownHash(rendered.markdown),
+      ]);
+      const { buffer, cache } = await cachedPdf(key, () => htmlToPdf(html));
       await recordExportAudit(req, 'EXPORT copilot-reconcile-document', id, {
         format: 'pdf',
       });
       return reply
         .header('content-type', 'application/pdf')
+        .header('x-pdf-cache', cache)
         .header(
           'content-disposition',
           docDisposition(rendered.title, 'pdf'),

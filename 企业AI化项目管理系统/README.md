@@ -14,10 +14,11 @@
 | [05_数据模型v2.md](./05_数据模型v2.md) | 9 张新表 DDL、11 个字段变更、规则 R5（14 项校验）、20 项行业对标种子数据 |
 | [../OPERATIONS.md](../OPERATIONS.md) | **运维手册**：健康检查、Prometheus/Grafana（含看板 JSON）、cron（备份/审计归档/PDF 清理）、故障处置、发布回滚 |
 | [07_多租户与交付架构.md](./07_多租户与交付架构.md) | **多租户/HA 架构决策**：供应商 SaaS 控制面、客户单租户交付面、组件化组合、阶段路线 |
+| [08_本轮变更说明_2026-11-04.md](./08_本轮变更说明_2026-11-04.md) | **本轮变更说明**：多租户、试点一、协作审计、工程与测试；含接口/数据模型/验证/风险，供评审与交接 |
 | [06_实施计划.md](./06_实施计划.md) | **全系统分阶段实施计划**：S1 生产化 → S2 方案 → S3 POC → S4 交付 → S5 运营，含数据/API/页面/门禁/排期/风险/最近 6 周 backlog |
 | [DEPLOY.md](../DEPLOY.md) | Docker Compose 部署、备份恢复、生产检查清单 |
 | [prototype/index.html](./prototype/index.html) | 可点击 HTML 原型，浏览器直接打开 |
-| [../backend/](../backend/) | **可运行后端**：PostgreSQL 78 张表（47 个迁移） + 增量迁移 + Fastify API + 登录骨架 + OpenAPI/Swagger + S1 录入写接口 + 17 项数据库规则断言 + 14 项一致性校验 + 11 项报告回归 + 43 项录入闭环回归 + Playwright 冒烟（`npm run demo` / `verify:report` / `verify:write`） |
+| [../backend/](../backend/) | **可运行后端**：PostgreSQL 82 张表（54 个迁移） + 增量迁移 + Fastify API + 登录骨架 + OpenAPI/Swagger + S1 录入写接口 + 17 项数据库规则断言 + 14 项一致性校验 + 11 项报告回归 + 51 项录入闭环回归 + 16 条 Playwright 冒烟（`npm run demo` / `verify:report` / `verify:write`） |
 | [../frontend/](../frontend/) | **内部工作台**：Vite + React + TS，项目列表、诊断录入、机会点/ROI 编辑、报告预览与生成（`npm run dev` → `http://127.0.0.1:5173`） |
 | [../港口集卡运输AI可行性评估.md](../港口集卡运输AI可行性评估.md) | 阶段一的**真实样例产出**（集卡运输行业），可视为系统应能自动生成的交付物范本 |
 | [../会客包/13_AI能力路线图.md](../会客包/13_AI能力路线图.md) | **AI 能力路线图**：感知/预测/优化/生成/Agent 五层、节点机会地图、分期与数据门槛 |

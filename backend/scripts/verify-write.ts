@@ -4360,9 +4360,37 @@ async function main() {
       assert.equal(firstItem.status, 'draft');
       assert.ok(firstItem.title.includes('对账复核报告'), '标题应含报告名');
 
+      const listDocuments = async () => {
+        const res = await app.inject({
+          method: 'GET',
+          url: `/api/copilot-reconcile-reviews/${reviewId}/documents`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(res.statusCode, 200, `查询交付物失败：${res.body}`);
+        return res.json().items as any[];
+      };
+      const freshDocs = await listDocuments();
+      assert.equal(freshDocs.length, 1);
+      assert.equal(freshDocs[0].is_stale, false, '刚生成的交付物不应过期');
+
+      await query(
+        `UPDATE copilot_reconcile_reviews SET decisions = $2::jsonb WHERE id = $1`,
+        [
+          reviewId,
+          JSON.stringify([
+            { difference_id: `WORD-${stamp}-1`, decision: '忽略', note: '回归测试' },
+          ]),
+        ],
+      );
+      const staleDocs = await listDocuments();
+      assert.equal(staleDocs[0].is_stale, true, '复核变更后交付物应标记过期');
+
       const second = await generate();
       assert.equal(second.statusCode, 201);
       assert.equal(second.json().item.version, 2, '再次生成应递增版本');
+      const refreshedDocs = await listDocuments();
+      assert.equal(refreshedDocs[0].version, 2);
+      assert.equal(refreshedDocs[0].is_stale, false, '重新生成后应恢复最新');
 
       const stored = await one<{ markdown: string }>(
         `SELECT content->>'markdown' AS markdown FROM deliverables WHERE id = $1`,

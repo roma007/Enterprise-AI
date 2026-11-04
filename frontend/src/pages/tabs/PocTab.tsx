@@ -26,7 +26,11 @@ import {
   Stat,
   Textarea,
 } from '../../ui';
-import { fmtDate, fmtDateTime } from '../../utils';
+import {
+  deliverableStatusLabel,
+  fmtDate,
+  fmtDateTime,
+} from '../../utils';
 
 const STATUS_LABEL: Record<string, string> = {
   planned: '计划中',
@@ -578,6 +582,13 @@ function ReconcileReviewDetail({
   const [exportingDiffs, setExportingDiffs] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [generatingDoc, setGeneratingDoc] = useState(false);
+  const [latestDoc, setLatestDoc] = useState<{
+    id: string;
+    title: string;
+    version: number;
+    status: string;
+    is_stale: boolean;
+  } | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
     type: 'risk' | 'issue';
     done: number;
@@ -813,6 +824,22 @@ function ReconcileReviewDetail({
     }
   };
 
+  const decisionsKey = JSON.stringify(review.decisions ?? []);
+  useEffect(() => {
+    let alive = true;
+    api
+      .listReconcileDocuments(review.id)
+      .then((res) => {
+        if (alive) setLatestDoc(res.items[0] ?? null);
+      })
+      .catch(() => {
+        if (alive) setLatestDoc(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [review.id, decisionsKey]);
+
   const exportReviewDocx = async () => {
     setExportingDocx(true);
     setActionNotice(null);
@@ -840,6 +867,7 @@ function ReconcileReviewDetail({
     setActionNotice(null);
     try {
       const res = await api.generateReconcileDocument(review.id);
+      setLatestDoc({ ...res.item, is_stale: false });
       setActionNotice(
         `已生成交付物《${res.item.title}》v${res.item.version}，请在「报告」页签审批后分享给客户。`,
       );
@@ -1412,6 +1440,13 @@ function ReconcileReviewDetail({
         <Button size="sm" disabled={generatingDoc} onClick={() => void generateReviewDoc()}>
           {generatingDoc ? '生成中…' : '生成报告交付物'}
         </Button>
+        {latestDoc ? (
+          <span className="hint">
+            报告交付物 v{latestDoc.version} ·{' '}
+            {deliverableStatusLabel(latestDoc.status)}
+            {latestDoc.is_stale ? ' · 已过期，建议重新生成' : ' · 最新'}
+          </span>
+        ) : null}
       </div>
       <div className="table-wrap">
         <table>

@@ -10,6 +10,7 @@ import { buildDocx } from '../services/export';
 import { DIFF_LABEL } from '../services/reconcile_labels';
 import {
   generateReconcileDeliverable,
+  listReconcileDocuments,
   loadReconcileBundle,
   renderReconcileDoc,
 } from '../services/reconcile_docs';
@@ -1191,6 +1192,13 @@ export async function copilotRoutes(app: FastifyInstance) {
     return reply
       .header('content-type', 'text/markdown; charset=utf-8')
       .send(rendered.markdown);
+  });
+
+  /** 该复核生成的报告交付物（含是否过期）。 */
+  app.get('/api/copilot-reconcile-reviews/:id/documents', async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const items = await listReconcileDocuments(id);
+    return { items };
   });
 
   /** 生成复核报告交付物（data_report），审批后走现有分享流程外发。 */

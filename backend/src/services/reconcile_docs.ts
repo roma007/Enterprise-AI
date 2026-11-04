@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { one, query, withTransaction } from '../db';
 import { httpError } from './s1';
 import { DIFF_LABEL, DIFF_SOURCE_LABEL } from './reconcile_labels';
@@ -219,6 +220,44 @@ export function renderReconcileDoc(bundle: ReconcileBundle): {
   };
 }
 
+/** 报告内容的稳定哈希，用于判断交付物是否过期。 */
+export function reconcileMarkdownHash(markdown: string): string {
+  return createHash('sha256').update(markdown).digest('hex');
+}
+
+/** 列出该复核生成的交付物，并标记内容是否已过期。 */
+export async function listReconcileDocuments(reviewId: string): Promise<
+  Array<{
+    id: string;
+    title: string;
+    version: number;
+    status: string;
+    created_at: string;
+    is_stale: boolean;
+  }>
+> {
+  const bundle = await loadReconcileBundle(reviewId);
+  const currentHash = reconcileMarkdownHash(renderReconcileDoc(bundle).markdown);
+  const rows = await query<any>(
+    `SELECT id, title, version, status, created_at,
+            generated_from->>'content_hash' AS content_hash
+       FROM deliverables
+      WHERE type = 'data_report'
+        AND deleted_at IS NULL
+        AND generated_from->>'reviewId' = $1
+      ORDER BY version DESC`,
+    [reviewId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    version: row.version,
+    status: row.status,
+    created_at: row.created_at,
+    is_stale: row.content_hash !== currentHash,
+  }));
+}
+
 /** 生成复核报告交付物（data_report），按项目版本化；审批后可通过现有分享流程外发。 */
 export async function generateReconcileDeliverable(
   reviewId: string,
@@ -266,6 +305,7 @@ export async function generateReconcileDeliverable(
           differences: Array.isArray(review.differences)
             ? review.differences.length
             : 0,
+          content_hash: reconcileMarkdownHash(rendered.markdown),
         }),
         JSON.stringify({
           asOf: new Date().toISOString(),

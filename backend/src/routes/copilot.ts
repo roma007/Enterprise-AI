@@ -2072,10 +2072,16 @@ export async function copilotRoutes(app: FastifyInstance) {
 
       const item = await withTransaction(async (client) => {
         const review = await client.query(
-          `SELECT id FROM copilot_reconcile_reviews WHERE id = $1`,
+          `SELECT id, engagement_id FROM copilot_reconcile_reviews WHERE id = $1`,
           [id],
         );
         if (!review.rows[0]) throw httpError(404, 'NOT_FOUND', '对账复核记录不存在');
+        const reviewEngagementId = review.rows[0].engagement_id as
+          | string
+          | null;
+        const notificationLink = reviewEngagementId
+          ? `#/engagements/${reviewEngagementId}?review=${id}`
+          : '#/';
 
         if (sharedUserIds.length) {
           const found = await client.query(
@@ -2182,7 +2188,7 @@ export async function copilotRoutes(app: FastifyInstance) {
               auth.sub,
               `筛选视图已共享：${body.name}`,
               `${auth.name ?? '同事'} 共享了筛选视图「${body.name}」`,
-              `#/engagements/${id}`,
+              notificationLink,
               viewId,
             ],
           );

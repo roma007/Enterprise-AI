@@ -4042,6 +4042,19 @@ async function main() {
         '未被指定用户不应看到视图',
       );
 
+      const linkedNotification = await one<{ link: string }>(
+        `SELECT link FROM user_notifications
+          WHERE ref_type = 'copilot_batch_filter_view'
+            AND ref_id = $1 AND user_id = $2
+          ORDER BY created_at DESC LIMIT 1`,
+        [targeted.id, zhangId],
+      );
+      assert.equal(
+        linkedNotification?.link,
+        `#/engagements/${engagementId}?review=${reviewId}`,
+        '共享通知应直达复核',
+      );
+
       const resaved = await createView({ name: '指定视图', status: 'failed' });
       assert.equal(resaved.id, targeted.id, '重新保存应复用同一视图');
       assert.deepEqual(

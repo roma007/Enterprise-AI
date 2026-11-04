@@ -401,11 +401,25 @@ export function AuditPage() {
       if (!Array.isArray(parsed?.views) || !parsed.views.length) {
         throw new Error('文件缺少 views 数组');
       }
-      const res = await api.importAuditFilterViews({
+      const preview = await api.previewAuditFilterViews({
         version: 1,
         views: parsed.views,
       });
-      setViewNotice(`已导入 ${res.imported} 个视图（同名覆盖）`);
+      let mode: 'overwrite' | 'skip' = 'overwrite';
+      if (preview.conflicts.length) {
+        const overwrite = window.confirm(
+          `共 ${preview.total} 个视图：新增 ${preview.new}，同名 ${preview.conflicts.length}。\n\n确定：覆盖同名视图\n取消：跳过同名视图`,
+        );
+        mode = overwrite ? 'overwrite' : 'skip';
+      }
+      const res = await api.importAuditFilterViews({
+        version: 1,
+        mode,
+        views: parsed.views,
+      });
+      setViewNotice(
+        `已导入 ${res.imported} 个视图${res.skipped ? `，跳过 ${res.skipped} 个` : ''}`,
+      );
       await auditViews.reload();
     } catch (err) {
       setViewError(err);

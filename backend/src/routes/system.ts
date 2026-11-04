@@ -705,20 +705,15 @@ export async function systemRoutes(app: FastifyInstance) {
     export_columns: z.array(z.string()).max(20).optional(),
   });
 
-  /** 导入 JSON 视图（同名覆盖），只恢复筛选与导出列，不恢复共享关系。 */
-  app.post('/api/audit-filter-views/import', async (req, reply) => {
-    const auth = (req as any).authUser;
-    if (!auth?.sub || !auth.org_id) {
-      throw httpError(401, 'UNAUTHORIZED', '请先登录');
-    }
-    const body = z
-      .object({
-        version: z.literal(1).optional(),
-        views: z.array(importViewItem).min(1).max(100),
-      })
-      .parse(req.body ?? {});
+  const importViewsBody = z.object({
+    version: z.literal(1).optional(),
+    views: z.array(importViewItem).min(1).max(100),
+  });
 
-    const normalized = body.views.map((view) => {
+  const normalizeImportViews = (
+    views: Array<z.infer<typeof importViewItem>>,
+  ) => {
+    const normalized = views.map((view) => {
       if (view.from && view.to && view.from > view.to) {
         throw httpError(
           400,
@@ -731,12 +726,58 @@ export async function systemRoutes(app: FastifyInstance) {
         export_columns: normalizeAuditExportColumns(view.export_columns),
       };
     });
-    const unique = Array.from(
+    return Array.from(
       new Map(normalized.map((view) => [view.name, view])).values(),
     );
+  };
+
+  app.post('/api/audit-filter-views/import/preview', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    const body = importViewsBody.parse(req.body ?? {});
+    const views = normalizeImportViews(body.views);
+    const rows = await query<{ name: string }>(
+      `SELECT name FROM audit_filter_views
+        WHERE user_id = $1 AND name = ANY($2::text[])`,
+      [auth.sub, views.map((view) => view.name)],
+    );
+    const existing = new Set(rows.map((row) => row.name));
+    const conflicts = views
+      .filter((view) => existing.has(view.name))
+      .map((view) => view.name);
+    return {
+      total: views.length,
+      new: views.length - conflicts.length,
+      conflicts,
+    };
+  });
+
+  /** 导入 JSON 视图，可覆盖或跳过同名项；只恢复筛选与导出列，不恢复共享关系。 */
+  app.post('/api/audit-filter-views/import', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const body = importViewsBody
+      .extend({ mode: z.enum(['overwrite', 'skip']).default('overwrite') })
+      .parse(req.body ?? {});
+    const views = normalizeImportViews(body.views);
+
+    let skipped = 0;
+    let toImport = views;
+    if (body.mode === 'skip') {
+      const rows = await query<{ name: string }>(
+        `SELECT name FROM audit_filter_views
+          WHERE user_id = $1 AND name = ANY($2::text[])`,
+        [auth.sub, views.map((view) => view.name)],
+      );
+      const existing = new Set(rows.map((row) => row.name));
+      toImport = views.filter((view) => !existing.has(view.name));
+      skipped = views.length - toImport.length;
+    }
 
     const items: any[] = [];
-    for (const view of unique) {
+    for (const view of toImport) {
       const row = await one(
         `INSERT INTO audit_filter_views
            (org_id, user_id, name, mode, q, action, object_type, status,
@@ -771,7 +812,11 @@ export async function systemRoutes(app: FastifyInstance) {
       );
       items.push(row);
     }
-    return reply.code(201).send({ imported: items.length, items });
+    return reply.code(201).send({
+      imported: items.length,
+      skipped,
+      items,
+    });
   });
 
   app.patch('/api/audit-filter-views/:id', async (req) => {

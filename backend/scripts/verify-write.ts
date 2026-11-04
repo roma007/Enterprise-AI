@@ -5979,6 +5979,52 @@ async function main() {
       'status',
     ]);
 
+    const preview = ok(
+      await auditCall('POST', '/api/audit-filter-views/import/preview', {
+        version: 1,
+        views: [exportedItem],
+      }),
+      200,
+      '导入预览',
+    );
+    assert.equal(preview.total, 1);
+    assert.equal(preview.new, 0);
+    assert.deepEqual(preview.conflicts, [ioNames[0]]);
+
+    const skipped = ok(
+      await auditCall('POST', '/api/audit-filter-views/import', {
+        version: 1,
+        mode: 'skip',
+        views: [{ ...exportedItem, status: '3xx' }],
+      }),
+      201,
+      '跳过同名视图',
+    );
+    assert.equal(skipped.imported, 0);
+    assert.equal(skipped.skipped, 1);
+    const afterSkip = ok(
+      await auditCall('GET', '/api/audit-filter-views'),
+      200,
+      '跳过后的视图列表',
+    );
+    const kept = (afterSkip.items as any[]).find(
+      (item) => item.name === ioNames[0],
+    );
+    assert.equal(kept.status, '4xx', '跳过模式不应修改原视图');
+
+    const overwritten = ok(
+      await auditCall('POST', '/api/audit-filter-views/import', {
+        version: 1,
+        mode: 'overwrite',
+        views: [{ ...exportedItem, status: '3xx' }],
+      }),
+      201,
+      '覆盖同名视图',
+    );
+    assert.equal(overwritten.imported, 1);
+    assert.equal(overwritten.skipped, 0);
+    assert.equal((overwritten.items[0] as any).status, '3xx');
+
     const badImportColumns = await auditCall(
       'POST',
       '/api/audit-filter-views/import',

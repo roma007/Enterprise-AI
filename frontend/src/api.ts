@@ -1006,7 +1006,7 @@ export const api = {
     ),
   exportAuditFilterViewsJson: () =>
     requestBlob('/api/audit-filter-views/export.json'),
-  importAuditFilterViews: (payload: {
+  previewAuditFilterViews: (payload: {
     version?: number;
     views: Array<{
       name: string;
@@ -1020,8 +1020,30 @@ export const api = {
       export_columns?: string[];
     }>;
   }) =>
-    request<{ imported: number; items: AuditFilterView[] }>(
-      '/api/audit-filter-views/import',
+    request<{ total: number; new: number; conflicts: string[] }>(
+      '/api/audit-filter-views/import/preview',
+      json('POST', payload),
+    ),
+  importAuditFilterViews: (payload: {
+    version?: number;
+    mode?: 'overwrite' | 'skip';
+    views: Array<{
+      name: string;
+      mode?: 'live' | 'archive';
+      q?: string | null;
+      action?: string | null;
+      object_type?: string | null;
+      status?: string | null;
+      from?: string | null;
+      to?: string | null;
+      export_columns?: string[];
+    }>;
+  }) =>
+    request<{
+      imported: number;
+      skipped: number;
+      items: AuditFilterView[];
+    }>('/api/audit-filter-views/import',
       json('POST', payload),
     ),
   renameAuditFilterView: (id: string, name: string) =>

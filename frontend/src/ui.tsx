@@ -201,6 +201,7 @@ export function Stat({
   onClick,
   title,
   spark,
+  sparkLabels,
 }: {
   label: string;
   value: ReactNode;
@@ -209,6 +210,7 @@ export function Stat({
   onClick?: () => void;
   title?: string;
   spark?: number[];
+  sparkLabels?: string[];
 }) {
   const sparkMax = Math.max(1, ...(spark ?? []));
   return (
@@ -248,6 +250,11 @@ export function Stat({
           {spark.map((item, index) => (
             <span
               key={index}
+              title={
+                sparkLabels?.[index]
+                  ? `${sparkLabels[index]}：${item}`
+                  : undefined
+              }
               style={{
                 flex: 1,
                 minWidth: 2,

@@ -212,18 +212,33 @@ export function CollabAuditPage() {
     [boardDays],
   );
   const boardComparison = board.data?.comparison ?? null;
-  const boardSpark = (deltaKey: string, maxPoints = 24): number[] => {
+  const boardSpark = (
+    deltaKey: string,
+    maxPoints = 24,
+  ): { values: number[]; labels: string[] } => {
     const rows = [...(board.data?.items ?? [])].reverse();
-    const values = rows.map((row: any) => Number(row[deltaKey] ?? 0));
-    if (values.length <= maxPoints) return values;
-    const size = Math.ceil(values.length / maxPoints);
-    const out: number[] = [];
-    for (let i = 0; i < values.length; i += size) {
-      out.push(
-        values.slice(i, i + size).reduce((sum, item) => sum + item, 0),
-      );
+    const entries = rows.map((row: any) => ({
+      value: Number(row[deltaKey] ?? 0),
+      label:
+        row.period_start === row.period_end
+          ? String(row.period_start)
+          : `${row.period_start}~${row.period_end}`,
+    }));
+    if (entries.length <= maxPoints) {
+      return {
+        values: entries.map((entry) => entry.value),
+        labels: entries.map((entry) => entry.label),
+      };
     }
-    return out;
+    const size = Math.ceil(entries.length / maxPoints);
+    const values: number[] = [];
+    const labels: string[] = [];
+    for (let i = 0; i < entries.length; i += size) {
+      const chunk = entries.slice(i, i + size);
+      values.push(chunk.reduce((sum, entry) => sum + entry.value, 0));
+      labels.push(`${chunk[0].label}~${chunk[chunk.length - 1].label}`);
+    }
+    return { values, labels };
   };
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
@@ -578,6 +593,7 @@ export function CollabAuditPage() {
             ).map(([label, key]) => {
               const current = boardComparison.current[key];
               const change = boardComparison.change[key];
+              const spark = boardSpark(key);
               return (
                 <Stat
                   key={key}
@@ -586,7 +602,8 @@ export function CollabAuditPage() {
                   hint={`环比 ${change > 0 ? `+${change}` : change}`}
                   tone={change > 0 ? 'brand' : change < 0 ? 'red' : 'gray'}
                   title="查看该类型明细"
-                  spark={boardSpark(key)}
+                  spark={spark.values}
+                  sparkLabels={spark.labels}
                   onClick={() => {
                     setType(BOARD_TYPE[key] ?? 'all');
                     setAction('');

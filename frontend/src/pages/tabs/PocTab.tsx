@@ -577,6 +577,7 @@ function ReconcileReviewDetail({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [exportingDiffs, setExportingDiffs] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [generatingDoc, setGeneratingDoc] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     type: 'risk' | 'issue';
     done: number;
@@ -831,6 +832,21 @@ function ReconcileReviewDetail({
       setActionError(err);
     } finally {
       setExportingDocx(false);
+    }
+  };
+
+  const generateReviewDoc = async () => {
+    setGeneratingDoc(true);
+    setActionNotice(null);
+    try {
+      const res = await api.generateReconcileDocument(review.id);
+      setActionNotice(
+        `已生成交付物《${res.item.title}》v${res.item.version}，请在「报告」页签审批后分享给客户。`,
+      );
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setGeneratingDoc(false);
     }
   };
 
@@ -1392,6 +1408,9 @@ function ReconcileReviewDetail({
         </Button>
         <Button size="sm" disabled={exportingDocx} onClick={() => void exportReviewDocx()}>
           {exportingDocx ? '生成中…' : '导出复核 Word'}
+        </Button>
+        <Button size="sm" disabled={generatingDoc} onClick={() => void generateReviewDoc()}>
+          {generatingDoc ? '生成中…' : '生成报告交付物'}
         </Button>
       </div>
       <div className="table-wrap">

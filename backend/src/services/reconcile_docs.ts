@@ -1,4 +1,4 @@
-import { one, query } from '../db';
+import { one, query, withTransaction } from '../db';
 import { httpError } from './s1';
 import { DIFF_LABEL, DIFF_SOURCE_LABEL } from './reconcile_labels';
 
@@ -217,4 +217,66 @@ export function renderReconcileDoc(bundle: ReconcileBundle): {
       version: '复核版',
     },
   };
+}
+
+/** 生成复核报告交付物（data_report），按项目版本化；审批后可通过现有分享流程外发。 */
+export async function generateReconcileDeliverable(
+  reviewId: string,
+): Promise<{
+  id: string;
+  title: string;
+  version: number;
+  type: string;
+  status: string;
+}> {
+  const bundle = await loadReconcileBundle(reviewId);
+  const review = bundle.review;
+  if (!review.engagement_id) {
+    throw httpError(422, 'NO_ENGAGEMENT', '复核记录未关联项目');
+  }
+  const rendered = renderReconcileDoc(bundle);
+  const engagementId = review.engagement_id as string;
+
+  return withTransaction(async (client) => {
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [
+      engagementId,
+      'reconcile_report',
+    ]);
+    const v = await client.query<{ version: number }>(
+      `SELECT COALESCE(MAX(version), 0) + 1 AS version
+         FROM deliverables WHERE engagement_id = $1 AND type = 'data_report'`,
+      [engagementId],
+    );
+    const version = v.rows[0].version;
+    const inserted = await client.query<any>(
+      `INSERT INTO deliverables
+         (engagement_id, type, title, version, status, content, generated_from,
+          template_id, template_version, generated_snapshot)
+       VALUES ($1,'data_report',$2,$3,'draft',$4,$5,
+               'reconcile_pilot','1.0.0',$6)
+       RETURNING id, title, version, type, status`,
+      [
+        engagementId,
+        rendered.title,
+        version,
+        JSON.stringify({ markdown: rendered.markdown }),
+        JSON.stringify({
+          reviewId,
+          documentId: review.document_id,
+          differences: Array.isArray(review.differences)
+            ? review.differences.length
+            : 0,
+        }),
+        JSON.stringify({
+          asOf: new Date().toISOString(),
+          reviewId,
+          differences: Array.isArray(review.differences)
+            ? review.differences.length
+            : 0,
+          source: review.source,
+        }),
+      ],
+    );
+    return inserted.rows[0];
+  });
 }

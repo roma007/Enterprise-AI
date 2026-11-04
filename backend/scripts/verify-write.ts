@@ -4345,7 +4345,43 @@ async function main() {
         [reviewId],
       );
       assert.equal(Number(audit!.count), 1, '应写一条 Word 导出审计');
+
+      const generate = async () =>
+        app.inject({
+          method: 'POST',
+          url: `/api/copilot-reconcile-reviews/${reviewId}/documents`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+      const first = await generate();
+      assert.equal(first.statusCode, 201, `生成交付物失败：${first.body}`);
+      const firstItem = first.json().item;
+      assert.equal(firstItem.type, 'data_report');
+      assert.equal(firstItem.version, 1);
+      assert.equal(firstItem.status, 'draft');
+      assert.ok(firstItem.title.includes('对账复核报告'), '标题应含报告名');
+
+      const second = await generate();
+      assert.equal(second.statusCode, 201);
+      assert.equal(second.json().item.version, 2, '再次生成应递增版本');
+
+      const stored = await one<{ markdown: string }>(
+        `SELECT content->>'markdown' AS markdown FROM deliverables WHERE id = $1`,
+        [firstItem.id],
+      );
+      assert.ok(stored?.markdown.includes('差异依据'), '交付物内容应含差异依据');
+      assert.ok(stored?.markdown.includes('模型 + 规则'), '交付物内容应标注来源');
+
+      const generateAudit = await one<{ count: string }>(
+        `SELECT count(*)::text AS count FROM audit_logs
+          WHERE action = 'GENERATE copilot-reconcile-document' AND object_id = $1`,
+        [reviewId],
+      );
+      assert.equal(Number(generateAudit!.count), 2, '每次生成都应写审计');
     } finally {
+      await query(
+        `DELETE FROM deliverables WHERE generated_from->>'reviewId' = $1`,
+        [reviewId],
+      );
       await query(`DELETE FROM audit_logs WHERE object_id = $1 AND object_type = 'copilot_reconcile_review'`, [
         reviewId,
       ]);

@@ -9,6 +9,7 @@ import { csvCell } from '../services/csv';
 import { buildDocx } from '../services/export';
 import { DIFF_LABEL } from '../services/reconcile_labels';
 import {
+  generateReconcileDeliverable,
   loadReconcileBundle,
   renderReconcileDoc,
 } from '../services/reconcile_docs';
@@ -1190,6 +1191,30 @@ export async function copilotRoutes(app: FastifyInstance) {
     return reply
       .header('content-type', 'text/markdown; charset=utf-8')
       .send(rendered.markdown);
+  });
+
+  /** 生成复核报告交付物（data_report），审批后走现有分享流程外发。 */
+  app.post('/api/copilot-reconcile-reviews/:id/documents', async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const item = await generateReconcileDeliverable(id);
+    const auth = (req as any).authUser;
+    try {
+      await query(
+        `INSERT INTO audit_logs
+           (org_id, user_id, action, object_type, object_id, status_code, detail)
+         VALUES ($1,$2,'GENERATE copilot-reconcile-document',
+                 'copilot_reconcile_review',$3,200,$4::jsonb)`,
+        [
+          auth?.org_id ?? null,
+          auth?.sub ?? null,
+          id,
+          JSON.stringify({ deliverable_id: item.id, version: item.version }),
+        ],
+      );
+    } catch (err) {
+      req.log?.warn?.({ err }, 'reconcile document audit failed');
+    }
+    return reply.code(201).send({ item });
   });
 
   /** 复核记录 Word：含差异依据（来源、置信度、证据）。 */

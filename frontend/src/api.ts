@@ -1500,6 +1500,16 @@ export const api = {
     }>(
       `/api/copilot-reconcile-reviews/${reviewId}/action-batches/export-estimate${batchExportQuery(filters)}`,
     ),
+  generateReconcileDocument: (reviewId: string) =>
+    request<{
+      item: {
+        id: string;
+        title: string;
+        version: number;
+        type: string;
+        status: string;
+      };
+    }>(`/api/copilot-reconcile-reviews/${reviewId}/documents`, json('POST', {})),
   exportReconcileDocumentDocx: (reviewId: string) =>
     requestBlob(`/api/copilot-reconcile-reviews/${reviewId}/document.docx`),
   exportReconcileDifferencesCsv: (reviewId: string) =>

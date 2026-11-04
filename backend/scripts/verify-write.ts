@@ -4254,6 +4254,101 @@ async function main() {
     }
   });
 
+  await check('对账复核 Word：含差异依据并写导出审计', async () => {
+    const login = async (email: string) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email, password: 'demo1234' },
+      });
+      assert.equal(res.statusCode, 200, `登录失败：${email}`);
+      return res.json().token as string;
+    };
+    const token = await login('zhang@hengzhi.ai');
+    const eng = await one<{ org_id: string }>(
+      `SELECT org_id FROM engagements WHERE id = $1`,
+      [engagementId],
+    );
+    const differences = [
+      {
+        difference_id: `WORD-${stamp}-1`,
+        type: 'amount_mismatch',
+        waybill_no: 'HY-WORD-1',
+        statement_amount: 1200,
+        system_amount: 1000,
+        delta: 200,
+        source: 'llm+rule',
+        confidence: 0.6,
+        evidence: ['对账单第 1 行', '系统金额 1000.0'],
+        possible_causes: ['附加费未计入'],
+        suggested_action: '核对运单费用明细',
+      },
+    ];
+    const review = await one<{ id: string }>(
+      `INSERT INTO copilot_reconcile_reviews
+         (idempotency_key, org_id, engagement_id, kind, document_id, status,
+          source, document, differences, decisions)
+       VALUES ($1,$2,$3,'statement',$4,'confirmed','verify-write',$5::jsonb,$6::jsonb,'[]'::jsonb)
+       RETURNING id`,
+      [
+        `verify-word-${stamp}`,
+        eng!.org_id,
+        engagementId,
+        `WORD-${stamp}`,
+        JSON.stringify({
+          statement_no: `WORD-${stamp}`,
+          customer_name: '回归测试客户',
+          period_start: '2026-09-01',
+          period_end: '2026-09-30',
+          total_amount: 1200,
+        }),
+        JSON.stringify(differences),
+      ],
+    );
+    const reviewId = review!.id;
+
+    try {
+      const md = await app.inject({
+        method: 'GET',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/document`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      assert.equal(md.statusCode, 200, `Markdown 生成失败：${md.body}`);
+      assert.ok(md.body.includes('差异依据'), 'Markdown 应包含差异依据章节');
+      assert.ok(md.body.includes('模型 + 规则'), 'Markdown 应标注解释来源');
+      assert.ok(md.body.includes('对账单第 1 行'), 'Markdown 应包含证据');
+
+      const docx = await app.inject({
+        method: 'GET',
+        url: `/api/copilot-reconcile-reviews/${reviewId}/document.docx`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      assert.equal(docx.statusCode, 200, `Word 生成失败：${docx.body}`);
+      assert.equal(
+        docx.headers['content-type'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      );
+      assert.equal(
+        docx.rawPayload.slice(0, 2).toString('utf8'),
+        'PK',
+        'Word 应为 zip 容器',
+      );
+      assert.ok(docx.rawPayload.length > 2000, 'Word 内容不应为空');
+
+      const audit = await one<{ count: string }>(
+        `SELECT count(*)::text AS count FROM audit_logs
+          WHERE action = 'EXPORT copilot-reconcile-document' AND object_id = $1`,
+        [reviewId],
+      );
+      assert.equal(Number(audit!.count), 1, '应写一条 Word 导出审计');
+    } finally {
+      await query(`DELETE FROM audit_logs WHERE object_id = $1 AND object_type = 'copilot_reconcile_review'`, [
+        reviewId,
+      ]);
+      await query(`DELETE FROM copilot_reconcile_reviews WHERE id = $1`, [reviewId]);
+    }
+  });
+
   await check('指标：Prometheus 输出、数据库状态与访问令牌', async () => {
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     assert.equal(health.statusCode, 200);

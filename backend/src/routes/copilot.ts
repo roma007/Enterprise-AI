@@ -6,6 +6,12 @@ import { httpError } from '../services/s1';
 import { reapStaleBatches } from '../services/copilot_batches';
 import { createZip } from '../services/zip';
 import { csvCell } from '../services/csv';
+import { buildDocx } from '../services/export';
+import { DIFF_LABEL } from '../services/reconcile_labels';
+import {
+  loadReconcileBundle,
+  renderReconcileDoc,
+} from '../services/reconcile_docs';
 
 /**
  * B4 · ai-copilot 评测结果回写
@@ -89,20 +95,6 @@ const batchFilterViewBody = z.object({
   shared_user_ids: z.array(z.uuid()).max(50).optional(),
 });
 
-const DIFF_LABEL: Record<string, string> = {
-  amount_mismatch: '金额不符',
-  missing_line: '对账单缺行',
-  extra_line: '对账单多行',
-  duplicate: '重复',
-  tax_mismatch: '税额不符',
-  unit_price_mismatch: '单价不符',
-  quantity_mismatch: '数量不符',
-  period_mismatch: '账期不符',
-  customer_mismatch: '主体不符',
-  rounding: '舍入',
-  no_rate: '无合同价',
-};
-
 const engagementParams = z.object({ id: z.uuid() });
 
 function hookToken(): string {
@@ -130,6 +122,12 @@ function assertHook(req: FastifyRequest): void {
   }
 }
 
+
+function docDisposition(title: string, ext: string, inline = false): string {
+  const safe = `${title}.${ext}`;
+  const ascii = `copilot-reconcile.${ext}`;
+  return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+}
 
 function localDate(d: Date): string {
   const y = d.getFullYear();
@@ -1180,30 +1178,47 @@ export async function copilotRoutes(app: FastifyInstance) {
   /** 顾问查看：单条对账复核详情（含 document 与按差异生成的动作）。 */
   app.get('/api/copilot-reconcile-reviews/:id', async (req) => {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
-    const item = await one(
-      `SELECT rev.*,
-              rr.status AS risk_status,
-              ii.status AS issue_status
-         FROM copilot_reconcile_reviews rev
-         LEFT JOIN risks rr ON rr.id = rev.risk_id
-         LEFT JOIN delivery_issues ii ON ii.id = rev.issue_id
-        WHERE rev.id = $1`,
-      [id],
-    );
-    if (!item) throw httpError(404, 'NOT_FOUND', '对账复核记录不存在');
-    const actions = await query(
-      `SELECT a.id, a.difference_id, a.action_type, a.target_id, a.created_at,
-              CASE WHEN a.action_type = 'issue' THEN i.code ELSE NULL END AS item_code,
-              CASE WHEN a.action_type = 'risk' THEN r.title ELSE i.title END AS item_title,
-              CASE WHEN a.action_type = 'risk' THEN r.status ELSE i.status END AS item_status
-         FROM copilot_reconcile_actions a
-         LEFT JOIN risks r ON a.action_type = 'risk' AND r.id = a.target_id
-         LEFT JOIN delivery_issues i ON a.action_type = 'issue' AND i.id = a.target_id
-        WHERE a.review_id = $1
-        ORDER BY a.created_at`,
-      [id],
-    );
-    return { item: { ...item, actions } };
+    const { review, actions } = await loadReconcileBundle(id);
+    return { item: { ...review, actions } };
+  });
+
+  /** 复核记录 Markdown（便于排查与二次加工）。 */
+  app.get('/api/copilot-reconcile-reviews/:id/document', async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const bundle = await loadReconcileBundle(id);
+    const rendered = renderReconcileDoc(bundle);
+    return reply
+      .header('content-type', 'text/markdown; charset=utf-8')
+      .send(rendered.markdown);
+  });
+
+  /** 复核记录 Word：含差异依据（来源、置信度、证据）。 */
+  app.get('/api/copilot-reconcile-reviews/:id/document.docx', async (req, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const bundle = await loadReconcileBundle(id);
+    const rendered = renderReconcileDoc(bundle);
+    const buffer = await buildDocx(rendered.markdown, {
+      title: rendered.title,
+      client: rendered.meta.client,
+      project: rendered.meta.project,
+      version: rendered.meta.version,
+    });
+    await recordExportAudit(req, 'EXPORT copilot-reconcile-document', id, {
+      format: 'docx',
+      differences: Array.isArray(bundle.review.differences)
+        ? bundle.review.differences.length
+        : 0,
+    });
+    return reply
+      .header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      .header(
+        'content-disposition',
+        docDisposition(rendered.title, 'docx'),
+      )
+      .send(buffer);
   });
 
   /** 从对账复核记录生成风险/待办；可按单条差异生成，重复调用幂等。 */

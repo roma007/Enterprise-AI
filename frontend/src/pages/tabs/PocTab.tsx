@@ -576,6 +576,7 @@ function ReconcileReviewDetail({
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [exportingDiffs, setExportingDiffs] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     type: 'risk' | 'issue';
     done: number;
@@ -808,6 +809,28 @@ function ReconcileReviewDetail({
       setActionError(err);
     } finally {
       setExportingDiffs(false);
+    }
+  };
+
+  const exportReviewDocx = async () => {
+    setExportingDocx(true);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportReconcileDocumentDocx(review.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const docNo = String(doc.statement_no ?? doc.settlement_no ?? review.id);
+      link.href = url;
+      link.download = `对账复核-${docNo}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setActionNotice('复核 Word 已导出（含差异依据）。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingDocx(false);
     }
   };
 
@@ -1366,6 +1389,9 @@ function ReconcileReviewDetail({
         <strong>差异明细</strong>
         <Button size="sm" disabled={exportingDiffs} onClick={() => void exportDiffs()}>
           {exportingDiffs ? '导出中…' : '导出差异 CSV'}
+        </Button>
+        <Button size="sm" disabled={exportingDocx} onClick={() => void exportReviewDocx()}>
+          {exportingDocx ? '生成中…' : '导出复核 Word'}
         </Button>
       </div>
       <div className="table-wrap">

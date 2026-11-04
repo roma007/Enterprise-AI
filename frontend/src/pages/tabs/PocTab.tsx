@@ -982,6 +982,54 @@ function ReconcileReviewDetail({
   }, [holidays.data, holidaySet, severity]);
   const lines: Array<Record<string, any>> = doc.lines ?? [];
   const decisions = new Map(review.decisions.map((d) => [d.difference_id, d]));
+  const sourceSummary = (() => {
+    const counts = new Map<string, number>();
+    for (const diff of review.differences) {
+      const key =
+        DIFF_SOURCE_LABEL[diff.source ?? ''] ?? diff.source ?? '未知';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return (
+      [...counts.entries()]
+        .map(([key, count]) => `${key} ${count}`)
+        .join(' · ') || '—'
+    );
+  })();
+  const confidenceSummary = (() => {
+    let high = 0;
+    let medium = 0;
+    let low = 0;
+    let unknown = 0;
+    for (const diff of review.differences) {
+      const value = Number(diff.confidence);
+      if (!Number.isFinite(value)) unknown += 1;
+      else if (value >= 0.8) high += 1;
+      else if (value >= 0.6) medium += 1;
+      else low += 1;
+    }
+    return `高 ${high} · 中 ${medium} · 低 ${low}${
+      unknown ? ` · 未知 ${unknown}` : ''
+    }`;
+  })();
+  const decisionStateSummary = (() => {
+    const counts: Record<string, number> = {
+      采纳: 0,
+      忽略: 0,
+      待确认: 0,
+      未决: 0,
+    };
+    for (const diff of review.differences) {
+      const value = diff.difference_id
+        ? decisions.get(diff.difference_id)?.decision
+        : undefined;
+      if (value === '采纳' || value === '忽略' || value === '待确认') {
+        counts[value] += 1;
+      } else {
+        counts['未决'] += 1;
+      }
+    }
+    return `采纳 ${counts['采纳']} · 忽略 ${counts['忽略']} · 待确认 ${counts['待确认']} · 未决 ${counts['未决']}`;
+  })();
   const lineFields = review.kind === 'statement'
     ? ['waybill_no', 'container_no', 'container_type', 'amount', 'tax_amount', 'total_amount', 'due_date']
     : ['trip_no', 'waybill_no', 'plate_no', 'route', 'container_type', 'quantity', 'unit_price', 'amount', 'deduction'];
@@ -1693,6 +1741,14 @@ function ReconcileReviewDetail({
         <Stat label="明细行" value={lines.length} tone="blue" />
         <Stat label="差异" value={review.differences.length} tone={review.differences.length ? 'red' : 'green'} />
         <Stat label="决策" value={decisionSummary(review.decisions)} tone="amber" />
+      </div>
+      <div
+        className="row"
+        style={{ flexWrap: 'wrap', gap: 12, margin: '-4px 0 8px' }}
+      >
+        <span className="muted small">来源：{sourceSummary}</span>
+        <span className="muted small">置信度：{confidenceSummary}</span>
+        <span className="muted small">决策：{decisionStateSummary}</span>
       </div>
 
       <div className="form-grid">

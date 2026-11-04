@@ -1223,6 +1223,9 @@ export interface NotificationFilterView {
   from: string | null;
   to: string | null;
   scope: 'inbox' | 'trash';
+  shared: boolean;
+  is_owner: boolean;
+  owner_name?: string | null;
   created_at: string;
   updated_at: string;
 }

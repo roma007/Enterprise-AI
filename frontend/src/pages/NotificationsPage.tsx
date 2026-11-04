@@ -91,6 +91,7 @@ export function NotificationsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
+  const [shareView, setShareView] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
   const rangeError =
     from && to && from > to ? '开始日期不能晚于结束日期' : '';
@@ -261,6 +262,7 @@ export function NotificationsPage() {
         from: from || null,
         to: to || null,
         scope: view,
+        shared: shareView,
       });
       setSelectedViewId(res.item.id);
       await savedViews.reload();
@@ -444,9 +446,19 @@ export function NotificationsPage() {
             {(savedViews.data?.items ?? []).map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
+                {v.shared ? '（共享）' : ''}
+                {v.is_owner ? '' : ` · ${v.owner_name ?? '同事'}`}
               </option>
             ))}
           </Select>
+          <label className="row" style={{ gap: 4 }}>
+            <input
+              type="checkbox"
+              checked={shareView}
+              onChange={(e) => setShareView(e.target.checked)}
+            />
+            <span className="muted">共享给同事</span>
+          </label>
           <Button
             size="sm"
             disabled={busy || savingView}
@@ -454,7 +466,9 @@ export function NotificationsPage() {
           >
             {savingView ? '保存中…' : '保存当前筛选'}
           </Button>
-          {selectedViewId ? (
+          {selectedViewId &&
+          (savedViews.data?.items ?? []).find((v) => v.id === selectedViewId)
+            ?.is_owner ? (
             <Button
               size="sm"
               variant="ghost"

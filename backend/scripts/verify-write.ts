@@ -4382,11 +4382,13 @@ async function main() {
         name,
         unread: false,
         scope: 'trash',
+        shared: true,
       });
       assert.equal(updated.statusCode, 201);
       assert.equal(updated.json().item.id, viewId, '同名保存应覆盖');
       assert.equal(updated.json().item.unread, false);
       assert.equal(updated.json().item.scope, 'trash');
+      assert.equal(updated.json().item.shared, true);
 
       const listed = await call(zhangToken, 'GET', '/api/notification-filter-views');
       assert.equal(listed.statusCode, 200);
@@ -4396,10 +4398,12 @@ async function main() {
       );
 
       const otherList = await call(wangToken, 'GET', '/api/notification-filter-views');
-      assert.ok(
-        !(otherList.json().items as any[]).some((v) => v.id === viewId),
-        '不应看到他人的筛选视图',
+      const sharedSeen = (otherList.json().items as any[]).find(
+        (v) => v.id === viewId,
       );
+      assert.ok(sharedSeen, '共享视图应被同事看到');
+      assert.equal(sharedSeen.is_owner, false, '同事不是视图创建者');
+      assert.equal(sharedSeen.owner_name, '张顾问', '应返回创建者名称');
 
       const deleteOther = await call(
         wangToken,

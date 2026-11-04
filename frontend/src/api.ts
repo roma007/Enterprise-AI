@@ -1163,6 +1163,7 @@ export const api = {
     from?: string | null;
     to?: string | null;
     scope?: 'inbox' | 'trash';
+    shared?: boolean;
   }) =>
     request<{ item: NotificationFilterView }>(
       '/api/notification-filter-views',

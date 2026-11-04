@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useLoad } from '../hooks';
 import {
@@ -247,6 +247,13 @@ export function NotificationsPage() {
   };
 
   const savedViews = useLoad(() => api.listNotificationFilterViews(), []);
+  const initialViewId = useMemo(
+    () =>
+      new URLSearchParams(window.location.search).get('notification_view') ??
+      '',
+    [],
+  );
+  const appliedInitialView = useRef<string | null>(null);
 
   const applySavedView = (id: string) => {
     setSelectedViewId(id);
@@ -275,6 +282,26 @@ export function NotificationsPage() {
       setShareUsers(item.shared_user_ids ?? []);
     }
   };
+
+  useEffect(() => {
+    if (!initialViewId) return;
+    if (appliedInitialView.current === initialViewId) return;
+    const item = (savedViews.data?.items ?? []).find(
+      (view) => view.id === initialViewId,
+    );
+    if (!item) return;
+    appliedInitialView.current = initialViewId;
+    applySavedView(initialViewId);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('notification_view');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialViewId, savedViews.data]);
 
   const saveCurrentView = async () => {
     const name = window.prompt('视图名称（同名会覆盖）')?.trim();

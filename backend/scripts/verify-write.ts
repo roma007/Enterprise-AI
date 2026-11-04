@@ -4459,6 +4459,19 @@ async function main() {
           )!.count,
         );
       assert.equal(await shareNoticeCount(), 1, '被指定同事应收到共享通知');
+      const shareNotice = await one<{ link: string }>(
+        `SELECT link FROM user_notifications
+          WHERE user_id = $1
+            AND kind = 'copilot_notification_view_shared'
+            AND ref_id = $2
+          LIMIT 1`,
+        [wangUser!.id, targetedId],
+      );
+      assert.ok(
+        shareNotice?.link.startsWith('?notification_view=') &&
+          shareNotice?.link.endsWith('#/notifications'),
+        '共享通知应直达并套用视图',
+      );
       await call(zhangToken, 'POST', '/api/notification-filter-views', {
         name: `${name}-users`,
         unread: true,

@@ -641,7 +641,9 @@ export async function notificationRoutes(app: FastifyInstance) {
              (org_id, user_id, actor_id, kind, title, body, link, ref_type, ref_id)
            SELECT $1, unnest($2::uuid[]), $3,
                   'copilot_notification_view_shared',
-                  $4, $5, '#/notifications', 'notification_filter_view', $6`,
+                  $4, $5,
+                  '?notification_view=' || $6::text || '#/notifications',
+                  'notification_filter_view', $6::uuid`,
           [
             auth.org_id,
             recipients,

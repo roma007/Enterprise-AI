@@ -5720,6 +5720,68 @@ async function main() {
     assert.equal(badViewRange.status, 400);
     assert.equal(badViewRange.body.error, 'INVALID_DATE_RANGE');
 
+    const sharedView = ok(
+      await auditCall('POST', '/api/audit-filter-views', {
+        name: `${viewName}-shared`,
+        mode: 'live',
+        status: '4xx',
+        shared: true,
+      }),
+      201,
+      '共享审计视图',
+    );
+    const sharedViewId = (sharedView.item as any).id as string;
+
+    const zhangLogin = ok(
+      await req('POST', '/api/auth/login', {
+        email: 'zhang@hengzhi.ai',
+        password: 'demo1234',
+      }),
+      200,
+      '共享视图同事登录',
+    );
+    const zhangGet = await app.inject({
+      method: 'GET',
+      url: '/api/audit-filter-views',
+      headers: { authorization: `Bearer ${zhangLogin.token}` },
+    });
+    assert.equal(zhangGet.statusCode, 200);
+    const seen = (zhangGet.json().items as any[]).find(
+      (item) => item.id === sharedViewId,
+    );
+    assert.ok(seen, '共享视图应被同事看到');
+    assert.equal(seen.is_owner, false, '同事不是视图创建者');
+    assert.ok(seen.owner_name, '应返回创建者名称');
+
+    const hijack = await app.inject({
+      method: 'PATCH',
+      url: `/api/audit-filter-views/${sharedViewId}`,
+      headers: {
+        authorization: `Bearer ${zhangLogin.token}`,
+        'content-type': 'application/json',
+      },
+      payload: JSON.stringify({ name: `${viewName}-hijack` }),
+    });
+    assert.equal(hijack.statusCode, 404, '不能重命名他人视图');
+
+    const badShare = await auditCall('POST', '/api/audit-filter-views', {
+      name: `${viewName}-bad-share`,
+      shared: true,
+      shared_user_ids: ['00000000-0000-4000-8000-000000000000'],
+    });
+    assert.equal(badShare.status, 422);
+    assert.equal(badShare.body.error, 'INVALID_SHARED_USERS');
+
+    ok(
+      await auditCall('DELETE', `/api/audit-filter-views/${sharedViewId}`),
+      200,
+      '删除共享审计视图',
+    );
+    await query(
+      `DELETE FROM user_notifications
+        WHERE ref_type = 'audit_filter_view' AND ref_id = $1`,
+      [sharedViewId],
+    );
     ok(
       await auditCall('DELETE', `/api/audit-filter-views/${viewId}`),
       200,

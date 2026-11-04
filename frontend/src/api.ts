@@ -972,6 +972,9 @@ export const api = {
     status?: string;
     from?: string;
     to?: string;
+    shared?: boolean;
+    shared_role?: string | null;
+    shared_user_ids?: string[];
   }) =>
     request<{ item: AuditFilterView }>(
       '/api/audit-filter-views',

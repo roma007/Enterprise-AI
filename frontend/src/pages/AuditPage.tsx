@@ -102,6 +102,14 @@ function statusTone(code: number | null) {
   return 'green' as const;
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: '管理员',
+  director: '总监',
+  pm: '项目经理',
+  consultant: '顾问',
+  tech_lead: '技术负责人',
+};
+
 const PAGE_SIZE = 50;
 const defaultBefore = () =>
   new Date(Date.now() - 180 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -124,6 +132,8 @@ export function AuditPage() {
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [viewError, setViewError] = useState<unknown>(null);
+  const [shareMode, setShareMode] = useState<'none' | 'all' | 'role'>('none');
+  const [shareRole, setShareRole] = useState('consultant');
   const selectedView = (auditViews.data?.items ?? []).find(
     (view) => view.id === selectedViewId,
   );
@@ -234,6 +244,8 @@ export function AuditPage() {
     status: statusFilter || undefined,
     from: fromFilter || undefined,
     to: toFilter || undefined,
+    shared: shareMode === 'all',
+    shared_role: shareMode === 'role' ? shareRole : null,
   });
 
   const saveCurrentView = async () => {
@@ -263,10 +275,34 @@ export function AuditPage() {
     setStatusFilter(view.status ?? '');
     setFromFilter(view.from ?? '');
     setToFilter(view.to ?? '');
+    setShareMode(view.shared ? 'all' : view.shared_role ? 'role' : 'none');
+    if (view.shared_role) setShareRole(view.shared_role);
     setOffset(0);
     setArchiveNotice(null);
     setArchiveError(null);
   };
+
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    const id = new URLSearchParams(window.location.search).get('audit_view');
+    if (!id) {
+      deepLinkApplied.current = true;
+      return;
+    }
+    const view = (auditViews.data?.items ?? []).find((item) => item.id === id);
+    if (!view) return;
+    deepLinkApplied.current = true;
+    applySavedView(id);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('audit_view');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+    );
+  }, [auditViews.data]);
 
   const renameCurrentView = async () => {
     if (!selectedViewId) return;
@@ -485,9 +521,42 @@ export function AuditPage() {
                     <option key={view.id} value={view.id}>
                       {view.name}
                       {view.mode === 'archive' ? '（归档）' : ''}
+                      {view.shared
+                        ? '（全员）'
+                        : view.shared_role
+                          ? `（角色：${ROLE_LABEL[view.shared_role] ?? view.shared_role}）`
+                          : ''}
+                      {view.is_owner ? '' : ` · ${view.owner_name ?? '同事'}`}
                     </option>
                   ))}
                 </Select>
+                <Select
+                  value={shareMode}
+                  onChange={(e) =>
+                    setShareMode(e.target.value as 'none' | 'all' | 'role')
+                  }
+                  style={{ maxWidth: 130 }}
+                >
+                  <option value="none">仅自己</option>
+                  <option value="all">共享给全员</option>
+                  <option value="role">按角色共享</option>
+                </Select>
+                {shareMode === 'role' ? (
+                  <Select
+                    value={shareRole}
+                    onChange={(e) => setShareRole(e.target.value)}
+                    style={{ maxWidth: 130 }}
+                  >
+                    {Object.entries(ROLE_LABEL).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+                ) : null}
+                {shareMode !== 'none' ? (
+                  <span className="muted small">保存后通知同事</span>
+                ) : null}
                 <Button
                   size="sm"
                   disabled={savingView}

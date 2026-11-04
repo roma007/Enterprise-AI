@@ -61,6 +61,32 @@ const AUDIT_STATS_SQL = `SELECT count(*)::int AS total,
        count(*) FILTER (WHERE a.action LIKE 'DELETE%')::int AS deletes,
        count(*) FILTER (WHERE COALESCE(a.status_code, 0) >= 400)::int AS failures`;
 
+async function auditViewRecipients(
+  client: any,
+  orgId: string,
+  view: { shared?: boolean; shared_role?: string | null },
+  shareIds: string[],
+): Promise<Set<string>> {
+  const ids = new Set<string>(shareIds);
+  if (view.shared) {
+    const rows = await client.query(
+      `SELECT id FROM users WHERE org_id = $1 AND status = 'active'`,
+      [orgId],
+    );
+    for (const row of rows.rows) ids.add(row.id as string);
+  } else if (view.shared_role) {
+    const rows = await client.query(
+      `SELECT u.id
+         FROM users u
+         JOIN memberships m ON m.user_id = u.id AND m.org_id = u.org_id
+        WHERE u.org_id = $1 AND u.status = 'active' AND m.role = $2`,
+      [orgId, view.shared_role],
+    );
+    for (const row of rows.rows) ids.add(row.id as string);
+  }
+  return ids;
+}
+
 export async function systemRoutes(app: FastifyInstance) {
   app.get('/api/system/storage', async (req) => {
     requirePlatformAdmin(req);
@@ -264,23 +290,58 @@ export async function systemRoutes(app: FastifyInstance) {
     status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    shared: z.boolean().optional(),
+    shared_role: z
+      .enum(['admin', 'director', 'pm', 'consultant', 'tech_lead'])
+      .nullable()
+      .optional(),
+    shared_user_ids: z.array(z.uuid()).max(50).optional(),
   });
 
   const AUDIT_VIEW_COLUMNS = `v.id, v.name, v.mode, v.q, v.action,
               v.object_type, v.status,
               v.from_date::text AS "from", v.to_date::text AS "to",
+              v.shared, v.shared_role, (v.user_id = $1) AS is_owner,
+              u.name AS owner_name,
               v.created_at, v.updated_at`;
 
-  /** 当前用户保存的审计日志筛选视图（私有）。 */
+  const auditViewRow = (id: string) =>
+    `SELECT v.id, v.name, v.mode, v.q, v.action,
+            v.object_type, v.status,
+            v.from_date::text AS "from", v.to_date::text AS "to",
+            v.shared, v.shared_role, true AS is_owner,
+            (SELECT name FROM users WHERE id = v.user_id) AS owner_name,
+            v.created_at, v.updated_at,
+            COALESCE((
+              SELECT json_agg(s.user_id)
+                FROM audit_filter_view_shares s
+               WHERE s.view_id = v.id
+            ), '[]'::json) AS shared_user_ids
+       FROM audit_filter_views v
+      WHERE v.id = $1`;
+
+  /** 当前用户可见的审计日志筛选视图（自己的 + 共享的）。 */
   app.get('/api/audit-filter-views', async (req) => {
     const auth = (req as any).authUser;
     if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
     const items = await query(
-      `SELECT ${AUDIT_VIEW_COLUMNS}
+      `SELECT ${AUDIT_VIEW_COLUMNS},
+              COALESCE((
+                SELECT json_agg(s.user_id)
+                  FROM audit_filter_view_shares s
+                 WHERE s.view_id = v.id
+              ), '[]'::json) AS shared_user_ids
          FROM audit_filter_views v
+         LEFT JOIN users u ON u.id = v.user_id
         WHERE v.user_id = $1
+           OR v.shared
+           OR v.shared_role = $2
+           OR EXISTS (
+             SELECT 1 FROM audit_filter_view_shares s
+              WHERE s.view_id = v.id AND s.user_id = $1
+           )
         ORDER BY v.name`,
-      [auth.sub],
+      [auth.sub, auth.role ?? ''],
     );
     return { items };
   });
@@ -294,37 +355,129 @@ export async function systemRoutes(app: FastifyInstance) {
     if (body.from && body.to && body.from > body.to) {
       throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
     }
-    const item = await one(
-      `INSERT INTO audit_filter_views
-         (org_id, user_id, name, mode, q, action, object_type, status,
-          from_date, to_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       ON CONFLICT (user_id, name)
-       DO UPDATE SET mode = EXCLUDED.mode,
-                     q = EXCLUDED.q,
-                     action = EXCLUDED.action,
-                     object_type = EXCLUDED.object_type,
-                     status = EXCLUDED.status,
-                     from_date = EXCLUDED.from_date,
-                     to_date = EXCLUDED.to_date,
-                     updated_at = now()
-       RETURNING id, name, mode, q, action, object_type, status,
-                 from_date::text AS "from", to_date::text AS "to",
-                 created_at, updated_at`,
-      [
+    const shareIds = Array.from(new Set(body.shared_user_ids ?? []));
+    const result = await withTransaction(async (client) => {
+      if (shareIds.length) {
+        const found = await client.query(
+          `SELECT id FROM users WHERE org_id = $1 AND id = ANY($2::uuid[])`,
+          [auth.org_id, shareIds],
+        );
+        if (found.rows.length !== shareIds.length) {
+          throw httpError(422, 'INVALID_SHARED_USERS', '共享对象不属于当前组织');
+        }
+      }
+      const existing = await client.query<any>(
+        `SELECT id, shared, shared_role
+           FROM audit_filter_views
+          WHERE user_id = $1 AND name = $2`,
+        [auth.sub, body.name],
+      );
+      let oldRecipients = new Set<string>();
+      let oldShareIds: string[] = [];
+      if (existing.rows[0]) {
+        const existingShares = await client.query(
+          `SELECT user_id FROM audit_filter_view_shares WHERE view_id = $1`,
+          [existing.rows[0].id],
+        );
+        oldShareIds = existingShares.rows.map((row: any) => row.user_id as string);
+        oldRecipients = await auditViewRecipients(
+          client,
+          auth.org_id,
+          existing.rows[0],
+          oldShareIds,
+        );
+      }
+      const effectiveShareIds =
+        body.shared_user_ids === undefined ? oldShareIds : shareIds;
+
+      const inserted = await client.query<any>(
+        `INSERT INTO audit_filter_views
+           (org_id, user_id, name, mode, q, action, object_type, status,
+            from_date, to_date, shared, shared_role)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         ON CONFLICT (user_id, name)
+         DO UPDATE SET mode = EXCLUDED.mode,
+                       q = EXCLUDED.q,
+                       action = EXCLUDED.action,
+                       object_type = EXCLUDED.object_type,
+                       status = EXCLUDED.status,
+                       from_date = EXCLUDED.from_date,
+                       to_date = EXCLUDED.to_date,
+                       shared = EXCLUDED.shared,
+                       shared_role = EXCLUDED.shared_role,
+                       updated_at = now()
+         RETURNING id`,
+        [
+          auth.org_id,
+          auth.sub,
+          body.name,
+          body.mode,
+          body.q ?? null,
+          body.action ?? null,
+          body.object_type ?? null,
+          body.status ?? null,
+          body.from ?? null,
+          body.to ?? null,
+          body.shared ?? false,
+          body.shared_role ?? null,
+        ],
+      );
+      const viewId = inserted.rows[0].id as string;
+      if (body.shared_user_ids !== undefined) {
+        await client.query(
+          `DELETE FROM audit_filter_view_shares WHERE view_id = $1`,
+          [viewId],
+        );
+        if (shareIds.length) {
+          await client.query(
+            `INSERT INTO audit_filter_view_shares (view_id, user_id)
+             SELECT $1, unnest($2::uuid[])`,
+            [viewId, shareIds],
+          );
+        }
+      }
+      const row = await client.query(auditViewRow(viewId), [viewId]);
+      const newRecipients = await auditViewRecipients(
+        client,
         auth.org_id,
-        auth.sub,
-        body.name,
-        body.mode,
-        body.q ?? null,
-        body.action ?? null,
-        body.object_type ?? null,
-        body.status ?? null,
-        body.from ?? null,
-        body.to ?? null,
-      ],
-    );
-    return reply.code(201).send({ item });
+        {
+          shared: body.shared ?? false,
+          shared_role: body.shared_role ?? null,
+        },
+        effectiveShareIds,
+      );
+      return {
+        item: row.rows[0],
+        recipients: [...newRecipients].filter(
+          (userId) => userId !== auth.sub && !oldRecipients.has(userId),
+        ),
+      };
+    });
+
+    if (result.recipients.length) {
+      try {
+        await query(
+          `INSERT INTO user_notifications
+             (org_id, user_id, actor_id, kind, title, body, link, ref_type, ref_id)
+           SELECT $1, unnest($2::uuid[]), $3,
+                  'copilot_audit_view_shared',
+                  $4, $5,
+                  '?audit_view=' || $6::text || '#/audit',
+                  'audit_filter_view', $6::uuid`,
+          [
+            auth.org_id,
+            result.recipients,
+            auth.sub,
+            `审计视图已共享：${body.name}`,
+            `${auth.name ?? '同事'} 共享了审计筛选视图「${body.name}」`,
+            result.item.id,
+          ],
+        );
+      } catch (err) {
+        req.log?.warn?.({ err }, 'audit view share notification failed');
+      }
+    }
+    return reply.code(201).send({ item: result.item });
   });
 
   app.patch('/api/audit-filter-views/:id', async (req) => {
@@ -340,7 +493,7 @@ export async function systemRoutes(app: FastifyInstance) {
         WHERE id = $1 AND user_id = $3
         RETURNING id, name, mode, q, action, object_type, status,
                   from_date::text AS "from", to_date::text AS "to",
-                  created_at, updated_at`,
+                  shared, shared_role, created_at, updated_at`,
       [id, body.name, auth.sub],
     );
     if (!item) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');

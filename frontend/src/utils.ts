@@ -127,6 +127,15 @@ export const deliverableTypeLabel = (v: string | null | undefined) =>
 export const deliverableStatusLabel = (v: string | null | undefined) =>
   dict({ draft: '草稿', in_review: '审核中', approved: '已批准', shared: '已外发', archived: '已归档' }, v);
 
+export const namesPreview = (
+  items: Array<{ name: string }>,
+  max = 3,
+): string => {
+  if (!items.length) return '';
+  const names = items.slice(0, max).map((item) => item.name).join('、');
+  return items.length > max ? `${names} 等 ${items.length} 人` : names;
+};
+
 export const shareChannelLabel = (v: string | null | undefined) =>
   dict({ email: '邮件', wechat: '企业微信', meeting: '会议', print: '打印' }, v);
 

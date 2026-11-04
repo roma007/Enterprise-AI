@@ -4895,6 +4895,16 @@ async function main() {
         '按来源应包含规则',
       );
 
+      const statsCsv = await app.inject({
+        method: 'GET',
+        url: `/api/engagements/${engagementId}/copilot-reconcile-diff-stats/export.csv`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      assert.equal(statsCsv.statusCode, 200, `分布导出失败：${statsCsv.body}`);
+      assert.ok(statsCsv.body.includes('维度,取值,数量'), 'CSV 表头应正确');
+      assert.ok(statsCsv.body.includes('金额不符'), 'CSV 应包含类型分布');
+      assert.ok(statsCsv.body.includes('规则'), 'CSV 应包含来源分布');
+
       const listReviews = async (query: string) => {
         const res = await app.inject({
           method: 'GET',

@@ -14,7 +14,7 @@ import {
   Spinner,
   Stat,
 } from '../ui';
-import { fmtDateTime } from '../utils';
+import { fmtDateTime, namesPreview } from '../utils';
 import type { CollabAudit } from '../types';
 
 const ACTION_LABEL: Record<string, string> = {
@@ -946,16 +946,14 @@ export function CollabAuditPage() {
           {shareMode === 'role' ? (
             <span className="muted small">
               将共享给：
-              {roleMembers.length
-                ? roleMembers.map((u) => u.name).join('、')
-                : '暂无成员'}
+              {roleMembers.length ? namesPreview(roleMembers) : '暂无成员'}
             </span>
           ) : null}
           {shareMode === 'users' ? (
             <span className="muted small">
               已选：
               {targetedMembers.length
-                ? targetedMembers.map((u) => u.name).join('、')
+                ? namesPreview(targetedMembers)
                 : '未选择'}
             </span>
           ) : null}

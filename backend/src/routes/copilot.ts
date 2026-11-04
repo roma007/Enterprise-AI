@@ -8,7 +8,7 @@ import { createZip } from '../services/zip';
 import { csvCell } from '../services/csv';
 import { buildDocx, buildPrintHtml } from '../services/export';
 import { htmlToPdf } from '../services/pdf';
-import { DIFF_LABEL } from '../services/reconcile_labels';
+import { DIFF_LABEL, DIFF_SOURCE_LABEL } from '../services/reconcile_labels';
 import {
   generateReconcileDeliverable,
   listReconcileDocuments,
@@ -978,6 +978,76 @@ async function buildBatchItemsCsv(reviewId: string, rows: any[]): Promise<string
     );
   }
   return `\uFEFF${lines.join('\r\n')}`;
+}
+
+/** 项目内差异分布聚合。 */
+export async function computeReconcileDiffStats(engagementId: string) {
+  const rows = await query<any>(
+    `SELECT differences, decisions
+       FROM copilot_reconcile_reviews
+      WHERE engagement_id = $1`,
+    [engagementId],
+  );
+  const typeCounts = new Map<string, number>();
+  const sourceCounts = new Map<string, number>();
+  const decisionCounts = new Map<string, number>();
+  const confidence = { high: 0, medium: 0, low: 0, unknown: 0 };
+  let total = 0;
+  for (const row of rows) {
+    const decisions = new Map<string, string>();
+    for (const item of Array.isArray(row.decisions) ? row.decisions : []) {
+      if (item?.difference_id) {
+        decisions.set(String(item.difference_id), String(item.decision ?? ''));
+      }
+    }
+    const diffs = Array.isArray(row.differences) ? row.differences : [];
+    for (const diff of diffs) {
+      total += 1;
+      const type = String(diff?.type ?? 'unknown');
+      typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+      const source = String(diff?.source ?? '未知');
+      sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1);
+      const value = Number(diff?.confidence);
+      if (!Number.isFinite(value)) confidence.unknown += 1;
+      else if (value >= 0.8) confidence.high += 1;
+      else if (value >= 0.6) confidence.medium += 1;
+      else confidence.low += 1;
+      const decision = diff?.difference_id
+        ? decisions.get(String(diff.difference_id))
+        : undefined;
+      const key =
+        decision === '采纳' || decision === '忽略' || decision === '待确认'
+          ? decision
+          : '未决';
+      decisionCounts.set(key, (decisionCounts.get(key) ?? 0) + 1);
+    }
+  }
+  const toList = (map: Map<string, number>) =>
+    [...map.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count);
+  return {
+    reviews: rows.length,
+    differences: total,
+    by_type: toList(typeCounts).map((row) => ({
+      type: row.key,
+      count: row.count,
+    })),
+    by_source: toList(sourceCounts).map((row) => ({
+      source: row.key,
+      count: row.count,
+    })),
+    by_confidence: [
+      { bucket: 'high' as const, count: confidence.high },
+      { bucket: 'medium' as const, count: confidence.medium },
+      { bucket: 'low' as const, count: confidence.low },
+      { bucket: 'unknown' as const, count: confidence.unknown },
+    ],
+    by_decision: toList(decisionCounts).map((row) => ({
+      decision: row.key,
+      count: row.count,
+    })),
+  };
 }
 
 export async function copilotRoutes(app: FastifyInstance) {
@@ -2719,7 +2789,6 @@ export async function copilotRoutes(app: FastifyInstance) {
     });
   });
 
-  /** 顾问查看：某个项目收到的对账复核记录。 */
   /** 项目内对账差异分布：类型、来源、置信度与决策。 */
   app.get(
     '/api/engagements/:id/copilot-reconcile-diff-stats',
@@ -2730,72 +2799,79 @@ export async function copilotRoutes(app: FastifyInstance) {
         [id],
       );
       if (!engagement) throw httpError(404, 'NOT_FOUND', '项目不存在');
-      const rows = await query<any>(
-        `SELECT differences, decisions
-           FROM copilot_reconcile_reviews
-          WHERE engagement_id = $1`,
+      return computeReconcileDiffStats(id);
+    },
+  );
+
+  app.get(
+    '/api/engagements/:id/copilot-reconcile-diff-stats/export.csv',
+    async (req, reply) => {
+      const { id } = engagementParams.parse(req.params);
+      const engagement = await one(
+        `SELECT id FROM engagements WHERE id = $1 AND deleted_at IS NULL`,
         [id],
       );
-      const typeCounts = new Map<string, number>();
-      const sourceCounts = new Map<string, number>();
-      const decisionCounts = new Map<string, number>();
-      const confidence = { high: 0, medium: 0, low: 0, unknown: 0 };
-      let total = 0;
-      for (const row of rows) {
-        const decisions = new Map<string, string>();
-        for (const item of Array.isArray(row.decisions) ? row.decisions : []) {
-          if (item?.difference_id) {
-            decisions.set(String(item.difference_id), String(item.decision ?? ''));
-          }
-        }
-        const diffs = Array.isArray(row.differences) ? row.differences : [];
-        for (const diff of diffs) {
-          total += 1;
-          const type = String(diff?.type ?? 'unknown');
-          typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
-          const source = String(diff?.source ?? '未知');
-          sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1);
-          const value = Number(diff?.confidence);
-          if (!Number.isFinite(value)) confidence.unknown += 1;
-          else if (value >= 0.8) confidence.high += 1;
-          else if (value >= 0.6) confidence.medium += 1;
-          else confidence.low += 1;
-          const decision = diff?.difference_id
-            ? decisions.get(String(diff.difference_id))
-            : undefined;
-          const key =
-            decision === '采纳' || decision === '忽略' || decision === '待确认'
-              ? decision
-              : '未决';
-          decisionCounts.set(key, (decisionCounts.get(key) ?? 0) + 1);
-        }
-      }
-      const toList = (map: Map<string, number>) =>
-        [...map.entries()]
-          .map(([key, count]) => ({ key, count }))
-          .sort((a, b) => b.count - a.count);
-      return {
-        reviews: rows.length,
-        differences: total,
-        by_type: toList(typeCounts).map((row) => ({
-          type: row.key,
-          count: row.count,
-        })),
-        by_source: toList(sourceCounts).map((row) => ({
-          source: row.key,
-          count: row.count,
-        })),
-        by_confidence: [
-          { bucket: 'high', count: confidence.high },
-          { bucket: 'medium', count: confidence.medium },
-          { bucket: 'low', count: confidence.low },
-          { bucket: 'unknown', count: confidence.unknown },
-        ],
-        by_decision: toList(decisionCounts).map((row) => ({
-          decision: row.key,
-          count: row.count,
-        })),
+      if (!engagement) throw httpError(404, 'NOT_FOUND', '项目不存在');
+      const stats = await computeReconcileDiffStats(id);
+      const confidenceLabel: Record<string, string> = {
+        high: '高 (≥0.8)',
+        medium: '中 (0.6–0.8)',
+        low: '低 (<0.6)',
+        unknown: '未知',
       };
+      const lines = [['维度', '取值', '数量'].join(',')];
+      for (const row of stats.by_type) {
+        lines.push(
+          ['类型', DIFF_LABEL[row.type] ?? row.type, row.count]
+            .map(csvCell)
+            .join(','),
+        );
+      }
+      for (const row of stats.by_source) {
+        lines.push(
+          [
+            '来源',
+            DIFF_SOURCE_LABEL[row.source] ?? row.source,
+            row.count,
+          ]
+            .map(csvCell)
+            .join(','),
+        );
+      }
+      for (const row of stats.by_confidence) {
+        lines.push(
+          ['置信度', confidenceLabel[row.bucket] ?? row.bucket, row.count]
+            .map(csvCell)
+            .join(','),
+        );
+      }
+      for (const row of stats.by_decision) {
+        lines.push(
+          ['决策', row.decision, row.count].map(csvCell).join(','),
+        );
+      }
+      try {
+        await query(
+          `INSERT INTO audit_logs
+             (org_id, user_id, action, object_type, object_id, status_code, detail)
+           VALUES ($1,$2,'EXPORT copilot-reconcile-diff-stats','engagement',$3,200,$4::jsonb)`,
+          [
+            (req as any).authUser?.org_id ?? null,
+            (req as any).authUser?.sub ?? null,
+            id,
+            JSON.stringify({ rows: lines.length - 1 }),
+          ],
+        );
+      } catch (err) {
+        req.log?.warn?.({ err }, 'diff stats export audit failed');
+      }
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header(
+          'content-disposition',
+          'attachment; filename="copilot-diff-stats.csv"',
+        )
+        .send(`\uFEFF${lines.join('\r\n')}`);
     },
   );
 

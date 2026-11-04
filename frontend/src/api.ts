@@ -1019,6 +1019,10 @@ export const api = {
     request<{ item: Holiday }>('/api/holidays', json('POST', payload)),
   deleteHoliday: (id: string) =>
     request<{ ok: boolean }>(`/api/holidays/${id}`, { method: 'DELETE' }),
+  exportReconcileDiffStatsCsv: (engagementId: string) =>
+    requestBlob(
+      `/api/engagements/${engagementId}/copilot-reconcile-diff-stats/export.csv`,
+    ),
   getReconcileDiffStats: (engagementId: string) =>
     request<ReconcileDiffStats>(
       `/api/engagements/${engagementId}/copilot-reconcile-diff-stats`,

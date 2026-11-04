@@ -108,6 +108,27 @@ export function PocTab({
     () => api.getReconcileDiffStats(engagementId),
     [engagementId],
   );
+  const [statsExportError, setStatsExportError] = useState<unknown>(null);
+  const [exportingStats, setExportingStats] = useState(false);
+  const exportDiffStats = async () => {
+    setExportingStats(true);
+    setStatsExportError(null);
+    try {
+      const blob = await api.exportReconcileDiffStatsCsv(engagementId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'copilot-diff-stats.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setStatsExportError(err);
+    } finally {
+      setExportingStats(false);
+    }
+  };
   const decisionCount = (key: string) =>
     diffStats.data?.by_decision.find((row) => row.decision === key)?.count ??
     0;
@@ -388,15 +409,25 @@ export function PocTab({
         title="差异分布"
         subtitle="规则命中、解释来源、置信度与决策进度"
         actions={
-          <Button
-            size="sm"
-            disabled={diffStats.loading}
-            onClick={() => void diffStats.reload()}
-          >
-            刷新
-          </Button>
+          <div className="row">
+            <Button
+              size="sm"
+              disabled={exportingStats || !diffStats.data}
+              onClick={() => void exportDiffStats()}
+            >
+              {exportingStats ? '导出中…' : '导出分布 CSV'}
+            </Button>
+            <Button
+              size="sm"
+              disabled={diffStats.loading}
+              onClick={() => void diffStats.reload()}
+            >
+              刷新
+            </Button>
+          </div>
         }
       >
+        {statsExportError ? <ErrorBox error={statsExportError} /> : null}
         {diffStats.data ? (
           <>
             <div className="stat-grid" style={{ marginBottom: 10 }}>

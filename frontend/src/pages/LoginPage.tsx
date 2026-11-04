@@ -12,6 +12,7 @@ export function LoginPage({
 }) {
   const [email, setEmail] = useState('zhang@hengzhi.ai');
   const [password, setPassword] = useState('');
+  const [orgSlug, setOrgSlug] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +21,7 @@ export function LoginPage({
     setLoading(true);
     setError(null);
     try {
-      const res = await api.login(email.trim(), password);
+      const res = await api.login(email.trim(), password, orgSlug.trim() || undefined);
       onLogin(res.token, res.user);
     } catch (err) {
       setError(err);
@@ -54,6 +55,14 @@ export function LoginPage({
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
+          <Field label="组织标识（可选）" hint="同一邮箱属于多个组织时必填">
+            <Input
+              value={orgSlug}
+              onChange={(e) => setOrgSlug(e.target.value)}
+              placeholder="如 hengzhi"
+              autoComplete="organization"
+            />
+          </Field>
           <Field label="密码" required>
             <Input
               type="password"
@@ -72,11 +81,14 @@ export function LoginPage({
           演示账号：<code>zhang@hengzhi.ai</code> / <code>demo1234</code>
         </Notice>
 
-        {onBack && (
-          <button type="button" className="link-btn" onClick={onBack}>
-            ← 返回项目列表
-          </button>
-        )}
+        <div className="login-links">
+          <a className="link-btn" href="#/register">还没有账号？注册供应商 →</a>
+          {onBack && (
+            <button type="button" className="link-btn" onClick={onBack}>
+              ← 返回项目列表
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

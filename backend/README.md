@@ -65,9 +65,25 @@ npm run dev          # http://127.0.0.1:8788
 - 管理员/总监保留组织级可见性；项目经理可管理成员；项目至少保留一名负责人。
 - 成员关系随项目硬删除级联清理。
 
-**登录安全**：连续登录失败按 `IP + 邮箱` 滑动窗口计数，默认 5 次 / 15 分钟（`LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_MS`）；超限返回 429 `LOGIN_RATE_LIMITED` + `retry-after`，限流期间即使密码正确也会被拦截。登录成功清空计数；进程内存实现。
+**登录安全**：连续登录失败按 `IP + 邮箱` 计数，默认 5 次 / 15 分钟（`LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_MS`）；超限返回 429 `LOGIN_RATE_LIMITED` + `retry-after`，限流期间即使密码正确也会被拦截。登录成功清空计数。优先使用 Redis（`REDIS_URL`），未配置或不可用时回退进程内存；多实例部署必须配置 Redis。
+
+**会话缓存**：`sessionActive` 结果缓存 30 秒（Redis 或内存），撤销/强制下线/暂停租户会主动失效对应 key。`GET /api/system/cache`（平台管理员）查看驱动与健康状态。
 
 **密码策略**：新建用户、管理员重置、自助改密统一校验：≥10 位、大小写/数字/符号至少 3 类、不能是常见弱口令或包含邮箱前缀；新密码不能与最近 5 次相同（`password_history`）。违反返回 422 `WEAK_PASSWORD` / `PASSWORD_REUSED`。
+
+**多租户基础**：`organizations` 即供应商租户，新增 `slug/status/settings`；`POST /api/auth/register` 自助创建租户 + 管理员；登录支持 `org_slug`，同一邮箱属于多个组织时必须填写。
+
+**PostgreSQL RLS**：迁移 `0029_rls.sql` 创建受限角色 `ai_delivery_app`、`app_org_id()`/`app_platform_admin()`，并为全部租户表启用 RLS。请求通过 `@fastify/request-context` 注入 `org_id`/平台管理员标记；每个 API 请求复用一条数据库连接并设置会话级 `SET ROLE ai_delivery_app + app.org_id`，请求结束释放并清理上下文。登录、公开分享、健康检查等使用服务角色绕过 RLS。`/api/system/db-context` 可验证当前数据库角色、org 与请求内连接复用。`benchmarks` / `metric_definitions` 为平台字典，仅平台管理员可改。连接池上限 `PG_POOL_MAX` 默认 20。
+
+**平台运营**：`users.is_platform_admin` 标记平台管理员（seed 的 `admin@hengzhi.ai`）。`GET /api/platform/tenants` 列表、`PATCH /api/platform/tenants/:id` 暂停/恢复/套餐/试用到期/账单邮箱；暂停立即撤销该组织全部会话并阻止登录。`GET/PATCH /api/org` 供租户管理员维护组织名称与账单邮箱。
+
+**节假日日历**：`holiday_calendar` 支持平台级（`org_id IS NULL`）与组织级节假日，按 `region` 区分；`GET/POST /api/holidays`、`DELETE /api/holidays/:id`，仅管理员/总监可维护。组织在 `settings.region` 配置 SLA 地区（默认 `CN`）；`GET /api/holidays?effective=1` 只返回该地区（或 `ALL`）的节假日。SLA 计算默认跳过周末，并跳过生效地区的已启用节假日。当前未预置法定节假日，需平台或客户自行维护。
+
+**试用、配额与计费**：`tenant_plans` 为平台级套餐目录（trial/free/pro/enterprise，含用户/客户/项目/本月 PDF 任务上限与月费）。新注册租户自动获得 14 天 `trial`；`trial_ends_at` 到期后登录返回 403 `TRIAL_EXPIRED`，现有会话失效。创建用户/客户/项目/PDF 任务前执行配额检查，超限返回 403 `QUOTA_EXCEEDED`，`details` 带 `resource/limit/used/plan`。`GET /api/org/billing` 返回套餐、试用剩余、用量与价格；`GET /api/platform/plans` 返回套餐目录。当前支付支持 `mock`（本地模拟）/ `manual`（平台确认收款）/ `callback`（HMAC 网关回调）；未内置具体支付厂商 SDK。账单接口：`GET/POST /api/org/billing/*`、`GET /api/platform/invoices`、`POST /api/platform/invoices/:id/mark-paid|void`、`POST /api/billing/callback`。自动续费任务：`npm run billing:run`。
+
+租户生命周期：`GET /api/platform/tenants/:id/impact` 影响评估；`GET /api/platform/tenants/:id/export` 导出组织/用户/客户/项目/机会点/交付物/知识库 JSON；`DELETE /api/platform/tenants/:id?confirm=<slug>` 删除租户并清理审计/归档/会话数据。
+
+**站内通知**：`GET /api/notifications?unread=1&kind=copilot_batch_filter_view_shared&from=YYYY-MM-DD&to=YYYY-MM-DD&limit=20&offset=0`、`GET /api/notifications/unread-count`、`POST /api/notifications/:id/read`、`POST /api/notifications/read-all`、`POST /api/notifications/delete`（body `{ ids[] }` 最多 100 条，或 `{ all: true, unread?, kind?, from?, to? }` 按当前筛选批量删除，均为软删除）。`GET /api/notifications?trash=1` 查看回收站；`POST /api/notifications/restore`、`POST /api/notifications/purge` 恢复或彻底删除。`from > to` 返回 `400 INVALID_DATE_RANGE`。删除/恢复/彻底删除写 `DELETE/RESTORE/PURGE copilot-notification` 审计事件。`GET /api/notification-audits?action=&from=&to=&actor_id=&limit=&offset=` 供管理员/总监查询通知审计；`GET /api/notification-audits/export.csv` 导出最多 5000 条 CSV（含操作人、数量、模式、筛选条件与通知 ID）。统一协作审计：`GET /api/collab-audits?type=all|notification|filter_view|export&action=&from=&to=&actor_id=&limit=&offset=` 合并通知、筛选视图与导出审计；操作与类型不匹配返回 `400 INVALID_ACTION_TYPE`；`GET /api/collab-audits/export.csv` 导出 CSV；`GET /api/collab-audits/stats?from=&to=&actor_id=` 返回总数、按类型计数、Top 操作与 Top 操作人；`GET /api/collab-audits/archive?...` 查询 `audit_logs_archive` 中的归档协作审计（含 `archived_at` 与最近归档摘要）；`GET /api/collab-audits/archive/export.csv` 导出归档审计 CSV；`GET /api/collab-audits/archive-runs?from=&to=` 分页返回归档执行历史；`GET /api/collab-audits/snapshots?days=30&bucket=day|week|month` 返回连续日期序列（缺失日期补点、累计值顺延）及 `delta_*` 新增量，并支持按周/月聚合；`GET /api/collab-audits/snapshots/export.csv?days=30&bucket=...` 导出同口径 CSV（含周期区间与新增）；`GET /api/collab-audits/merged?...` 合并热表与归档（返回 `is_archived` / `archived_at`），`/merged/export.csv` 导出合并结果；`stats?scope=live|archive|all` 支持合并统计。每日快照按组织 `settings.timezone`（默认 `Asia/Shanghai`，PATCH /api/org 时校验，非法值返回 `422 INVALID_TIMEZONE`）生成，统计口径同时包含热表 `audit_logs` 与归档表 `audit_logs_archive`，避免归档后累计量下降；查询窗口同样以组织时区的当天作为截止日，由 `COLLAB_AUDIT_SNAPSHOT_INTERVAL_SECONDS`（默认 86400 秒，0 关闭）触发，也可运行 `npm run collab-audits:snapshot`，写入 `collab_audit_snapshots`；快照保留期由 `COLLAB_AUDIT_SNAPSHOT_RETENTION_DAYS`（默认 365 天）控制，并随快照任务清理；清理写 `CLEANUP copilot-collab-snapshots`，导出写 `EXPORT copilot-collab-snapshots`。修改时区后可调用 `POST /api/org/snapshots/retime` 按 `created_at` 重算历史快照日期（同日保留最新一条），并写 `RETIME copilot-collab-snapshots` 审计事件。归档动作写 `ARCHIVE copilot-collab-audits`，归档导出写 `EXPORT copilot-collab-archive`。协作审计热表保留期由 `COLLAB_AUDIT_RETENTION_DAYS` 控制（默认 365 天），API 进程按 `COLLAB_AUDIT_ARCHIVE_INTERVAL_SECONDS`（默认 86400 秒，0 关闭）自动归档到 `audit_logs_archive`，也可运行 `npm run collab-audits:archive`；导出动作记录 `EXPORT copilot-notification-audits` / `EXPORT copilot-collab-audits` 审计事件。回收站保留期由 `NOTIFICATION_TRASH_RETENTION_DAYS` 控制（默认 30 天），API 进程按 `NOTIFICATION_CLEANUP_INTERVAL_SECONDS`（默认 3600 秒，0 关闭）常驻清理，也可运行 `npm run notifications:cleanup`；打开回收站时会先清理当前用户过期通知。当前用于筛选视图共享：只通知本次新增的共享对象，重新保存不会重复提醒。
 
 **用户管理**（仅管理员/总监）：`GET/POST /api/admin/users`、`PATCH /api/admin/users/:id`、`POST /api/admin/users/:id/reset-password`；支持创建账号、调整组织角色、禁用/启用、重置密码；禁用与重置会撤销该用户全部会话，组织至少保留一名启用管理员。
 
@@ -97,7 +113,11 @@ npm run dev          # http://127.0.0.1:8788
   - `slow_requests_total`
   - `process_uptime_seconds`
   - `db_up`（`SELECT 1` 探活）
+  - `db_pool_total_connections` / `db_pool_idle_connections` / `db_pool_waiting_requests` / `db_pool_max_connections`
+  - `redis_configured` / `redis_up`
+  - `pdf_jobs_pending` / `pdf_jobs_running` / `pdf_jobs_done_24h` / `pdf_jobs_failed_24h` / `pdf_jobs_oldest_pending_seconds`
   - 设置 `METRICS_TOKEN` 后需 `Authorization: Bearer <token>` 或 `?token=`；`/metrics` 抓取本身不计入指标。
+  - SLO、错误预算与告警 Runbook 见 `ops/slo.md`。
 
 **审计归档**：
 
@@ -112,7 +132,7 @@ npm run dev          # http://127.0.0.1:8788
 
 **搜索**：上述列表均支持 `q`（服务端 ILIKE），项目/客户按名称与行业，痛点/机会点/盘点按编号、标题、描述、来源，交付物按标题/类型，审计按 action/对象/IP/操作人；与分页组合使用，`total` 为过滤后的总数。
 
-数据库连接默认 `postgres://127.0.0.1:5432/ai_delivery`，可用 `DATABASE_URL` 覆盖；复制 `.env.example` 为 `.env` 即自动加载。
+数据库连接默认 `postgres://127.0.0.1:5432/ai_delivery`，可用 `DATABASE_URL` 覆盖；复制 `.env.example` 为 `.env` 即自动加载。RLS 默认使用 `DB_APP_ROLE=ai_delivery_app`（迁移创建并授权）；若数据库用户无权创建/授予角色，需由 DBA 预先执行等效授权。
 
 **ai-copilot 评测回写（B4）**
 
@@ -135,12 +155,50 @@ Body:   { idempotency_key, experiment_id, dataset_name?, config?,
 - 查询：`GET /api/engagements/:id/copilot-syncs` 看该项目收到的回写。
 - 原始 payload 存在 `copilot_eval_syncs.payload`，指标口径有争议时可回看。
 
+**ai-copilot 对账复核回写（试点一）**
+
+```env
+COPILOT_HOOK_TOKEN=与 ai-copilot 的 DELIVERY_HOOK_TOKEN 一致
+```
+
+```
+POST /api/hooks/copilot/reconcile
+Header: x-copilot-token: <COPILOT_HOOK_TOKEN>
+Body:   { idempotency_key, engagement_id | experiment_id, kind,
+          document_id?, status?, summary, document, differences, decisions, source? }
+```
+
+- `engagement_id` 或 `experiment_id` 至少一个；后者自动推导组织与项目。
+- 幂等：`idempotency_key` 已存在 → `200 { duplicate: true }`。
+- 存储：`copilot_reconcile_reviews`（RLS 按组织隔离）。
+- 查询：`GET /api/engagements/:id/copilot-reconcile-reviews`；详情：`GET /api/copilot-reconcile-reviews/:id`。详情会联表返回风险/待办当前状态（`actions[].item_status`、`risk_status`、`issue_status`），风险关闭或待办解决后立即反映，不需要额外回写。
+- 生成风险/待办：`POST /api/copilot-reconcile-reviews/:id/actions`（`type=risk|issue`）。支持整张复核或单条 `difference_id`；每条差异/每类动作最多生成一次。支持 `owner` / `due_date` / `severity`，未传时默认当前用户，并按当前组织可见节假日计算 P0/P1/P2/P3 = 1/3/7/14 个工作日（跳过周末 + 已配置节假日）。风险同样支持 `owner` / `due_date`，风险登记册支持行内修改。
+- 批量生成：`POST /api/copilot-reconcile-reviews/:id/actions/batch`，body `{ type, difference_ids[], owner?, due_date?, severity? }`。每条差异使用独立保存点，单条失败不影响其他条；返回 `created/skipped/failed` 汇总与 `items[]` 明细（`status=created|duplicate|failed`，失败带 `code/error`）。已存在动作返回 `duplicate`，请求内重复或差异不存在返回 `failed`。
+- 流式批量：`POST /api/copilot-reconcile-reviews/:id/actions/batch/stream`，同样的 body，返回 `application/x-ndjson`。每处理完一条立即输出一行结果，最后输出 `{ done: true, batch_id, created, skipped, failed }`；每条差异使用独立事务，前端可显示逐条进度。
+- 批量历史：`GET /api/copilot-reconcile-reviews/:id/action-batches?limit=20&offset=0` 按**根批次**分页，一次返回整棵树（含 `depth`、`total` 根组数、`batch_total`、`roots_returned`、`failed_difference_ids`、`has_child`、`parent_batch_id`、`remaining_difference_ids`）；`remaining_difference_ids` 在内存里按树一次性汇总，避免逐行递归查询；`GET /api/copilot-reconcile-batches/:id` 返回批次与逐条结果。批次与结果落在 `copilot_reconcile_batches` / `copilot_reconcile_batch_items`，刷新后仍可查。读取历史时会顺带回收超时批次：`running` 超过 `BATCH_RUNNING_TIMEOUT_MINUTES`（默认 10 分钟）自动标记为失败并按请求数补 `failed_count`；API 进程内还会按 `BATCH_REAP_INTERVAL_SECONDS`（默认 300 秒，0 关闭）常驻回收，也可运行 `npm run batches:reap` 手动执行。
+- 失败重试：`POST /api/copilot-reconcile-batches/:id/retry/stream` 只重试该批次的失败差异，创建带 `parent_batch_id` 的子批次并流式输出进度；成功的子批次会让父批次不再显示重试入口。
+- 取消：`POST /api/copilot-reconcile-batches/:id/cancel`，body `{ reason? }`，仅允许取消 `running` 批次；记录 `cancelled_by` / `cancel_reason` / `cancelled_at`，已生成动作保留，剩余未处理数量计入 `failed_count`。流式任务在下一条差异前检查取消状态，停止后保留 `cancelled` 状态，不再被完成回调覆盖。
+- 命名筛选视图：`GET/POST /api/copilot-reconcile-reviews/:id/batch-filter-views`、`DELETE /api/copilot-batch-filter-views/:id`。按用户 + 复核隔离，同名保存会更新；支持名称、状态、类型、起止日期与 `shared`。共享支持全员（`shared`）、按角色（`shared_role`）和指定用户（`shared_user_ids`）；列表返回 `is_owner`、`owner_name`、`shared_role` 与 `shared_user_ids`。只有创建者能删除。保存/删除会额外写 `SAVE/DELETE copilot-batch-filter-view` 审计事件；`GET /api/copilot-reconcile-reviews/:id/batch-filter-view-audits?limit=20&offset=0` 分页返回当前复核的视图审计（含 `total/limit/offset`）；`GET .../export.csv` 导出最多 5000 条审计 CSV（含共享设置与筛选条件）。新增共享对象会写入 `user_notifications`，并站内通知被共享人。
+- 导出预估：`GET /api/copilot-reconcile-reviews/:id/action-batches/export-estimate` 接收与导出相同的筛选参数，返回 `batches`、`items`、`estimated_bytes`（summary/items/zip）与 `large` 标记。
+- 导出汇总：`GET /api/copilot-reconcile-reviews/:id/action-batches/export.csv` 导出该复核的全部批次（CSV，UTF-8 BOM），包含父子 ID、类型、状态、请求/成功/跳过/失败数、级别、截止日期、取消原因/取消人、创建人、创建/完成时间。
+- 导出明细：`GET /api/copilot-reconcile-reviews/:id/action-batches/export-items.csv` 按批次逐条导出差异（批次/父批次、批次状态、差异 ID、明细状态、目标/动作 ID、待办编号、失败码/原因、时间、取消信息、创建人）。两套 CSV 都对 `= + - @` 开头的内容加 `'` 前缀，防止 Excel 公式注入；导出成功会写独立审计事件 `EXPORT copilot-batch-summary` / `EXPORT copilot-batch-items` / `EXPORT copilot-batch-zip`，包含行数、格式与筛选条件。
+- 筛选导出：列表、预估、CSV 与 ZIP 共用 `?status=running|completed|failed|cancelled&action_type=risk|issue&from=YYYY-MM-DD&to=YYYY-MM-DD`，日期按批次创建时间过滤。筛选按**批次组**：组内任一批次命中即整组显示/导出。`from > to` 返回 `400 INVALID_DATE_RANGE`，列表、预估、CSV、ZIP 一致校验。
+- 打包导出：`GET /api/copilot-reconcile-reviews/:id/action-batches/export.zip` 返回 ZIP，内含 `batch-summary.csv` 与 `batch-items.csv`，两个文件使用同一组筛选条件。
+- 继续：`POST /api/copilot-reconcile-batches/:id/resume/stream` 仅对 `cancelled` 批次生效，body 可覆盖 `{ owner?, severity?, due_date? }`。剩余差异按**递归后代汇总**：`difference_ids` 减去该批次及所有子批次已出现的明细；创建带 `parent_batch_id` 的子批次并流式执行，没有剩余返回 `422 NO_REMAINING_ITEMS`。历史列表与详情返回的 `remaining_difference_ids` 使用同一递归口径。
+
 
 **服务端 PDF**：`GET /api/deliverables/:id/export.pdf` 用无头 Chromium 把打印版 HTML 渲染成 PDF。按顺序查找：`PDF_CHROME_PATH` → 系统 Chrome/Chromium → Playwright 浏览器缓存。找不到浏览器时返回 503 `PDF_ENGINE_UNAVAILABLE`，不影响 Word/HTML 导出。Docker 镜像已安装 Debian `chromium` 与 `fonts-noto-cjk`。
 
-PDF 缓存：按交付物 id / 版本 / 标题 / 客户 / 内容生成 SHA-256 key，默认写入 `backend/.pdf-cache`；命中时返回 `x-pdf-cache: HIT`，`?refresh=1` 强制重渲染并覆盖。`PDF_CACHE_DIR` 可改目录，`PDF_CACHE_TTL_DAYS` 默认 30 天，过期文件异步清理。
+PDF 缓存：按交付物 id / 版本 / 标题 / 客户 / 内容生成 SHA-256 key，命中时返回 `x-pdf-cache: HIT`，`?refresh=1` 强制重渲染并覆盖。底层对象存储支持 `local` / `s3`：`STORAGE_DRIVER=local`（默认，写 `PDF_CACHE_DIR`，30 天 TTL）或 `s3`（MinIO/S3，配置 `S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY/PREFIX`，生命周期规则负责过期）。`GET /api/system/storage`（平台管理员）可查看当前驱动。本地可用 `npm run drill:s3` 启动 `s3rver` 做真实 PUT/GET/DELETE 与 API/worker 跨进程缓存验证。
 
-PDF 异步任务：`pdf_jobs` 表记录 queued/running/done/failed，进程内单并发队列执行；启动时把中断的 running 标 failed，queued 重新入队。前端点 PDF 后创建任务并轮询，完成后下载；同步导出接口仍保留。
+PDF 异步任务：`pdf_jobs` 表作为 PostgreSQL 队列，worker 通过 `FOR UPDATE SKIP LOCKED` + 租约认领任务，支持多实例；任务记录 `locked_by/locked_at/attempts`。API 默认内联跑 worker（`PDF_WORKER_INLINE`），生产建议设 `false` 并独立启动 `npm run worker:pdf`。`PDF_JOB_LEASE_MINUTES` 控制失联任务回收。前端创建任务后轮询，完成后下载；同步导出接口仍保留。Compose 提供 `migrate` 一次性迁移服务、`pdf-worker`、Redis 与 nginx 多副本网关；K8s 清单见 `ops/k8s/`。
+
+多副本演练：
+
+- `npm run smoke:replicas`：2 API + nginx 故障切换 + 双 worker。
+- `npm run soak:replicas`：持续压测、压测中故障、Redis 宕机回退、PDF 积压、连接池与指标校验。需本机有 `nginx` 与 `redis-server`。
+- `npm run drill:rollout`：3 副本滚动发布/回滚、readiness 拦截坏版本、`x-app-version` 流量切换校验。需本机有 `nginx`。
+- `npm run drill:alerts`：校验 `ops/alerts.yml` 的标签与 `ops/alertmanager.yml` 的路由/抑制（本地模拟）。
 
 PDF 任务清理：`POST /api/pdf-jobs/cleanup`（`{ before, dry_run, confirm }`，执行需 `confirm=CLEANUP`，仅管理员/总监）或 CLI `npm run pdf:cleanup -- --days=30 --dry-run`；只删除任务行，不删除 PDF 文件缓存。`PDF_JOB_RETENTION_DAYS` 默认 30 天。
 
@@ -351,6 +409,28 @@ curl -s -X POST localhost:8788/api/deliverables/generate -H 'content-type: appli
 - `db/migrations/0022_share_views_archive_org.sql`：归档表补充 `org_id` 并回填。
 - `db/migrations/0023_user_sessions.sql`：可撤销登录会话 `user_sessions`。
 - `db/migrations/0024_password_history.sql`：最近 5 次密码历史 `password_history`。
+- `db/migrations/0026_tenant_foundation.sql`：供应商租户 `slug/status/settings`。
+- `db/migrations/0027_org_slug_default.sql`：组织 slug 默认值（兼容脚本/测试插入）。
+- `db/migrations/0028_platform_admin.sql`：平台管理员标记 `users.is_platform_admin`。
+- `db/migrations/0029_rls.sql`：RLS 角色、策略、租户上下文函数。
+- `db/migrations/0030_pdf_job_lease.sql`：PDF 任务 worker 租约字段与队列索引。
+- `db/migrations/0031_tenant_billing.sql`：租户试用到期、账单邮箱、套餐目录 `tenant_plans`。
+- `db/migrations/0032_tenant_plan_trial.sql`：套餐枚举新增 `trial`。
+- `db/migrations/0033_tenant_invoices.sql`：订阅周期、自动续费、账单 `tenant_invoices`。
+- `db/migrations/0034_copilot_reconcile_reviews.sql`：ai-copilot 对账复核回写 `copilot_reconcile_reviews`。
+- `db/migrations/0035_copilot_reconcile_action_links.sql`：复核记录关联风险/待办并防重复。
+- `db/migrations/0036_copilot_reconcile_actions.sql`：按单条差异生成风险/待办的动作表。
+- `db/migrations/0037_risk_owner_due.sql`：风险增加负责人与截止日期。
+- `db/migrations/0038_holiday_calendar.sql`：组织级/平台级节假日日历，供工作日 SLA 使用。
+- `db/migrations/0039_copilot_reconcile_batches.sql`：批量生成批次与逐条结果，支持历史查询和失败重试。
+- `db/migrations/0040_batch_cancelled_status.sql`：批量任务增加 `cancelled` 状态。
+- `db/migrations/0041_batch_cancel_resume.sql`：保存请求差异列表、取消原因/操作人/时间，支持取消后继续剩余差异。
+- `db/migrations/0042_batch_filter_views.sql`：用户级命名筛选视图 `copilot_batch_filter_views`。
+- `db/migrations/0043_batch_filter_view_sharing.sql`：筛选视图增加 `shared`，支持共享给同组织同事。
+- `db/migrations/0044_batch_filter_view_targeted_sharing.sql`：筛选视图支持 `shared_role` 与指定用户共享表。
+- `db/migrations/0045_user_notifications.sql`：站内通知 `user_notifications`。
+- `db/migrations/0046_notification_trash.sql`：通知软删除字段 `deleted_at` 与回收站索引。
+- `db/migrations/0047_collab_audit_snapshots.sql`：按组织的协作审计每日快照。
 - 容器化与备份恢复见根目录 [DEPLOY.md](../DEPLOY.md)。
 - `db/003_seed.sql`：宏远样例（仅在 `db:seed` / `db:reset` 时执行）。
 - `db/legacy/`：迁移体系引入前的原始 SQL，仅作对照。

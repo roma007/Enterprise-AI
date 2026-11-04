@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { one, query } from '../db';
 import { POSITION_LABEL, positionOf } from '../rules/benchmark';
 import { httpError } from '../services/s1';
+import { requirePlatformAdmin } from '../services/permissions';
 import type { Benchmark } from '../types';
 import { queryBool } from '../utils/query';
 
@@ -120,6 +121,7 @@ export async function benchmarkRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/benchmarks', async (req, reply) => {
+    requirePlatformAdmin(req);
     const body = benchmarkCreate.parse(req.body);
     validatePercentiles(body.p25, body.p50, body.p75);
 
@@ -151,6 +153,7 @@ export async function benchmarkRoutes(app: FastifyInstance) {
   });
 
   app.patch('/api/benchmarks/:id', async (req, reply) => {
+    requirePlatformAdmin(req);
     const { id } = z.object({ id: uuid }).parse(req.params);
     const patch = benchmarkPatch.parse(req.body);
     const existing = await one<any>(`SELECT * FROM benchmarks WHERE id = $1`, [id]);
@@ -177,6 +180,7 @@ export async function benchmarkRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/benchmarks/:id', async (req, reply) => {
+    requirePlatformAdmin(req);
     const { id } = z.object({ id: uuid }).parse(req.params);
     const row = await one(`DELETE FROM benchmarks WHERE id = $1 RETURNING id`, [id]);
     if (!row) return reply.code(404).send({ error: 'NOT_FOUND', message: '标杆不存在' });

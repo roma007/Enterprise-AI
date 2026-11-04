@@ -6,7 +6,9 @@ export const TOKEN_TTL_SECONDS = 8 * 60 * 60;
 export interface AuthUser {
   sub: string;
   org_id: string;
+  org_slug?: string;
   role: string;
+  platform_admin?: boolean;
   name: string;
   email: string;
   exp: number;
@@ -37,12 +39,16 @@ export function signToken(user: {
   role: string;
   name: string;
   email: string;
+  org_slug?: string;
   jti?: string;
+  platform_admin?: boolean;
 }): string {
   const payload: AuthUser = {
     sub: user.id,
     org_id: user.org_id,
+    ...(user.org_slug ? { org_slug: user.org_slug } : {}),
     role: user.role,
+    ...(user.platform_admin ? { platform_admin: true } : {}),
     name: user.name,
     email: user.email,
     exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,

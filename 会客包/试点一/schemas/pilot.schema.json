@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-delivery.local/schemas/pilot.schema.json",
+  "title": "试点一：对账单/结算单抽取与差异解释",
+  "description": "D1-D3 阶段的最小可用 schema；字段可按客户模板扩展。",
+  "$defs": {
+    "Money": {
+      "type": "number",
+      "description": "金额，单位元，保留两位小数"
+    },
+    "Confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "StatementLine": {
+      "type": "object",
+      "required": ["line_no", "waybill_no", "amount"],
+      "properties": {
+        "line_no": { "type": "integer", "minimum": 1 },
+        "waybill_no": { "type": "string", "minLength": 1 },
+        "container_no": { "type": ["string", "null"] },
+        "container_type": { "type": ["string", "null"] },
+        "amount": { "$ref": "#/$defs/Money" },
+        "tax_amount": { "type": ["number", "null"] },
+        "total_amount": { "type": ["number", "null"] },
+        "due_date": { "type": ["string", "null"], "format": "date" },
+        "remark": { "type": ["string", "null"] },
+        "confidence": { "$ref": "#/$defs/Confidence" },
+        "source_page": { "type": ["integer", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "StatementDocument": {
+      "type": "object",
+      "required": ["document_id", "customer_name", "total_amount", "lines"],
+      "properties": {
+        "document_id": { "type": "string", "minLength": 1 },
+        "statement_no": { "type": ["string", "null"] },
+        "customer_name": { "type": "string", "minLength": 1 },
+        "period_start": { "type": ["string", "null"], "format": "date" },
+        "period_end": { "type": ["string", "null"], "format": "date" },
+        "currency": { "type": "string", "default": "CNY" },
+        "total_amount": { "$ref": "#/$defs/Money" },
+        "source_format": {
+          "type": "string",
+          "enum": ["pdf_scan", "image", "excel", "text", "api"]
+        },
+        "page_count": { "type": ["integer", "null"] },
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/StatementLine" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "SettlementLine": {
+      "type": "object",
+      "required": ["line_no", "amount"],
+      "properties": {
+        "line_no": { "type": "integer", "minimum": 1 },
+        "trip_no": { "type": ["string", "null"] },
+        "waybill_no": { "type": ["string", "null"] },
+        "plate_no": { "type": ["string", "null"] },
+        "route": { "type": ["string", "null"] },
+        "container_type": { "type": ["string", "null"] },
+        "quantity": { "type": ["number", "null"] },
+        "unit_price": { "type": ["number", "null"] },
+        "amount": { "$ref": "#/$defs/Money" },
+        "deduction": { "type": ["number", "null"] },
+        "remark": { "type": ["string", "null"] },
+        "confidence": { "$ref": "#/$defs/Confidence" },
+        "source_page": { "type": ["integer", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "SettlementDocument": {
+      "type": "object",
+      "required": ["document_id", "carrier_name", "total_amount", "lines"],
+      "properties": {
+        "document_id": { "type": "string", "minLength": 1 },
+        "settlement_no": { "type": ["string", "null"] },
+        "carrier_name": { "type": "string", "minLength": 1 },
+        "period_start": { "type": ["string", "null"], "format": "date" },
+        "period_end": { "type": ["string", "null"], "format": "date" },
+        "currency": { "type": "string", "default": "CNY" },
+        "total_amount": { "$ref": "#/$defs/Money" },
+        "source_format": {
+          "type": "string",
+          "enum": ["pdf_scan", "image", "excel", "text", "api"]
+        },
+        "page_count": { "type": ["integer", "null"] },
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/SettlementLine" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "Difference": {
+      "type": "object",
+      "required": ["difference_id", "document_id", "type"],
+      "properties": {
+        "difference_id": { "type": "string", "minLength": 1 },
+        "document_id": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": [
+            "amount_mismatch",
+            "missing_line",
+            "extra_line",
+            "duplicate",
+            "tax_mismatch",
+            "unit_price_mismatch",
+            "quantity_mismatch",
+            "period_mismatch",
+            "customer_mismatch",
+            "rounding",
+            "no_rate"
+          ]
+        },
+        "waybill_no": { "type": ["string", "null"] },
+        "trip_no": { "type": ["string", "null"] },
+        "statement_amount": { "type": ["number", "null"] },
+        "system_amount": { "type": ["number", "null"] },
+        "delta": { "type": ["number", "null"] },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "possible_causes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "suggested_action": { "type": ["string", "null"] },
+        "confidence": { "$ref": "#/$defs/Confidence" },
+        "source": {
+          "type": "string",
+          "enum": ["rule", "llm", "llm+rule", "human"]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

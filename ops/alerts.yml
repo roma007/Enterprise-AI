@@ -1,11 +1,52 @@
 groups:
-  - name: ai-delivery
+  # ---------------------------------------------------------------- SLO 记录规则
+  - name: ai-delivery-slo
+    interval: 30s
+    rules:
+      - record: slo:http_request_error_ratio:5m
+        expr: |
+          sum(rate(http_requests_total{job="ai-delivery-backend",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="ai-delivery-backend"}[5m])), 0.001)
+
+      - record: slo:http_request_p95_ms:5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_ms_bucket{job="ai-delivery-backend"}[5m]))
+          )
+
+      - record: slo:http_request_fast_ratio:5m
+        expr: |
+          sum(rate(http_request_duration_ms_bucket{job="ai-delivery-backend",le="500"}[5m]))
+          /
+          clamp_min(sum(rate(http_request_duration_ms_count{job="ai-delivery-backend"}[5m])), 0.001)
+
+      - record: slo:pdf_job_failure_ratio:24h
+        expr: |
+          sum(pdf_jobs_failed_24h{job="ai-delivery-backend"})
+          /
+          clamp_min(
+            sum(pdf_jobs_done_24h{job="ai-delivery-backend"})
+            + sum(pdf_jobs_failed_24h{job="ai-delivery-backend"}),
+            1
+          )
+
+      - record: slo:db_pool_utilization:5m
+        expr: |
+          sum(db_pool_total_connections{job="ai-delivery-backend"})
+          /
+          clamp_min(sum(db_pool_max_connections{job="ai-delivery-backend"}), 1)
+
+  # ---------------------------------------------------------------- 告警规则
+  - name: ai-delivery-alerts
     rules:
       - alert: BackendDown
         expr: up{job="ai-delivery-backend"} == 0
         for: 2m
         labels:
           severity: critical
+          service: api
         annotations:
           summary: 'AI 交付云后端不可达'
           description: 'Prometheus 连续 2 分钟抓取 /metrics 失败，检查容器、端口与网关。'
@@ -15,51 +56,166 @@ groups:
         for: 1m
         labels:
           severity: critical
+          service: database
         annotations:
           summary: 'AI 交付云数据库不可用'
-          description: '后端 /metrics db_up=0，检查 PostgreSQL 与连接数。'
+          description: '后端 /metrics db_up=0，检查 PostgreSQL、连接数与主备状态。'
 
-      - alert: High5xxRate
-        expr: |
-          (
-            sum(rate(http_requests_total{status=~"5.."}[5m]))
-            /
-            clamp_min(sum(rate(http_requests_total[5m])), 0.001)
-          ) > 0.02
-        for: 10m
+      - alert: High5xxRateFastBurn
+        expr: slo:http_request_error_ratio:5m > 0.02
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: '5xx 错误率快速燃烧（>2%）'
+          description: '5 分钟内 5xx 比例超过 2%，优先回滚最近发布或检查数据库/依赖。'
+
+      - alert: High5xxRateSlowBurn
+        expr: slo:http_request_error_ratio:5m > 0.005
+        for: 30m
         labels:
           severity: warning
+          service: api
         annotations:
-          summary: '5xx 比例超过 2%'
-          description: '检查最近部署、数据库错误与 PDF/Chromium 异常；用 requestId 检索日志。'
+          summary: '5xx 错误率持续偏高（>0.5%）'
+          description: '30 分钟窗口超过 SLO 基线，排查错误路由与 requestId。'
 
       - alert: HighP95Latency
-        expr: |
-          histogram_quantile(
-            0.95,
-            sum by (le) (rate(http_request_duration_ms_bucket[5m]))
-          ) > 1000
+        expr: slo:http_request_p95_ms:5m > 500
         for: 10m
         labels:
           severity: warning
+          service: api
         annotations:
-          summary: 'P95 请求延迟超过 1s'
+          summary: 'P95 请求延迟超过 500ms'
           description: '查看慢请求日志与 route 维度指标，确认是否为报告/PDF/大列表。'
 
+      - alert: VeryHighP95Latency
+        expr: slo:http_request_p95_ms:5m > 1000
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: 'P95 请求延迟超过 1s'
+          description: '用户可感知的性能劣化；检查数据库连接池、Redis 与 PDF worker。'
+
       - alert: SlowRequestSpike
-        expr: sum(increase(slow_requests_total[5m])) > 20
+        expr: sum(increase(slow_requests_total{job="ai-delivery-backend"}[5m])) > 20
         for: 5m
         labels:
           severity: warning
+          service: api
         annotations:
           summary: '慢请求数量异常'
           description: '5 分钟内超过 20 次慢请求（默认阈值 500ms），结合 route 指标定位。'
 
+      - alert: RedisDown
+        expr: |
+          redis_configured{job="ai-delivery-backend"} == 1
+          and
+          redis_up{job="ai-delivery-backend"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: 'Redis 不可用（已回退内存/数据库）'
+          description: '业务不会中断，但多副本限流与会话缓存一致性下降；检查 Redis 与网络。'
+
+      - alert: DbPoolSaturated
+        expr: slo:db_pool_utilization:5m > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: '数据库连接池使用率超过 90%'
+          description: '副本数 × PG_POOL_MAX 接近上限；考虑 PgBouncer、降低池大小或扩容数据库。'
+
+      - alert: DbPoolWaiting
+        expr: sum(db_pool_waiting_requests{job="ai-delivery-backend"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: '请求在等待数据库连接'
+          description: '连接池已打满；检查慢 SQL、长事务与 PG_POOL_MAX。'
+
+      - alert: PdfQueueBacklog
+        expr: sum(pdf_jobs_pending{job="ai-delivery-backend"}) > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: pdf
+        annotations:
+          summary: 'PDF 队列积压超过 50'
+          description: '检查 pdf-worker 副本数、Chromium 可用性与任务失败原因。'
+
+      - alert: PdfJobStale
+        expr: max(pdf_jobs_oldest_pending_seconds{job="ai-delivery-backend"}) > 900
+        for: 5m
+        labels:
+          severity: warning
+          service: pdf
+        annotations:
+          summary: 'PDF 队列最老任务等待超过 15 分钟'
+          description: '可能存在 worker 全部失联或租约未回收；检查 worker 日志与 pdf_jobs.locked_at。'
+
+      - alert: PdfFailureRate
+        expr: |
+          slo:pdf_job_failure_ratio:24h > 0.05
+          and
+          (
+            sum(pdf_jobs_done_24h{job="ai-delivery-backend"})
+            + sum(pdf_jobs_failed_24h{job="ai-delivery-backend"})
+          ) >= 10
+        for: 15m
+        labels:
+          severity: warning
+          service: pdf
+        annotations:
+          summary: 'PDF 任务 24 小时失败率超过 5%'
+          description: '检查 Chromium、字体、对象存储与交付物内容；失败任务保留 error 字段。'
+
+      - alert: BackupStale
+        expr: (time() - max(ai_delivery_backup_last_success_timestamp_seconds)) > 129600
+        for: 30m
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: '数据库备份超过 36 小时未成功'
+          description: '检查 backup cron、磁盘空间、pg_dump 与异地同步；需要 textfile collector。'
+
+      - alert: BackupMetricMissing
+        expr: absent(ai_delivery_backup_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: warning
+          service: backup
+        annotations:
+          summary: '未发现备份心跳指标'
+          description: '若已配置备份，请设置 PROM_TEXTFILE_DIR 并让 node_exporter 抓取 textfile collector。'
+
+      - alert: RestoreDrillStale
+        expr: (time() - max(ai_delivery_restore_drill_last_success_timestamp_seconds)) > 7776000
+        for: 1h
+        labels:
+          severity: info
+          service: backup
+        annotations:
+          summary: '恢复演练超过 90 天未执行'
+          description: '执行 make drill-restore 与 make drill-pitr，并记录结果。'
+
       - alert: NoTraffic
-        expr: sum(rate(http_requests_total[15m])) == 0
+        expr: sum(rate(http_requests_total{job="ai-delivery-backend"}[15m])) == 0
         for: 30m
         labels:
           severity: info
+          service: api
         annotations:
           summary: '30 分钟无请求'
           description: '确认是否为非工作时段；若为工作时段，检查前端/网关。'

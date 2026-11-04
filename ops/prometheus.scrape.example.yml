@@ -1,4 +1,7 @@
-# Prometheus 抓取示例：把 backend 换成实际主机名/容器名
+# Prometheus 抓取示例
+# - 单机/固定地址：使用 static_configs
+# - Compose / 多副本：使用 dns_sd_configs，一次抓取所有 backend 副本
+# - K8s：建议用 ServiceMonitor / PodMonitor，按 Pod 抓取
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -6,12 +9,28 @@ global:
 rule_files:
   - alerts.yml
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   - job_name: ai-delivery-backend
     metrics_path: /metrics
     static_configs:
       - targets: ['backend:8788']
-    # 设置了 METRICS_TOKEN 时启用
+    # 多副本（Compose）改为 DNS 发现，确保每个副本都被抓取：
+    # dns_sd_configs:
+    #   - names: ['backend']
+    #     type: A
+    #     port: 8788
+    # 设置了 METRICS_TOKEN 时启用：
     # authorization:
     #   type: Bearer
     #   credentials_file: /etc/prometheus/ai-delivery-metrics-token
+
+  # 可选：备份/恢复演练心跳。backup.sh 与 restore-drill.sh 在
+  # PROM_TEXTFILE_DIR 下写入 .prom 文件，由 node_exporter textfile collector 暴露。
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']

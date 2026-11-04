@@ -38,6 +38,7 @@ from .store import (
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
     clear_login_failures, login_locked, record_login_failure, ops_counts,
+    save_pilot_review, get_pilot_review, list_pilot_reviews, mark_pilot_review_delivery,
     list_jobs,
     confirmed_recent, revisions, undo_confirm, NotConfirmed, VersionMismatch,
 )
@@ -1195,24 +1196,329 @@ def threeway_page():
     return FileResponse(ROOT / "static" / "threeway.html")
 
 
+
+
+# ---------------------------------------------------------------- 试点一：对账单/结算单抽取
+
+@app.post("/api/statement/extract")
+def api_statement_extract(req: dict):
+    """对账单文本/CSV/Excel 粘贴 → 标准 StatementDocument。"""
+    from .statement import parse_statement_text
+
+    text = (req.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="对账单内容为空")
+    try:
+        doc = parse_statement_text(
+            text,
+            document_id=req.get("document_id"),
+            source_format=req.get("source_format"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "data": doc,
+        "warnings": doc.get("warnings", []),
+        "meta": {
+            "engine": doc.get("engine", "rule-text-v1"),
+            "elapsed_ms": doc.get("elapsed_ms", 0),
+            "document_id": doc.get("document_id"),
+            "needs_review": doc.get("needs_review", False),
+        },
+    }
+
+
+@app.post("/api/statement/extract/file")
+async def api_statement_extract_file(
+    file: UploadFile = File(...),
+    source_format: str = "text",
+    document_id: str | None = None,
+):
+    """对账单文件：文本直读 + PDF/图片 OCR。"""
+    from .statement import norm_source_format, parse_statement_text
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="文件超过 10MB")
+    try:
+        res = ocr.extract(file.filename or "", data)
+    except ocr.OcrUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"OCR 不可用：{exc}") from exc
+    if not res.text.strip():
+        raise HTTPException(status_code=422, detail="未能从文件中识别出文字")
+    fmt = source_format if source_format != "text" else norm_source_format(None, file.filename)
+    try:
+        doc = parse_statement_text(
+            res.text,
+            document_id=document_id or (file.filename or None),
+            source_format=fmt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "data": doc,
+        "warnings": doc.get("warnings", []),
+        "meta": {
+            "needs_review": doc.get("needs_review", False),
+            "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
+        },
+    }
+
+
+@app.post("/api/settlement/extract")
+def api_settlement_extract(req: dict):
+    """结算单文本/CSV/Excel 粘贴 → 标准 SettlementDocument。"""
+    from .settlement_extract import parse_settlement_text
+
+    text = (req.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="结算单内容为空")
+    try:
+        doc = parse_settlement_text(
+            text,
+            document_id=req.get("document_id"),
+            source_format=req.get("source_format"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "data": doc,
+        "warnings": doc.get("warnings", []),
+        "meta": {
+            "engine": doc.get("engine", "rule-text-v1"),
+            "elapsed_ms": doc.get("elapsed_ms", 0),
+            "document_id": doc.get("document_id"),
+            "needs_review": doc.get("needs_review", False),
+        },
+    }
+
+
+@app.post("/api/settlement/extract/file")
+async def api_settlement_extract_file(
+    file: UploadFile = File(...),
+    source_format: str = "text",
+    document_id: str | None = None,
+):
+    """结算单文件：文本直读 + PDF/图片 OCR。"""
+    from .settlement_extract import norm_source_format, parse_settlement_text
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="文件超过 10MB")
+    try:
+        res = ocr.extract(file.filename or "", data)
+    except ocr.OcrUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"OCR 不可用：{exc}") from exc
+    if not res.text.strip():
+        raise HTTPException(status_code=422, detail="未能从文件中识别出文字")
+    fmt = source_format if source_format != "text" else norm_source_format(None, file.filename)
+    try:
+        doc = parse_settlement_text(
+            res.text,
+            document_id=document_id or (file.filename or None),
+            source_format=fmt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "data": doc,
+        "warnings": doc.get("warnings", []),
+        "meta": {
+            "needs_review": doc.get("needs_review", False),
+            "ocr": {"pages": res.pages, "used_ocr": res.used_ocr, "note": res.note},
+        },
+    }
+
+
+
+
+# ---------------------------------------------------------------- 试点一：复核页
+
+@app.get("/pilot")
+def pilot_page():
+    return FileResponse(ROOT / "static" / "pilot.html")
+
+
+@app.get("/api/pilot/demo")
+def api_pilot_demo():
+    """示例：原始文本 + 运单 + 合同价，供复核页一键加载。"""
+    base = ROOT.parent / "会客包" / "试点一" / "samples"
+    waybills = []
+    wp = base / "waybills.example.jsonl"
+    if wp.exists():
+        waybills = [json.loads(line) for line in wp.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return {
+        "statement_text": (base / "statement_raw.example.txt").read_text(encoding="utf-8"),
+        "settlement_text": (base / "settlement_raw.example.txt").read_text(encoding="utf-8"),
+        "rates_text": (base / "contract_rates.example.txt").read_text(encoding="utf-8"),
+        "waybills": waybills,
+    }
+
+
+@app.post("/api/pilot/review")
+def api_pilot_review(req: dict):
+    """抽取（或接收已抽取文档）→ 规则比对 → 差异解释。"""
+    from .diff_explain import explain_differences
+    from .reconcile import reconcile
+    from .settlement import parse_rates, settle
+    from .settlement_extract import parse_settlement_text, to_bills, to_differences as settlement_differences
+    from .statement import parse_statement_text, to_differences as statement_differences, to_reconcile_rows
+    from .store import confirmed_waybills
+
+    kind = (req.get("kind") or "statement").strip()
+    if kind not in {"statement", "settlement"}:
+        raise HTTPException(status_code=400, detail="kind 必须是 statement 或 settlement")
+
+    document = req.get("document")
+    if document:
+        doc = document
+    else:
+        text = (req.get("text") or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="内容为空")
+        try:
+            if kind == "statement":
+                doc = parse_statement_text(
+                    text, document_id=req.get("document_id"), source_format=req.get("source_format")
+                )
+            else:
+                doc = parse_settlement_text(
+                    text, document_id=req.get("document_id"), source_format=req.get("source_format")
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if kind == "statement":
+        waybills = req.get("waybills") or confirmed_waybills()
+        if not waybills:
+            raise HTTPException(status_code=409, detail="没有可比对的运单（请先确认托书，或传 waybills）")
+        result = reconcile(to_reconcile_rows(doc), waybills)
+        diffs = explain_differences(
+            statement_differences(doc, result),
+            context={"kind": "statement", "customer_name": doc.get("customer_name")},
+        )
+    else:
+        rates = req.get("rates") or parse_rates((req.get("rates_text") or "").strip())
+        if not rates:
+            raise HTTPException(status_code=400, detail="合同价表为空或无法解析")
+        result = settle(rates, to_bills(doc))
+        diffs = explain_differences(
+            settlement_differences(doc, result),
+            context={"kind": "settlement", "carrier_name": doc.get("carrier_name")},
+        )
+
+    return {
+        "ok": True,
+        "kind": kind,
+        "document": doc,
+        "result": result,
+        "differences": diffs,
+        "meta": {
+            "engine": doc.get("engine", "rule-text-v1"),
+            "needs_review": doc.get("needs_review", False),
+            "warnings": doc.get("warnings", []),
+        },
+    }
+
+
+@app.post("/api/pilot/reviews")
+def api_pilot_review_save(req: dict, request: Request):
+    """保存复核结果（本地幂等）。"""
+    kind = (req.get("kind") or "").strip()
+    document = req.get("document")
+    if kind not in {"statement", "settlement"} or not isinstance(document, dict):
+        raise HTTPException(status_code=400, detail="kind/document 不合法")
+    decisions = req.get("decisions") or []
+    differences = req.get("differences") or []
+    summary = req.get("summary") or {}
+    if not isinstance(decisions, list) or not isinstance(differences, list):
+        raise HTTPException(status_code=400, detail="differences/decisions 必须是数组")
+    return save_pilot_review(
+        kind, document, differences, decisions,
+        actor=_uid(request), summary=summary,
+    )
+
+
+@app.get("/api/pilot/reviews")
+def api_pilot_reviews(limit: int = 50):
+    return {"items": list_pilot_reviews(min(max(limit, 1), 200))}
+
+
+@app.get("/api/pilot/reviews/{review_id}")
+def api_pilot_review_get(review_id: str):
+    review = get_pilot_review(review_id)
+    if not review:
+        raise HTTPException(status_code=404, detail="复核记录不存在")
+    return review
+
+
+@app.post("/api/pilot/reviews/{review_id}/push")
+def api_pilot_review_push(review_id: str, req: dict):
+    """把复核结果写到交付平台的对账记录。"""
+    review = get_pilot_review(review_id)
+    if not review:
+        raise HTTPException(status_code=404, detail="复核记录不存在")
+    try:
+        result = delivery.push_pilot_review(review, req.get("engagement_id"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    updated = mark_pilot_review_delivery(review_id, result.get("status", "pending"), result)
+    return {"ok": result.get("ok", False), "delivery": result, "review": updated}
+
+
+# ---------------------------------------------------------------- 对账
+
 @app.post("/api/reconcile")
 def api_reconcile(req: dict):
     """账单级自动对账。
 
     入参：
+      statement       结构化对账单（可选，优先）
       statement_text  对账单原文（CSV/制表符/空格分隔均支持）
       waybills        系统运单（可选，不传则从已确认的托书里取）
+      explain         是否生成差异解释（规则 + 可选大模型）
     """
+    from .diff_explain import explain_differences
     from .reconcile import parse_statement, reconcile
+    from .statement import parse_statement_text, to_differences, to_reconcile_rows
     from .store import confirmed_waybills
 
+    statement_doc = req.get("statement")
     text = (req.get("statement_text") or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="对账单内容为空")
 
-    parsed = parse_statement(text)
-    if not parsed["rows"]:
-        raise HTTPException(status_code=422, detail="未能从对账单中解析出数据行")
+    if statement_doc:
+        rows = to_reconcile_rows(statement_doc)
+        doc = statement_doc
+        meta = {"mode": "structured", "mapping": {}, "parsed_rows": len(rows)}
+    else:
+        if not text:
+            raise HTTPException(status_code=400, detail="对账单内容为空")
+        try:
+            doc = parse_statement_text(
+                text,
+                document_id=req.get("document_id"),
+                source_format=req.get("source_format"),
+            )
+            rows = to_reconcile_rows(doc)
+            meta = {"mode": "text-v2", "mapping": {}, "parsed_rows": len(rows)}
+        except ValueError:
+            parsed = parse_statement(text)
+            if not parsed["rows"]:
+                raise HTTPException(status_code=422, detail="未能从对账单中解析出数据行")
+            rows = parsed["rows"]
+            doc = {
+                "document_id": req.get("document_id") or "stmt-live",
+                "customer_name": req.get("customer_name") or "",
+            }
+            meta = {"mode": parsed["mode"], "mapping": parsed["mapping"], "parsed_rows": len(rows)}
 
     waybills = req.get("waybills")
     if not waybills:
@@ -1221,21 +1527,39 @@ def api_reconcile(req: dict):
         raise HTTPException(status_code=409,
                             detail="系统里没有已确认的运单，无法对账（请先确认托书，或手动传 waybills）")
 
-    result = reconcile(parsed["rows"], waybills)
-    result["statement_meta"] = {"mode": parsed["mode"], "mapping": parsed["mapping"],
-                                "parsed_rows": len(parsed["rows"])}
+    result = reconcile(rows, waybills)
+    result["statement_meta"] = meta
+    if req.get("explain"):
+        diffs = explain_differences(
+            to_differences(doc, result),
+            context={"kind": "statement", "customer_name": doc.get("customer_name")},
+        )
+        result["differences"] = diffs
+        result["explanation_meta"] = {
+            "count": len(diffs),
+            "engines": sorted({d.get("source", "rule") for d in diffs}),
+        }
     return result
 
 
 @app.post("/api/reconcile/export.csv", response_class=PlainTextResponse)
 def api_reconcile_export(req: dict):
-    from .reconcile import export_csv
+    from .reconcile import export_csv, parse_statement, reconcile
+    from .statement import parse_statement_text, to_reconcile_rows
     from .store import confirmed_waybills
-    from .reconcile import parse_statement, reconcile
 
-    parsed = parse_statement((req.get("statement_text") or "").strip())
+    if req.get("statement"):
+        rows = to_reconcile_rows(req["statement"])
+    else:
+        text = (req.get("statement_text") or "").strip()
+        try:
+            doc = parse_statement_text(text, document_id=req.get("document_id"))
+            rows = to_reconcile_rows(doc)
+        except ValueError:
+            parsed = parse_statement(text)
+            rows = parsed["rows"]
     waybills = req.get("waybills") or confirmed_waybills()
-    return export_csv(reconcile(parsed["rows"], waybills))
+    return export_csv(reconcile(rows, waybills))
 
 
 @app.get("/api/reconcile/demo")
@@ -1325,24 +1649,76 @@ def aging_page():
 
 @app.post("/api/settlement")
 def api_settlement(req: dict):
-    """外协结算：合同价 × 数量 = 应付，与车队报账比对。"""
-    from .settlement import parse_bills, parse_rates, settle
+    """外协结算：合同价 × 数量 = 应付，与车队报账比对。
 
+    入参可传结构化 settlement，也可传 bill_text；explain=true 时生成差异解释。
+    """
+    from .diff_explain import explain_differences
+    from .settlement import parse_bills, parse_rates, settle
+    from .settlement_extract import parse_settlement_text, to_bills, to_differences
+
+    settlement_doc = req.get("settlement")
     rates = req.get("rates") or parse_rates((req.get("rate_text") or "").strip())
-    bills = req.get("bills") or parse_bills((req.get("bill_text") or "").strip())
+    if settlement_doc:
+        bills = to_bills(settlement_doc)
+        doc = settlement_doc
+    elif req.get("bills"):
+        bills = req.get("bills")
+        doc = {
+            "document_id": req.get("document_id") or "set-live",
+            "carrier_name": req.get("carrier_name") or (bills[0].get("carrier") if bills else ""),
+        }
+    else:
+        bill_text = (req.get("bill_text") or "").strip()
+        try:
+            doc = parse_settlement_text(
+                bill_text,
+                document_id=req.get("document_id"),
+                source_format=req.get("source_format"),
+            )
+            bills = to_bills(doc)
+        except ValueError:
+            bills = parse_bills(bill_text)
+            doc = {
+                "document_id": req.get("document_id") or "set-live",
+                "carrier_name": req.get("carrier_name") or "",
+            }
     if not rates:
         raise HTTPException(status_code=400, detail="合同价表为空或无法解析")
     if not bills:
         raise HTTPException(status_code=400, detail="车队结算单为空或无法解析")
-    return settle(rates, bills)
+
+    result = settle(rates, bills)
+    if req.get("explain"):
+        diffs = explain_differences(
+            to_differences(doc, result),
+            context={"kind": "settlement", "carrier_name": doc.get("carrier_name")},
+        )
+        result["differences"] = diffs
+        result["explanation_meta"] = {
+            "count": len(diffs),
+            "engines": sorted({d.get("source", "rule") for d in diffs}),
+        }
+    return result
 
 
 @app.post("/api/settlement/export.csv", response_class=PlainTextResponse)
 def api_settlement_export(req: dict):
     from .settlement import export_csv, parse_bills, parse_rates, settle
+    from .settlement_extract import parse_settlement_text, to_bills
 
     rates = req.get("rates") or parse_rates((req.get("rate_text") or "").strip())
-    bills = req.get("bills") or parse_bills((req.get("bill_text") or "").strip())
+    if req.get("settlement"):
+        bills = to_bills(req["settlement"])
+    elif req.get("bills"):
+        bills = req.get("bills")
+    else:
+        bill_text = (req.get("bill_text") or "").strip()
+        try:
+            doc = parse_settlement_text(bill_text, document_id=req.get("document_id"))
+            bills = to_bills(doc)
+        except ValueError:
+            bills = parse_bills(bill_text)
     return export_csv(settle(rates, bills))
 
 

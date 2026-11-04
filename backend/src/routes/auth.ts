@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { one, query } from '../db';
+import { one, query, withTransaction } from '../db';
 import { hashPassword, signToken, TOKEN_TTL_SECONDS, verifyPassword } from '../services/auth';
 import {
   clearLoginFailures,
@@ -25,6 +25,15 @@ import { assertPasswordPolicy, passwordReused, rememberPassword } from '../servi
 const loginBody = z.object({
   email: z.email(),
   password: z.string().min(1),
+  org_slug: z.string().trim().max(40).optional(),
+});
+
+const registerBody = z.object({
+  org_name: z.string().trim().min(2, '组织名称至少 2 个字'),
+  org_slug: z.string().trim().max(40).optional(),
+  name: z.string().trim().min(1, '姓名必填'),
+  email: z.email(),
+  password: z.string().min(1),
 });
 
 export async function authRoutes(app: FastifyInstance) {
@@ -36,7 +45,7 @@ export async function authRoutes(app: FastifyInstance) {
     const body = loginBody.parse(req.body);
     const key = loginKey(req.ip, body.email);
 
-    const guard = loginAllowed(key);
+    const guard = await loginAllowed(key);
     if (!guard.allowed) {
       return reply
         .code(429)
@@ -47,27 +56,66 @@ export async function authRoutes(app: FastifyInstance) {
         });
     }
 
-    const user = await one<any>(
+    const orgSlug = body.org_slug?.trim().toLowerCase() || null;
+    const matches = await query<any>(
       `SELECT u.id, u.org_id, u.name, u.email, u.status, u.password_hash,
-              o.name AS org_name, COALESCE(m.role, 'consultant') AS role
+              u.is_platform_admin,
+              o.name AS org_name, o.slug AS org_slug,
+              o.plan, o.trial_ends_at, o.plan_expires_at,
+              COALESCE(m.role, 'consultant') AS role
          FROM users u
          JOIN organizations o ON o.id = u.org_id
          LEFT JOIN memberships m ON m.user_id = u.id AND m.org_id = u.org_id
-        WHERE lower(u.email) = lower($1) AND u.status = 'active'
-        ORDER BY u.created_at
-        LIMIT 1`,
-      [body.email],
+        WHERE lower(u.email) = lower($1)
+          AND u.status = 'active' AND o.status = 'active'
+          AND ($2::text IS NULL OR o.slug = $2)
+        ORDER BY u.created_at`,
+      [body.email, orgSlug],
     );
 
+    if (matches.length > 1 && !orgSlug) {
+      return reply.code(400).send({
+        error: 'ORG_REQUIRED',
+        message: '该邮箱属于多个组织，请填写组织标识',
+      });
+    }
+
+    const user = matches[0];
     if (!user || !verifyPassword(body.password, user.password_hash)) {
-      recordLoginFailure(key);
+      await recordLoginFailure(key);
       return reply.code(401).send({
         error: 'INVALID_CREDENTIALS',
         message: '邮箱或密码不正确',
       });
     }
 
-    clearLoginFailures(key);
+    await clearLoginFailures(key);
+
+    const trialEnds = user.trial_ends_at ? new Date(user.trial_ends_at).getTime() : null;
+    if (
+      user.plan === 'trial' &&
+      trialEnds !== null &&
+      trialEnds <= Date.now() &&
+      !user.is_platform_admin
+    ) {
+      return reply.code(403).send({
+        error: 'TRIAL_EXPIRED',
+        message: '试用已到期，请联系平台升级套餐',
+      });
+    }
+    const planEnds = user.plan_expires_at ? new Date(user.plan_expires_at).getTime() : null;
+    if (
+      !['trial', 'free'].includes(user.plan) &&
+      planEnds !== null &&
+      planEnds <= Date.now() &&
+      !user.is_platform_admin
+    ) {
+      return reply.code(403).send({
+        error: 'SUBSCRIPTION_EXPIRED',
+        message: '订阅已到期，请续费后继续使用',
+      });
+    }
+
     await one(`UPDATE users SET last_login_at = now() WHERE id = $1 RETURNING id`, [user.id]);
 
     const jti = randomUUID();
@@ -77,7 +125,9 @@ export async function authRoutes(app: FastifyInstance) {
       role: user.role,
       name: user.name,
       email: user.email,
+      org_slug: user.org_slug,
       jti,
+      platform_admin: Boolean(user.is_platform_admin),
     });
     await createSession({
       jti,
@@ -96,9 +146,85 @@ export async function authRoutes(app: FastifyInstance) {
         email: user.email,
         org_id: user.org_id,
         org_name: user.org_name,
+        org_slug: user.org_slug,
         role: user.role,
+        platform_admin: Boolean(user.is_platform_admin),
       },
     };
+  });
+
+  app.post('/api/auth/register', async (req, reply) => {
+    const body = registerBody.parse(req.body);
+    assertPasswordPolicy(body.password, body.email);
+
+    const requested = body.org_slug?.trim().toLowerCase();
+    const slug = requested || `vendor-${randomUUID().slice(0, 8)}`;
+    if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(slug)) {
+      return reply.code(422).send({
+        error: 'INVALID_ORG_SLUG',
+        message: '组织标识需为 3–32 位小写字母、数字或连字符，且不能以连字符开头/结尾',
+      });
+    }
+    const exists = await one(`SELECT 1 FROM organizations WHERE lower(slug) = lower($1)`, [slug]);
+    if (exists) {
+      return reply.code(409).send({ error: 'ORG_SLUG_EXISTS', message: '组织标识已被占用' });
+    }
+
+    const created = await withTransaction(async (client) => {
+      const org = await client.query<{ id: string }>(
+        `INSERT INTO organizations
+           (name, slug, plan, status, industry_focus, trial_ends_at, billing_email)
+         VALUES ($1,$2,'trial','active','{}', now() + interval '14 days', $3)
+         RETURNING id`,
+        [body.org_name, slug, body.email.toLowerCase()],
+      );
+      const orgId = org.rows[0].id;
+      const user = await client.query<{ id: string }>(
+        `INSERT INTO users (org_id, name, email, status, password_hash)
+         VALUES ($1,$2,$3,'active',$4) RETURNING id`,
+        [orgId, body.name, body.email.toLowerCase(), hashPassword(body.password)],
+      );
+      const userId = user.rows[0].id;
+      await client.query(
+        `INSERT INTO memberships (user_id, org_id, role) VALUES ($1,$2,'admin')`,
+        [userId, orgId],
+      );
+      await rememberPassword(userId, hashPassword(body.password), client);
+      return { orgId, userId };
+    });
+
+    const jti = randomUUID();
+    const token = signToken({
+      id: created.userId,
+      org_id: created.orgId,
+      org_slug: slug,
+      role: 'admin',
+      name: body.name,
+      email: body.email.toLowerCase(),
+      jti,
+    });
+    await createSession({
+      jti,
+      userId: created.userId,
+      orgId: created.orgId,
+      ip: req.ip,
+      userAgent: String(req.headers['user-agent'] ?? '').slice(0, 500),
+      expiresAt: new Date(Date.now() + TOKEN_TTL_SECONDS * 1000).toISOString(),
+    });
+
+    return reply.code(201).send({
+      token,
+      user: {
+        id: created.userId,
+        name: body.name,
+        email: body.email.toLowerCase(),
+        org_id: created.orgId,
+        org_name: body.org_name,
+        org_slug: slug,
+        role: 'admin',
+        platform_admin: false,
+      },
+    });
   });
 
   app.post('/api/user-sessions/cleanup', async (req, reply) => {
@@ -135,7 +261,7 @@ export async function authRoutes(app: FastifyInstance) {
       .parse(req.body ?? {});
 
     const key = `change-password:${auth.sub}:${req.ip ?? 'unknown'}`;
-    const guard = loginAllowed(key);
+    const guard = await loginAllowed(key);
     if (!guard.allowed) {
       return reply
         .code(429)
@@ -148,7 +274,7 @@ export async function authRoutes(app: FastifyInstance) {
       [auth.sub, auth.org_id],
     );
     if (!user || !verifyPassword(body.old_password, user.password_hash)) {
-      recordLoginFailure(key);
+      await recordLoginFailure(key);
       return reply.code(401).send({
         error: 'INVALID_OLD_PASSWORD',
         message: '原密码不正确',
@@ -174,7 +300,7 @@ export async function authRoutes(app: FastifyInstance) {
       [auth.sub, passwordHash],
     );
     await rememberPassword(auth.sub, passwordHash);
-    clearLoginFailures(key);
+    await clearLoginFailures(key);
     const revoked = await revokeOtherSessions(auth.sub, auth.org_id, auth.jti);
     return { ok: true, revoked_others: revoked };
   });
@@ -227,8 +353,8 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const user = await one<any>(
-      `SELECT u.id, u.name, u.email, u.org_id, o.name AS org_name,
-              COALESCE(m.role, 'consultant') AS role
+      `SELECT u.id, u.name, u.email, u.org_id, o.name AS org_name, o.slug AS org_slug,
+              u.is_platform_admin, COALESCE(m.role, 'consultant') AS role
          FROM users u
          JOIN organizations o ON o.id = u.org_id
          LEFT JOIN memberships m ON m.user_id = u.id AND m.org_id = u.org_id
@@ -239,7 +365,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'UNAUTHORIZED', message: '账号不可用' });
     }
     await touchSession(auth.jti);
-    return { user };
+    return { user: { ...user, platform_admin: Boolean(user.is_platform_admin) } };
   });
 
   app.post('/api/auth/logout', async (req) => {

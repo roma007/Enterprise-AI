@@ -39,6 +39,7 @@ from .store import outbox_add, outbox_claim, outbox_mark, outbox_status
 PLATFORM_URL = os.getenv("DELIVERY_PLATFORM_URL", "").strip().rstrip("/")
 HOOK_TOKEN = os.getenv("DELIVERY_HOOK_TOKEN", "").strip()
 EXPERIMENT_ID = os.getenv("DELIVERY_EXPERIMENT_ID", "").strip()
+ENGAGEMENT_ID = os.getenv("DELIVERY_ENGAGEMENT_ID", "").strip()
 RETRY_SECONDS = int(os.getenv("DELIVERY_RETRY_SECONDS", "60") or 60)
 TIMEOUT = float(os.getenv("DELIVERY_TIMEOUT_SECONDS", "20") or 20)
 
@@ -61,6 +62,65 @@ def config_status() -> dict:
         "experiment_id": EXPERIMENT_ID,
         "missing": missing,
     }
+
+
+def pilot_config_status() -> dict:
+    missing = [k for k, v in (
+        ("DELIVERY_PLATFORM_URL", PLATFORM_URL),
+        ("DELIVERY_HOOK_TOKEN", HOOK_TOKEN),
+    ) if not v]
+    return {
+        "enabled": not missing,
+        "url": PLATFORM_URL,
+        "engagement_id": ENGAGEMENT_ID,
+        "missing": missing,
+    }
+
+
+def push_pilot_review(review: dict, engagement_id: str | None = None) -> dict:
+    """把试点一复核结果推送到交付平台的对账记录。
+
+    与评测回写不同，这里同步返回结果；失败可在页面重试。
+    """
+    status = pilot_config_status()
+    if not status["enabled"]:
+        raise ValueError(f"回写未配置：缺少 {', '.join(status['missing'])}")
+    engagement = (engagement_id or ENGAGEMENT_ID).strip()
+    if not engagement:
+        raise ValueError("未指定交付平台项目（engagement_id 或 DELIVERY_ENGAGEMENT_ID）")
+
+    payload = {
+        "idempotency_key": review.get("idempotency_key"),
+        "engagement_id": engagement,
+        "kind": review.get("kind"),
+        "document_id": review.get("document_id"),
+        "status": review.get("status") or "confirmed",
+        "summary": review.get("summary") or {},
+        "document": review.get("document") or {},
+        "differences": review.get("differences") or [],
+        "decisions": review.get("decisions") or [],
+        "source": "ai-copilot-pilot",
+    }
+    url = urljoin(PLATFORM_URL + "/", "api/hooks/copilot/reconcile")
+    try:
+        resp = httpx.post(
+            url, json=payload, timeout=TIMEOUT,
+            headers={"x-copilot-token": HOOK_TOKEN},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "status": "pending", "error": f"{type(exc).__name__}: {exc}", "response": None}
+
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if 200 <= resp.status_code < 300:
+        return {"ok": True, "status": "sent", "response": body, "error": ""}
+    if 400 <= resp.status_code < 500:
+        return {"ok": False, "status": "failed", "response": body,
+                "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
+    return {"ok": False, "status": "pending", "response": body,
+            "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
 
 
 def _payload(eval_result: dict, experiment_id: str) -> dict:

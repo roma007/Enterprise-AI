@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../../api';
 import { DependencyGraph } from '../../components/DependencyGraph';
 import { useForm, useLoad } from '../../hooks';
-import type { Dependency, EngagementDetail, Limitation, Risk } from '../../types';
+import type { Dependency, EngagementDetail, Limitation, Risk, User } from '../../types';
 import {
   Badge,
   Button,
@@ -26,6 +26,7 @@ interface Bundle {
   limitations: Limitation[];
   risks: Risk[];
   dependencies: Dependency[];
+  users: User[];
 }
 
 export function RisksTab({
@@ -38,16 +39,19 @@ export function RisksTab({
   onChanged: () => void;
 }) {
   const { data, error, loading, reload } = useLoad<Bundle>(async () => {
-    const [l, r, d] = await Promise.all([
+    const [l, r, d, u] = await Promise.all([
       api.listLimitations(engagementId),
       api.listRisks(engagementId),
       api.listDependencies(engagementId),
+      api.listUsers(),
     ]);
-    return { limitations: l.items, risks: r.items, dependencies: d.items };
+    return { limitations: l.items, risks: r.items, dependencies: d.items, users: u.items };
   }, [engagementId]);
 
   const [modal, setModal] = useState<'limitation' | 'risk' | 'dependency' | null>(null);
   const [formError, setFormError] = useState<unknown>(null);
+  const [opError, setOpError] = useState<unknown>(null);
+  const [opBusy, setOpBusy] = useState<string | null>(null);
 
   const lim = useForm({
     title: '',
@@ -64,12 +68,15 @@ export function RisksTab({
     impact: '3',
     mitigation: '',
     status: 'open',
+    owner: '',
+    due_date: '',
   });
   const dep = useForm({ from_id: '', to_id: '', type: 'requires', note: '' });
 
   const limitations = data?.limitations ?? [];
   const risks = data?.risks ?? [];
   const dependencies = data?.dependencies ?? [];
+  const users = data?.users ?? [];
   const oppOptions = detail.opportunities;
 
   const grouped = useMemo(() => {
@@ -81,6 +88,19 @@ export function RisksTab({
   const after = async () => {
     await reload();
     onChanged();
+  };
+
+  const patchRisk = async (riskId: string, patch: Record<string, unknown>) => {
+    setOpError(null);
+    setOpBusy(riskId);
+    try {
+      await api.updateRisk(riskId, patch);
+      await after();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setOpBusy(null);
+    }
   };
 
   const save = async (kind: 'limitation' | 'risk' | 'dependency') => {
@@ -106,6 +126,8 @@ export function RisksTab({
           impact: Number(risk.values.impact),
           mitigation: risk.values.mitigation || undefined,
           status: risk.values.status,
+          owner: risk.values.owner || null,
+          due_date: risk.values.due_date || null,
         });
         risk.reset();
       } else {
@@ -185,6 +207,7 @@ export function RisksTab({
           </Button>
         }
       >
+        {opError ? <ErrorBox error={opError} /> : null}
         {risks.length === 0 ? (
           <Empty title="暂无显式风险" hint="报告仍会显示从机会点字段自动识别的风险。" />
         ) : (
@@ -196,6 +219,8 @@ export function RisksTab({
                   <th>类型</th>
                   <th>概率</th>
                   <th>影响</th>
+                  <th>负责人</th>
+                  <th>截止</th>
                   <th>应对</th>
                   <th>状态</th>
                   <th />
@@ -208,6 +233,24 @@ export function RisksTab({
                     <td>{riskCategoryLabel(r.category)}</td>
                     <td>{r.probability}</td>
                     <td>{r.impact}</td>
+                    <td>
+                      <Select
+                        value={r.owner ?? ''}
+                        disabled={opBusy === r.id}
+                        onChange={(e) => void patchRisk(r.id, { owner: e.target.value || null })}
+                      >
+                        <option value="">不指定</option>
+                        {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </Select>
+                    </td>
+                    <td>
+                      <Input
+                        type="date"
+                        value={r.due_date ?? ''}
+                        disabled={opBusy === r.id}
+                        onChange={(e) => void patchRisk(r.id, { due_date: e.target.value || null })}
+                      />
+                    </td>
                     <td className="muted">{r.mitigation || '—'}</td>
                     <td>
                       <Badge tone={r.status === 'open' ? 'amber' : 'green'}>
@@ -375,6 +418,15 @@ export function RisksTab({
           </Field>
           <Field label="影响 1–5">
             <Input type="number" min={1} max={5} value={risk.values.impact} onChange={(e) => risk.set('impact', e.target.value)} />
+          </Field>
+          <Field label="负责人">
+            <Select value={risk.values.owner} onChange={(e) => risk.set('owner', e.target.value)}>
+              <option value="">不指定</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="截止日期">
+            <Input type="date" value={risk.values.due_date} onChange={(e) => risk.set('due_date', e.target.value)} />
           </Field>
           <Field label="应对" className="span-2">
             <Textarea rows={2} value={risk.values.mitigation} onChange={(e) => risk.set('mitigation', e.target.value)} />

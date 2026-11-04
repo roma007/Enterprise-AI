@@ -7,15 +7,18 @@
  * 最后生成诊断报告与一页纸，再清理掉测试数据。
  */
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { buildApp } from '../src/app';
-import { closePool, one, query } from '../src/db';
+import { closePool, one, pool, query } from '../src/db';
 import { hashPassword } from '../src/services/auth';
 import { findPdfBrowser } from '../src/services/pdf';
 import { resetShareRateLimit } from '../src/services/share_access';
 import { resetLoginGuard } from '../src/services/login_guard';
 
 process.env.LOG_LEVEL = 'silent';
+process.env.PAYMENT_PROVIDER = 'mock';
+process.env.BILLING_WEBHOOK_SECRET = 'test-billing-secret';
 const app = buildApp();
 
 const C = {
@@ -192,6 +195,42 @@ async function main() {
     );
     const authA = { authorization: `Bearer ${loginA.token}` };
     const authB = { authorization: `Bearer ${loginB.token}` };
+
+    const ctxA = await app.inject({
+      method: 'GET',
+      url: '/api/system/db-context',
+      headers: authA,
+    });
+    assert.equal(ctxA.statusCode, 200);
+    assert.equal(ctxA.json().current_user, 'ai_delivery_app', 'API 未切换到受限数据库角色');
+    assert.equal(ctxA.json().org_id, 'a0000000-0000-4000-8000-000000000001');
+    assert.equal(ctxA.json().connection_reused, true, '请求内未复用数据库连接');
+
+    const ctxB = await app.inject({
+      method: 'GET',
+      url: '/api/system/db-context',
+      headers: authB,
+    });
+    assert.equal(ctxB.json().current_user, 'ai_delivery_app');
+    assert.equal(ctxB.json().org_id, orgB!.id);
+
+    const rlsClient = await pool.connect();
+    try {
+      await rlsClient.query('BEGIN');
+      await rlsClient.query('SET LOCAL ROLE ai_delivery_app');
+      await rlsClient.query(`SELECT set_config('app.org_id', $1, true)`, [orgB!.id]);
+      const own = await rlsClient.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM clients WHERE name = '隔离测试客户'`,
+      );
+      const other = await rlsClient.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM clients WHERE name LIKE '宏远%'`,
+      );
+      assert.equal(own.rows[0].count, 1, 'RLS 看不到本组织数据');
+      assert.equal(other.rows[0].count, 0, 'RLS 未拦截其他组织数据');
+    } finally {
+      await rlsClient.query('ROLLBACK').catch(() => undefined);
+      rlsClient.release();
+    }
 
     const listA = await app.inject({ method: 'GET', url: '/api/engagements', headers: authA });
     assert.equal(listA.statusCode, 200);
@@ -950,6 +989,8 @@ async function main() {
       }
       assert.equal(job?.status, 'done', `PDF 任务状态 ${job?.status}：${job?.error ?? ''}`);
       assert.ok(job.cache_key, 'PDF 任务缺少 cache_key');
+      assert.ok(job.attempts >= 1, 'PDF 任务未经过队列认领');
+      assert.ok(job.locked_by, 'PDF 任务缺少 worker 标识');
 
       const jobFile = await app.inject({
         method: 'GET',
@@ -2413,7 +2454,7 @@ async function main() {
     try {
       process.env.LOGIN_MAX_FAILURES = '2';
       process.env.LOGIN_WINDOW_MS = '60000';
-      resetLoginGuard();
+      await resetLoginGuard();
 
       const attempt = (password: string) =>
         app.inject({
@@ -2435,7 +2476,7 @@ async function main() {
       const correctButBlocked = await attempt('demo1234');
       assert.equal(correctButBlocked.statusCode, 429, '限流期间正确密码也应被拦截');
 
-      resetLoginGuard();
+      await resetLoginGuard();
       const afterReset = await attempt('demo1234');
       assert.equal(afterReset.statusCode, 200, '重置后正确密码应放行');
     } finally {
@@ -2443,7 +2484,7 @@ async function main() {
       else process.env.LOGIN_MAX_FAILURES = previousMax;
       if (previousWindow === undefined) delete process.env.LOGIN_WINDOW_MS;
       else process.env.LOGIN_WINDOW_MS = previousWindow;
-      resetLoginGuard();
+      await resetLoginGuard();
     }
   });
 
@@ -2764,6 +2805,765 @@ async function main() {
     assert.equal(newLogin.statusCode, 200, '新密码应可登录');
 
     await query(`DELETE FROM users WHERE id = $1`, [userId]);
+  });
+
+  await check('供应商租户：自助注册、组织标识登录与数据隔离', async () => {
+    const slugB = `tenant-${stamp}`.slice(0, 32);
+    const slugC = `tenant-c-${stamp}`.slice(0, 32);
+    const email = `owner-${stamp}@vendor.test`;
+    const password = 'TenantPass1';
+
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: `供应商B-${stamp}`,
+        org_slug: slugB,
+        name: `管理员B-${stamp}`,
+        email,
+        password,
+      },
+    });
+    assert.equal(registered.statusCode, 201, `注册失败：${registered.body}`);
+    const reg = registered.json();
+    assert.equal(reg.user.org_slug, slugB);
+    assert.equal(reg.user.role, 'admin');
+    const tokenB = reg.token;
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { authorization: `Bearer ${tokenB}` },
+    });
+    assert.equal(me.statusCode, 200);
+    assert.equal(me.json().user.org_slug, slugB);
+
+    const clientB = await app.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: { authorization: `Bearer ${tokenB}` },
+      payload: { name: `租户B客户-${stamp}`, industry: 'logistics' },
+    });
+    assert.equal(clientB.statusCode, 201, `创建租户B客户失败：${clientB.body}`);
+
+    const zhangLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'zhang@hengzhi.ai', password: 'demo1234' },
+    });
+    const tokenA = zhangLogin.json().token;
+    const listA = await app.inject({
+      method: 'GET',
+      url: '/api/clients?limit=500',
+      headers: { authorization: `Bearer ${tokenA}` },
+    });
+    assert.ok(
+      !listA.json().items.some((c: any) => c.name === `租户B客户-${stamp}`),
+      '租户 A 看到了租户 B 的客户',
+    );
+    const listB = await app.inject({
+      method: 'GET',
+      url: '/api/clients?limit=500',
+      headers: { authorization: `Bearer ${tokenB}` },
+    });
+    assert.ok(listB.json().items.some((c: any) => c.name === `租户B客户-${stamp}`));
+
+    const duplicateSlug = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: '重复标识组织',
+        org_slug: slugB,
+        name: '重复管理员',
+        email: `dup-${stamp}@vendor.test`,
+        password: 'TenantPass2',
+      },
+    });
+    assert.equal(duplicateSlug.statusCode, 409, '重复组织标识应 409');
+    assert.equal(duplicateSlug.json().error, 'ORG_SLUG_EXISTS');
+
+    const registeredC = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: `供应商C-${stamp}`,
+        org_slug: slugC,
+        name: `管理员C-${stamp}`,
+        email,
+        password: 'TenantPass2',
+      },
+    });
+    assert.equal(registeredC.statusCode, 201, `注册租户C失败：${registeredC.body}`);
+
+    const ambiguous = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email, password },
+    });
+    assert.equal(ambiguous.statusCode, 400, '同邮箱多组织未填标识应 400');
+    assert.equal(ambiguous.json().error, 'ORG_REQUIRED');
+
+    for (const slug of [slugB, slugC]) {
+      const scoped = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email, password: slug === slugB ? password : 'TenantPass2', org_slug: slug },
+      });
+      assert.equal(scoped.statusCode, 200, `组织标识 ${slug} 登录失败`);
+    }
+
+    await query(`DELETE FROM organizations WHERE lower(slug) = ANY($1::text[])`, [
+      [slugB, slugC],
+    ]);
+  });
+
+  await check('平台租户：列表、组织设置、暂停/恢复与权限', async () => {
+    const adminLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    assert.equal(adminLogin.statusCode, 200);
+    const admin = adminLogin.json();
+    assert.equal(admin.user.platform_admin, true, '平台管理员标记缺失');
+    const adminHeaders = { authorization: `Bearer ${admin.token}` };
+
+    const zhangLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'zhang@hengzhi.ai', password: 'demo1234' },
+    });
+    assert.equal(zhangLogin.json().user.platform_admin, false);
+    const zhangHeaders = { authorization: `Bearer ${zhangLogin.json().token}` };
+
+    const tenants = await app.inject({
+      method: 'GET',
+      url: '/api/platform/tenants',
+      headers: adminHeaders,
+    });
+    assert.equal(tenants.statusCode, 200);
+    assert.ok(tenants.json().items.some((t: any) => t.slug === 'hengzhi'));
+
+    const storage = await app.inject({
+      method: 'GET',
+      url: '/api/system/storage',
+      headers: adminHeaders,
+    });
+    assert.equal(storage.statusCode, 200);
+    assert.equal(storage.json().driver, 'local', '测试环境应为 local 存储');
+
+    const cache = await app.inject({
+      method: 'GET',
+      url: '/api/system/cache',
+      headers: adminHeaders,
+    });
+    assert.equal(cache.statusCode, 200);
+    if (process.env.REDIS_URL) {
+      assert.equal(cache.json().driver, 'redis', '配置 REDIS_URL 时应使用 Redis');
+    } else {
+      assert.equal(cache.json().driver, 'memory', '未配置 Redis 时应回退内存');
+    }
+
+    const denied = await app.inject({
+      method: 'GET',
+      url: '/api/platform/tenants',
+      headers: zhangHeaders,
+    });
+    assert.equal(denied.statusCode, 403, '非平台管理员不应查看租户列表');
+
+    const slug = `platform-${stamp}`.slice(0, 32);
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: `平台测试供应商-${stamp}`,
+        org_slug: slug,
+        name: `租户管理员-${stamp}`,
+        email: `platform-${stamp}@vendor.test`,
+        password: 'PlatformPass1',
+      },
+    });
+    assert.equal(registered.statusCode, 201, registered.body);
+    const tenant = registered.json();
+    const tenantHeaders = { authorization: `Bearer ${tenant.token}` };
+
+    const org = await app.inject({
+      method: 'GET',
+      url: '/api/org',
+      headers: tenantHeaders,
+    });
+    assert.equal(org.statusCode, 200);
+    assert.equal(org.json().item.slug, slug);
+    assert.equal(org.json().item.status, 'active');
+
+    const renamed = await app.inject({
+      method: 'PATCH',
+      url: '/api/org',
+      headers: tenantHeaders,
+      payload: { name: `平台测试供应商-改名-${stamp}` },
+    });
+    assert.equal(renamed.statusCode, 200, renamed.body);
+    assert.match(renamed.json().item.name, /改名/);
+
+    const consultant = await app.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: tenantHeaders,
+      payload: {
+        name: '租户顾问',
+        email: `tenant-cons-${stamp}@vendor.test`,
+        role: 'consultant',
+        password: 'Consultant1',
+      },
+    });
+    assert.equal(consultant.statusCode, 201, consultant.body);
+    const consultantLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: `tenant-cons-${stamp}@vendor.test`, password: 'Consultant1' },
+    });
+    const consultantDenied = await app.inject({
+      method: 'PATCH',
+      url: '/api/org',
+      headers: { authorization: `Bearer ${consultantLogin.json().token}` },
+      payload: { name: '越权改名' },
+    });
+    assert.equal(consultantDenied.statusCode, 403, '顾问不应修改组织设置');
+
+    const tenantBenchmarkDenied = await app.inject({
+      method: 'POST',
+      url: '/api/benchmarks',
+      headers: tenantHeaders,
+      payload: {
+        metric_key: 'tenant_metric',
+        metric_name: '租户越权指标',
+        unit: '%',
+        direction: 'higher_better',
+        p25: 1,
+        p50: 2,
+        p75: 3,
+        source: 'tenant',
+        year: 2026,
+      },
+    });
+    assert.equal(tenantBenchmarkDenied.statusCode, 403, '租户不应修改平台标杆字典');
+
+    const suspended = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${tenant.user.org_id}`,
+      headers: adminHeaders,
+      payload: { status: 'suspended' },
+    });
+    assert.equal(suspended.statusCode, 200, suspended.body);
+    assert.equal(suspended.json().item.status, 'suspended');
+
+    const tenantMe = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: tenantHeaders,
+    });
+    assert.equal(tenantMe.statusCode, 401, '暂停租户后现有会话应失效');
+    const suspendedLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: tenant.user.email, password: 'PlatformPass1' },
+    });
+    assert.equal(suspendedLogin.statusCode, 401, '暂停租户不应能登录');
+
+    const activated = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${tenant.user.org_id}`,
+      headers: adminHeaders,
+      payload: { status: 'active' },
+    });
+    assert.equal(activated.statusCode, 200);
+    const reactivatedLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: tenant.user.email, password: 'PlatformPass1' },
+    });
+    assert.equal(reactivatedLogin.statusCode, 200, '恢复后应可登录');
+
+    const selfSuspend = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${admin.user.org_id}`,
+      headers: adminHeaders,
+      payload: { status: 'suspended' },
+    });
+    assert.equal(selfSuspend.statusCode, 422, '平台管理员不应暂停自己所属组织');
+
+    await query(`DELETE FROM organizations WHERE id = $1`, [tenant.user.org_id]);
+  });
+
+  await check('租户套餐：试用期、配额与升级', async () => {
+    const adminLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'admin@hengzhi.ai', password: 'demo1234', org_slug: 'hengzhi' },
+    });
+    assert.equal(adminLogin.statusCode, 200);
+    const adminHeaders = { authorization: `Bearer ${adminLogin.json().token}` };
+
+    const zhangLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'zhang@hengzhi.ai', password: 'demo1234' },
+    });
+    const zhangHeaders = { authorization: `Bearer ${zhangLogin.json().token}` };
+
+    const plans = await app.inject({
+      method: 'GET',
+      url: '/api/platform/plans',
+      headers: adminHeaders,
+    });
+    assert.equal(plans.statusCode, 200);
+    assert.ok(plans.json().items.some((p: any) => p.code === 'trial'));
+    assert.ok(plans.json().items.some((p: any) => p.code === 'pro'));
+
+    const deniedPlans = await app.inject({
+      method: 'GET',
+      url: '/api/platform/plans',
+      headers: zhangHeaders,
+    });
+    assert.equal(deniedPlans.statusCode, 403, '非平台管理员不应查看套餐目录');
+
+    const billing = await app.inject({
+      method: 'GET',
+      url: '/api/org/billing',
+      headers: zhangHeaders,
+    });
+    assert.equal(billing.statusCode, 200);
+    assert.equal(billing.json().item.plan, 'pro');
+    assert.equal(billing.json().item.plan_status, 'active');
+    assert.ok(billing.json().item.limits.clients >= 1);
+    assert.ok(billing.json().item.usage.users >= 1);
+
+    const slug = `billing-${stamp}`.slice(0, 32);
+    const password = 'BillingPass1';
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: `套餐测试供应商-${stamp}`,
+        org_slug: slug,
+        name: `套餐管理员-${stamp}`,
+        email: `billing-${stamp}@vendor.test`,
+        password,
+      },
+    });
+    assert.equal(registered.statusCode, 201, registered.body);
+    const tenant = registered.json();
+    const tenantHeaders = { authorization: `Bearer ${tenant.token}` };
+    const orgId = tenant.user.org_id;
+
+    const trialBilling = await app.inject({
+      method: 'GET',
+      url: '/api/org/billing',
+      headers: tenantHeaders,
+    });
+    assert.equal(trialBilling.statusCode, 200);
+    assert.equal(trialBilling.json().item.plan, 'trial');
+    assert.equal(trialBilling.json().item.plan_status, 'trialing');
+    assert.ok(trialBilling.json().item.days_left > 0, '新租户应有试用剩余天数');
+
+    const userLimit = trialBilling.json().item.limits.users;
+    for (let i = 1; i < userLimit; i += 1) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users',
+        headers: tenantHeaders,
+        payload: {
+          name: `试用用户${i}`,
+          email: `trial-user-${i}-${stamp}@vendor.test`,
+          role: 'consultant',
+          password: 'TrialUser1',
+        },
+      });
+      assert.equal(created.statusCode, 201, created.body);
+    }
+    const overUser = await app.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: tenantHeaders,
+      payload: {
+        name: '超额用户',
+        email: `trial-over-${stamp}@vendor.test`,
+        role: 'consultant',
+        password: 'TrialUser1',
+      },
+    });
+    assert.equal(overUser.statusCode, 403, overUser.body);
+    assert.equal(overUser.json().error, 'QUOTA_EXCEEDED');
+    assert.equal(overUser.json().details.resource, 'users');
+    assert.equal(overUser.json().details.limit, userLimit);
+
+    const clientLimit = trialBilling.json().item.limits.clients;
+    for (let i = 0; i < clientLimit; i += 1) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/clients',
+        headers: tenantHeaders,
+        payload: { name: `试用客户${i}` },
+      });
+      assert.equal(created.statusCode, 201, created.body);
+    }
+    const overClient = await app.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: tenantHeaders,
+      payload: { name: '超额客户' },
+    });
+    assert.equal(overClient.statusCode, 403, overClient.body);
+    assert.equal(overClient.json().error, 'QUOTA_EXCEEDED');
+    assert.equal(overClient.json().details.resource, 'clients');
+    assert.equal(overClient.json().details.limit, clientLimit);
+
+    const upgraded = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${orgId}`,
+      headers: adminHeaders,
+      payload: { plan: 'pro' },
+    });
+    assert.equal(upgraded.statusCode, 200, upgraded.body);
+    assert.equal(upgraded.json().item.plan, 'pro');
+    assert.equal(upgraded.json().item.plan_name, '专业版');
+
+    const afterUpgrade = await app.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: tenantHeaders,
+      payload: { name: '升级后客户' },
+    });
+    assert.equal(afterUpgrade.statusCode, 201, afterUpgrade.body);
+
+    const expired = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${orgId}`,
+      headers: adminHeaders,
+      payload: { plan: 'trial', trial_ends_at: '2020-01-01T00:00:00.000Z' },
+    });
+    assert.equal(expired.statusCode, 200, expired.body);
+    assert.equal(expired.json().item.trial_days_left, 0);
+
+    const expiredLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: tenant.user.email, password, org_slug: slug },
+    });
+    assert.equal(expiredLogin.statusCode, 403, expiredLogin.body);
+    assert.equal(expiredLogin.json().error, 'TRIAL_EXPIRED');
+
+    const extended = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${orgId}`,
+      headers: adminHeaders,
+      payload: {
+        plan: 'trial',
+        trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString(),
+      },
+    });
+    assert.equal(extended.statusCode, 200, extended.body);
+    const loginAgain = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: tenant.user.email, password, org_slug: slug },
+    });
+    assert.equal(loginAgain.statusCode, 200, '延长试用后应可重新登录');
+
+    const invalidPlan = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${orgId}`,
+      headers: adminHeaders,
+      payload: { plan: 'not-a-plan' },
+    });
+    assert.equal(invalidPlan.statusCode, 400, '非法套餐应在校验层拒绝');
+
+    await query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
+  });
+
+  await check('租户账单：生成、模拟支付、手动确认、回调与订阅到期', async () => {
+    const adminLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'admin@hengzhi.ai', password: 'demo1234', org_slug: 'hengzhi' },
+    });
+    const adminHeaders = { authorization: `Bearer ${adminLogin.json().token}` };
+
+    const slug = `invoice-${stamp}`.slice(0, 32);
+    const password = 'InvoicePass1';
+    const email = `invoice-${stamp}@vendor.test`;
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: `账单支付供应商-${stamp}`,
+        org_slug: slug,
+        name: `账单支付管理员-${stamp}`,
+        email,
+        password,
+      },
+    });
+    assert.equal(registered.statusCode, 201, registered.body);
+    const tenant = registered.json();
+    const tenantHeaders = { authorization: `Bearer ${tenant.token}` };
+    const orgId = tenant.user.org_id;
+
+    const checkout = await app.inject({
+      method: 'POST',
+      url: '/api/org/billing/checkout',
+      headers: tenantHeaders,
+      payload: { plan: 'pro', cycle: 'monthly' },
+    });
+    assert.equal(checkout.statusCode, 201, checkout.body);
+    const invoice = checkout.json().item;
+    assert.equal(invoice.status, 'pending');
+    assert.equal(invoice.plan, 'pro');
+    assert.equal(invoice.cycle, 'monthly');
+    assert.equal(Number(invoice.amount), 2999);
+    assert.equal(checkout.json().provider, 'mock');
+    assert.equal(checkout.json().mock, true);
+
+    const invoices = await app.inject({
+      method: 'GET',
+      url: '/api/org/billing/invoices',
+      headers: tenantHeaders,
+    });
+    assert.equal(invoices.statusCode, 200);
+    assert.ok(invoices.json().items.some((i: any) => i.id === invoice.id));
+
+    const platformInvoices = await app.inject({
+      method: 'GET',
+      url: '/api/platform/invoices',
+      headers: adminHeaders,
+    });
+    assert.equal(platformInvoices.statusCode, 200);
+    assert.ok(
+      platformInvoices.json().items.some((i: any) => i.id === invoice.id && i.org_slug === slug),
+    );
+
+    const paid = await app.inject({
+      method: 'POST',
+      url: `/api/org/billing/invoices/${invoice.id}/pay`,
+      headers: tenantHeaders,
+    });
+    assert.equal(paid.statusCode, 200, paid.body);
+    assert.equal(paid.json().item.status, 'paid');
+    assert.equal(paid.json().billing.plan, 'pro');
+    assert.ok(paid.json().billing.plan_expires_at, '支付后应有订阅到期日');
+
+    const paidAgain = await app.inject({
+      method: 'POST',
+      url: `/api/org/billing/invoices/${invoice.id}/pay`,
+      headers: tenantHeaders,
+    });
+    assert.equal(paidAgain.statusCode, 200);
+    assert.equal(paidAgain.json().item.status, 'paid', '重复支付应幂等');
+
+    const billing = await app.inject({
+      method: 'GET',
+      url: '/api/org/billing',
+      headers: tenantHeaders,
+    });
+    assert.equal(billing.json().item.plan_status, 'active');
+    assert.equal(billing.json().item.limits.clients, 50);
+
+    const expired = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${orgId}`,
+      headers: adminHeaders,
+      payload: { plan_expires_at: '2020-01-01T00:00:00.000Z' },
+    });
+    assert.equal(expired.statusCode, 200, expired.body);
+    const expiredLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email, password, org_slug: slug },
+    });
+    assert.equal(expiredLogin.statusCode, 403, expiredLogin.body);
+    assert.equal(expiredLogin.json().error, 'SUBSCRIPTION_EXPIRED');
+
+    const extended = await app.inject({
+      method: 'PATCH',
+      url: `/api/platform/tenants/${orgId}`,
+      headers: adminHeaders,
+      payload: { plan_expires_at: new Date(Date.now() + 30 * 86400000).toISOString() },
+    });
+    assert.equal(extended.statusCode, 200, extended.body);
+    const loginAgain = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email, password, org_slug: slug },
+    });
+    assert.equal(loginAgain.statusCode, 200, '续费后应可重新登录');
+
+    // 平台手动确认收款
+    const yearly = await app.inject({
+      method: 'POST',
+      url: '/api/org/billing/checkout',
+      headers: tenantHeaders,
+      payload: { cycle: 'yearly' },
+    });
+    assert.equal(yearly.statusCode, 201, yearly.body);
+    const manualPaid = await app.inject({
+      method: 'POST',
+      url: `/api/platform/invoices/${yearly.json().item.id}/mark-paid`,
+      headers: adminHeaders,
+      payload: { external_id: 'bank-transfer-1' },
+    });
+    assert.equal(manualPaid.statusCode, 200, manualPaid.body);
+    assert.equal(manualPaid.json().item.status, 'paid');
+    assert.equal(manualPaid.json().item.provider, 'manual');
+
+    // 作废
+    const pending = await app.inject({
+      method: 'POST',
+      url: '/api/org/billing/checkout',
+      headers: tenantHeaders,
+      payload: { cycle: 'monthly' },
+    });
+    const voided = await app.inject({
+      method: 'POST',
+      url: `/api/platform/invoices/${pending.json().item.id}/void`,
+      headers: adminHeaders,
+    });
+    assert.equal(voided.statusCode, 200, voided.body);
+    assert.equal(voided.json().item.status, 'void');
+
+    // 支付回调：签名校验 + 入账
+    const callbackInvoice = await app.inject({
+      method: 'POST',
+      url: '/api/org/billing/checkout',
+      headers: tenantHeaders,
+      payload: { cycle: 'monthly' },
+    });
+    const callbackBody = {
+      invoice_id: callbackInvoice.json().item.id,
+      status: 'paid',
+      external_id: 'gateway-1',
+    };
+    const signature = createHmac('sha256', 'test-billing-secret')
+      .update(`${callbackBody.invoice_id}:${callbackBody.status}:${callbackBody.external_id}`)
+      .digest('hex');
+
+    const badCallback = await app.inject({
+      method: 'POST',
+      url: '/api/billing/callback',
+      headers: { 'x-billing-signature': 'bad-signature' },
+      payload: callbackBody,
+    });
+    assert.equal(badCallback.statusCode, 401);
+
+    const callback = await app.inject({
+      method: 'POST',
+      url: '/api/billing/callback',
+      headers: { 'x-billing-signature': signature },
+      payload: callbackBody,
+    });
+    assert.equal(callback.statusCode, 200, callback.body);
+    assert.equal(callback.json().item.status, 'paid');
+    assert.equal(callback.json().item.provider, 'callback');
+
+    await query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
+  });
+
+  await check('租户导出与删除：影响评估、权限与级联清理', async () => {
+    const adminLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    const adminToken = adminLogin.json().token;
+    const adminHeaders = { authorization: `Bearer ${adminToken}` };
+
+    const slug = `lifecycle-${stamp}`.slice(0, 32);
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        org_name: `生命周期租户-${stamp}`,
+        org_slug: slug,
+        name: `生命周期管理员-${stamp}`,
+        email: `lifecycle-${stamp}@vendor.test`,
+        password: 'LifecyclePass1',
+      },
+    });
+    assert.equal(registered.statusCode, 201, registered.body);
+    const tenant = registered.json();
+    const tenantHeaders = { authorization: `Bearer ${tenant.token}` };
+    const tenantId = tenant.user.org_id;
+
+    const client = await app.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: tenantHeaders,
+      payload: { name: `生命周期客户-${stamp}`, industry: 'logistics' },
+    });
+    assert.equal(client.statusCode, 201, client.body);
+
+    const impact = await app.inject({
+      method: 'GET',
+      url: `/api/platform/tenants/${tenantId}/impact`,
+      headers: adminHeaders,
+    });
+    assert.equal(impact.statusCode, 200);
+    assert.ok(impact.json().counts.users >= 1);
+    assert.ok(impact.json().counts.clients >= 1);
+
+    const exported = await app.inject({
+      method: 'GET',
+      url: `/api/platform/tenants/${tenantId}/export`,
+      headers: adminHeaders,
+    });
+    assert.equal(exported.statusCode, 200);
+    assert.match(String(exported.headers['content-type']), /application\/json/);
+    const exportData = JSON.parse(exported.body);
+    assert.equal(exportData.organization.slug, slug);
+    assert.ok(exportData.users.some((u: any) => u.email === `lifecycle-${stamp}@vendor.test`));
+    assert.ok(exportData.clients.some((c: any) => c.name === `生命周期客户-${stamp}`));
+
+    const zhangLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'zhang@hengzhi.ai', password: 'demo1234' },
+    });
+    const denied = await app.inject({
+      method: 'GET',
+      url: `/api/platform/tenants/${tenantId}/export`,
+      headers: { authorization: `Bearer ${zhangLogin.json().token}` },
+    });
+    assert.equal(denied.statusCode, 403, '非平台管理员不应导出租户');
+
+    const noConfirm = await app.inject({
+      method: 'DELETE',
+      url: `/api/platform/tenants/${tenantId}`,
+      headers: adminHeaders,
+    });
+    assert.equal(noConfirm.statusCode, 422);
+    assert.equal(noConfirm.json().error, 'DELETE_CONFIRM_REQUIRED');
+
+    const selfDelete = await app.inject({
+      method: 'DELETE',
+      url: `/api/platform/tenants/${adminLogin.json().user.org_id}?confirm=hengzhi`,
+      headers: adminHeaders,
+    });
+    assert.equal(selfDelete.statusCode, 422, '平台管理员不应删除自己所属组织');
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/api/platform/tenants/${tenantId}?confirm=${encodeURIComponent(slug)}`,
+      headers: adminHeaders,
+    });
+    assert.equal(deleted.statusCode, 200, deleted.body);
+    assert.equal(deleted.json().deleted, slug);
+
+    const remaining = await one(`SELECT id FROM organizations WHERE id = $1`, [tenantId]);
+    assert.equal(remaining, null, '租户未删除');
+    const tenantLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: `lifecycle-${stamp}@vendor.test`, password: 'LifecyclePass1' },
+    });
+    assert.equal(tenantLogin.statusCode, 401, '删除后租户不应能登录');
   });
 
   await check('密码策略：复杂度、历史密码与管理员重置', async () => {
@@ -3122,6 +3922,8 @@ async function main() {
   await check('指标：Prometheus 输出、数据库状态与访问令牌', async () => {
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     assert.equal(health.statusCode, 200);
+    assert.ok(health.headers['x-app-version'], '响应应带 x-app-version');
+    assert.match(String(health.headers['x-request-id']), /[A-Za-z0-9._-]{8,128}/);
 
     const metrics = await app.inject({ method: 'GET', url: '/metrics' });
     assert.equal(metrics.statusCode, 200);
@@ -3132,6 +3934,11 @@ async function main() {
     assert.match(metrics.body, /slow_requests_total \d+/);
     assert.match(metrics.body, /db_up 1/);
     assert.match(metrics.body, /process_uptime_seconds \d+/);
+    assert.match(metrics.body, /db_pool_total_connections \d+/);
+    assert.match(metrics.body, /db_pool_max_connections \d+/);
+    assert.match(metrics.body, /redis_configured [01]/);
+    assert.match(metrics.body, /pdf_jobs_pending \d+/);
+    assert.match(metrics.body, /pdf_jobs_oldest_pending_seconds \d+/);
 
     process.env.METRICS_TOKEN = 'test-metrics-token';
     try {

@@ -301,6 +301,9 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
 | **账龄与催收**：四档账龄 + 客户风险分级 + 催收话术 | `app/aging.py` | `/aging`、`/api/aging/*` |
 | **外协结算**：合同价 × 数量 = 应付，与车队报账比对 | `app/settlement.py` | `/settlement`、`/api/settlement/*` |
+| **对账单/结算单抽取（试点一）**：文本/CSV + PDF/图片 OCR → 标准 JSON；差异解释可接大模型 | `app/statement.py`、`app/settlement_extract.py`、`app/diff_explain.py` | `/api/statement/extract`、`/api/settlement/extract`、`explain=true` |
+| **试点一闭环**：抽取 → 规则比对 → 解释 → 评测 | `scripts/pilot_flow.py`、`scripts/eval_statement_pilot.py` | `python3 ai-copilot/scripts/pilot_flow.py` |
+| **试点一复核页**：原文件/文本 + 抽取字段 + 差异解释 + 保存/回写 | `static/pilot.html` | `/pilot` |
 | **一键演示页**：按会客顺序串起 13 步全链路（含地址、费用、撤销） | `static/demo.html` | `/demo`、`make demo` |
 | **登录与角色（A1）**：admin / operator / finance / viewer，会话可撤销 | `app/auth.py` | `/login`、`/api/auth/*` |
 | **用户管理（A1）**：建用户、改角色、停用（停用即踢下线） | `app/main.py` | `/users`（仅管理员） |

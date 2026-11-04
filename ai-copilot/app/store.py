@@ -160,6 +160,22 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     first_at      TEXT NOT NULL,
     locked_until  TEXT
 );
+CREATE TABLE IF NOT EXISTS pilot_reviews (
+    id                TEXT PRIMARY KEY,
+    ts                TEXT NOT NULL,
+    actor             TEXT,
+    kind              TEXT NOT NULL,
+    document_id       TEXT,
+    status            TEXT NOT NULL DEFAULT 'confirmed',
+    summary_json      TEXT,
+    document_json     TEXT,
+    differences_json  TEXT,
+    decisions_json    TEXT,
+    idempotency_key   TEXT NOT NULL UNIQUE,
+    delivery_status   TEXT NOT NULL DEFAULT 'not_pushed',
+    delivery_response TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pilot_reviews_ts ON pilot_reviews(ts);
 """
 
 # 增量列：老库自动补，不用重建
@@ -1690,3 +1706,89 @@ def dump_feedback(limit: int = 500) -> str:
             (limit,),
         ).fetchall()
     return json.dumps([dict(r) for r in rows], ensure_ascii=False, indent=2)
+
+
+def _review_to_dict(row) -> dict:
+    d = dict(row)
+    for key, default in (
+        ("summary_json", "{}"),
+        ("document_json", "{}"),
+        ("differences_json", "[]"),
+        ("decisions_json", "[]"),
+    ):
+        raw = d.pop(key, None)
+        try:
+            d[key[:-5]] = json.loads(raw or default)
+        except (TypeError, json.JSONDecodeError):
+            d[key[:-5]] = json.loads(default)
+    return d
+
+
+def save_pilot_review(
+    kind: str,
+    document: dict,
+    differences: list[dict],
+    decisions: list[dict],
+    actor: str = "",
+    summary: dict | None = None,
+    status: str = "confirmed",
+) -> dict:
+    """保存试点一复核结果；按内容幂等。"""
+    material = json.dumps(
+        {"kind": kind, "document": document, "differences": differences, "decisions": decisions},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    key = hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
+    review_id = uuid.uuid4().hex[:12]
+    with _conn() as conn:
+        existing = conn.execute(
+            "SELECT * FROM pilot_reviews WHERE idempotency_key = ?", (key,)
+        ).fetchone()
+        if existing:
+            return {**_review_to_dict(existing), "duplicate": True}
+        conn.execute(
+            "INSERT INTO pilot_reviews"
+            " (id, ts, actor, kind, document_id, status, summary_json, document_json,"
+            "  differences_json, decisions_json, idempotency_key)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                review_id,
+                _now(),
+                actor,
+                kind,
+                str(document.get("document_id") or ""),
+                status,
+                json.dumps(summary or {}, ensure_ascii=False),
+                json.dumps(document, ensure_ascii=False),
+                json.dumps(differences, ensure_ascii=False),
+                json.dumps(decisions, ensure_ascii=False),
+                key,
+            ),
+        )
+    return {**get_pilot_review(review_id), "duplicate": False}
+
+
+def get_pilot_review(review_id: str) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM pilot_reviews WHERE id = ?", (review_id,)
+        ).fetchone()
+    return _review_to_dict(row) if row else None
+
+
+def list_pilot_reviews(limit: int = 50) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM pilot_reviews ORDER BY ts DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [_review_to_dict(r) for r in rows]
+
+
+def mark_pilot_review_delivery(review_id: str, status: str, response: dict | None) -> dict | None:
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE pilot_reviews SET delivery_status = ?, delivery_response = ? WHERE id = ?",
+            (status, json.dumps(response or {}, ensure_ascii=False), review_id),
+        )
+    return get_pilot_review(review_id)

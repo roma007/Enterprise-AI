@@ -35,6 +35,19 @@
         }
       }
     },
+    "/api/auth/register": {
+      "post": {
+        "summary": "POST /api/auth/register",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/user-sessions/cleanup": {
       "post": {
         "summary": "POST /api/user-sessions/cleanup",
@@ -4458,6 +4471,319 @@
         }
       }
     },
+    "/api/platform/tenants": {
+      "get": {
+        "summary": "GET /api/platform/tenants",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/plans": {
+      "get": {
+        "summary": "GET /api/platform/plans",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/tenants/{id}": {
+      "patch": {
+        "summary": "PATCH /api/platform/tenants/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "DELETE /api/platform/tenants/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/tenants/{id}/impact": {
+      "get": {
+        "summary": "GET /api/platform/tenants/:id/impact",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/tenants/{id}/export": {
+      "get": {
+        "summary": "GET /api/platform/tenants/:id/export",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/org": {
+      "get": {
+        "summary": "GET /api/org",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "patch": {
+        "summary": "PATCH /api/org",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/org/billing": {
+      "get": {
+        "summary": "GET /api/org/billing",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/org/billing/invoices": {
+      "get": {
+        "summary": "GET /api/org/billing/invoices",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/org/billing/checkout": {
+      "post": {
+        "summary": "POST /api/org/billing/checkout",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/org/billing/invoices/{id}/pay": {
+      "post": {
+        "summary": "POST /api/org/billing/invoices/:id/pay",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/invoices": {
+      "get": {
+        "summary": "GET /api/platform/invoices",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/invoices/{id}/mark-paid": {
+      "post": {
+        "summary": "POST /api/platform/invoices/:id/mark-paid",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/platform/invoices/{id}/void": {
+      "post": {
+        "summary": "POST /api/platform/invoices/:id/void",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/billing/callback": {
+      "post": {
+        "summary": "POST /api/billing/callback",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/system/storage": {
+      "get": {
+        "summary": "GET /api/system/storage",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/system/cache": {
+      "get": {
+        "summary": "GET /api/system/cache",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/system/db-context": {
+      "get": {
+        "summary": "GET /api/system/db-context",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/trash": {
       "get": {
         "summary": "GET /api/trash",
@@ -4752,6 +5078,42 @@
     "/api/engagements/{id}/import": {
       "post": {
         "summary": "POST /api/engagements/:id/import",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/hooks/copilot/eval": {
+      "post": {
+        "summary": "POST /api/hooks/copilot/eval",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/engagements/{id}/copilot-syncs": {
+      "get": {
+        "summary": "GET /api/engagements/:id/copilot-syncs",
         "tags": [
           "engagements"
         ],

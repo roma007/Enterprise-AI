@@ -1,0 +1,43 @@
+{
+  "kind": "statement",
+  "gold": "会客包/试点一/samples/statement_gold.example.jsonl",
+  "pred": "会客包/试点一/samples/statement_pred.example.jsonl",
+  "metrics": {
+    "documents": {
+      "gold": 2,
+      "pred": 2,
+      "matched": 2,
+      "missing": [],
+      "extra": []
+    },
+    "header_accuracy": 0.9167,
+    "line_field_accuracy_matched": 1.0,
+    "line_recall": 0.6667,
+    "line_precision": 1.0,
+    "total_amount_accuracy": 1.0,
+    "diff_recall": 1.0,
+    "diff_precision": 0.5,
+    "diff_false_positive_rate": 0.5,
+    "counts": {
+      "gold_lines": 3,
+      "pred_lines": 2,
+      "matched_lines": 2,
+      "gold_differences": 1,
+      "pred_differences": 2,
+      "matched_differences": 1
+    },
+    "thresholds": {
+      "header_accuracy": 0.98,
+      "line_field_accuracy_matched": 0.95,
+      "line_recall": 0.98,
+      "total_amount_accuracy": 1.0,
+      "diff_recall": 0.95,
+      "diff_precision": 0.95
+    },
+    "failed_thresholds": [
+      "header_accuracy",
+      "line_recall",
+      "diff_precision"
+    ]
+  }
+}

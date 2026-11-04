@@ -14,6 +14,19 @@ services:
       retries: 12
     restart: unless-stopped
 
+  migrate:
+    build:
+      context: ./backend
+    command: ["sh", "scripts/init-db.sh"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ai_delivery}
+      SEED_DEMO: ${SEED_DEMO:-false}
+      SKIP_MIGRATIONS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build:
       context: ./backend
@@ -23,12 +36,29 @@ services:
       HOST: 0.0.0.0
       AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-me}
       AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
       SEED_DEMO: ${SEED_DEMO:-false}
-    ports:
-      - "8788:8788"
+      SKIP_MIGRATIONS: "true"
+      PDF_WORKER_INLINE: "false"
+      PDF_CACHE_DIR: /app/.pdf-cache
+      REDIS_URL: redis://redis:6379
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_PREFIX: ${S3_PREFIX:-ai-delivery}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+    volumes:
+      - pdfcache:/app/.pdf-cache
     depends_on:
-      db:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
+    deploy:
+      replicas: 2
     healthcheck:
       test:
         [
@@ -40,6 +70,54 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  pdf-worker:
+    build:
+      context: ./backend
+    command: ["npm", "run", "worker:pdf"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ai_delivery}
+      PDF_CACHE_DIR: /app/.pdf-cache
+      PDF_JOB_LEASE_MINUTES: ${PDF_JOB_LEASE_MINUTES:-15}
+      SKIP_MIGRATIONS: "true"
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_PREFIX: ${S3_PREFIX:-ai-delivery}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+
+    volumes:
+      - pdfcache:/app/.pdf-cache
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    profiles: ["s3"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
     restart: unless-stopped
 
   frontend:
@@ -54,3 +132,5 @@ services:
 
 volumes:
   pgdata:
+  pdfcache:
+  miniodata:

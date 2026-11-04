@@ -49,6 +49,10 @@ test.describe('关键路径冒烟', () => {
     await page.getByRole('button', { name: '运营' }).click();
     await expect(page.getByText('G5 价值实现门禁')).toBeVisible();
 
+    await page.getByRole('button', { name: 'POC 验证' }).click();
+    await expect(page.getByText('G3 验证门禁')).toBeVisible();
+    await expect(page.getByText('ai-copilot 对账复核记录')).toBeVisible();
+
     await page.getByRole('button', { name: 'AI 助手' }).click();
     await expect(page.getByText('按项目数据与知识库生成草稿')).toBeVisible();
 
@@ -178,6 +182,23 @@ test.describe('关键路径冒烟', () => {
     await expect(page.getByRole('button', { name: '修改密码' })).toBeVisible();
   });
 
+  test('供应商可自助注册并进入独立工作台', async ({ page }) => {
+    const stamp = Date.now();
+    await page.goto('/#/register');
+    await expect(page.getByRole('heading', { name: '注册供应商' })).toBeVisible();
+
+    await page.getByLabel('供应商/组织名称').fill(`E2E供应商${stamp}`);
+    await page.getByLabel('组织标识').fill(`e2e-${stamp}`);
+    await page.getByLabel('管理员姓名').fill('E2E管理员');
+    await page.getByLabel('登录邮箱').fill(`e2e-${stamp}@vendor.test`);
+    await page.getByLabel(/^密码/).fill('E2eTenant1');
+    await page.getByLabel('确认密码').fill('E2eTenant1');
+    await page.getByRole('button', { name: '创建供应商租户' }).click();
+
+    await expect(page.getByRole('heading', { name: '项目列表' })).toBeVisible();
+    await expect(page.getByText('还没有项目')).toBeVisible();
+  });
+
   test('管理员可打开用户管理页', async ({ page, request }) => {
     const login = await request.post('/api/auth/login', {
       data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
@@ -195,6 +216,49 @@ test.describe('关键路径冒烟', () => {
     await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
     await expect(page.getByRole('button', { name: /新建用户/ })).toBeVisible();
     await expect(page.getByRole('table').getByText('系统管理员')).toBeVisible();
+  });
+
+  test('平台管理员可查看租户列表', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+
+    await page.goto('/#/tenants');
+    await expect(page.getByRole('heading', { name: '租户管理' })).toBeVisible();
+    await expect(page.getByRole('table').getByText('恒智 AI')).toBeVisible();
+    await expect(page.getByText('hengzhi')).toBeVisible();
+  });
+
+  test('组织设置展示套餐与用量', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', JSON.stringify(user));
+      },
+      { token, user },
+    );
+
+    await page.goto('/#/org');
+    await expect(page.getByRole('heading', { name: '组织设置' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '套餐与用量' })).toBeVisible();
+    await expect(page.getByText('专业版').first()).toBeVisible();
+    await expect(page.getByText('套餐状态')).toBeVisible();
+    await expect(page.getByText('到期日')).toBeVisible();
+    await expect(page.getByText('本月 PDF 任务')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '续费与账单' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /生成续费账单|升级并生成账单/ })).toBeVisible();
   });
 
   test('审计日志可访问并展示请求 ID 列', async ({ page, request }) => {

@@ -30,5 +30,23 @@ else
   pg_dump "$DATABASE_URL" --no-owner --no-acl -Fc > "$FILE"
 fi
 
+TIMESTAMP_EPOCH="$(date +%s)"
+SIZE_BYTES="$(wc -c < "$FILE" | tr -d ' ')"
+printf '%s\n' "$TIMESTAMP_EPOCH" > "$BACKUP_DIR/.last-backup-success"
+
+# 可选：写入 node_exporter textfile collector，供 BackupStale 告警使用
+if [ -n "${PROM_TEXTFILE_DIR:-}" ] && [ -d "$PROM_TEXTFILE_DIR" ]; then
+  TMP="$PROM_TEXTFILE_DIR/.ai_delivery_backup.prom.$$"
+  cat > "$TMP" <<EOF
+# HELP ai_delivery_backup_last_success_timestamp_seconds Unix time of the last successful backup.
+# TYPE ai_delivery_backup_last_success_timestamp_seconds gauge
+ai_delivery_backup_last_success_timestamp_seconds $TIMESTAMP_EPOCH
+# HELP ai_delivery_backup_last_size_bytes Size of the last successful backup in bytes.
+# TYPE ai_delivery_backup_last_size_bytes gauge
+ai_delivery_backup_last_size_bytes $SIZE_BYTES
+EOF
+  mv "$TMP" "$PROM_TEXTFILE_DIR/ai_delivery_backup.prom"
+fi
+
 echo "备份完成：$FILE"
 du -h "$FILE" | awk '{print "大小：" $1}'

@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { httpError } from './s1';
 
 export type Role = 'admin' | 'director' | 'pm' | 'consultant' | 'tech_lead';
 
@@ -109,6 +110,12 @@ const POLICIES: Policy[] = [
     reason: '行业标杆维护仅管理员/总监可操作',
   },
   {
+    methods: ['POST'],
+    pattern: /^\/api\/org\/billing(\/|$)/,
+    roles: ['admin', 'director'],
+    reason: '续费与账单仅管理员/总监可操作',
+  },
+  {
     methods: ['POST', 'PATCH', 'DELETE'],
     pattern: /^\/api\/metric-definitions(\/|$)/,
     roles: ['admin', 'director'],
@@ -198,5 +205,15 @@ export async function enforceRole(
   const policy = requiredPolicy(req.method, route);
   if (!roleAllowed(auth.role, policy)) {
     throw forbidden(policy?.reason ?? '当前角色无权执行该操作');
+  }
+}
+
+
+/** 平台级字典（行业标杆、指标定义）只允许平台运营方修改。 */
+export function requirePlatformAdmin(req: FastifyRequest): void {
+  const auth = (req as any).authUser;
+  if (!auth && process.env.AUTH_REQUIRED !== 'true') return; // 本地匿名开发模式
+  if (!auth?.platform_admin) {
+    throw httpError(403, 'PLATFORM_FORBIDDEN', '该字典由平台统一维护');
   }
 }

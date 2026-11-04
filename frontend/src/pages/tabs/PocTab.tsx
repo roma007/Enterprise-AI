@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../../api';
-import { useLoad } from '../../hooks';
-import type { EngagementDetail, PocDetail, PocExperiment, PocRun, User } from '../../types';
+import { api, type BatchActionEvent } from '../../api';
+import { getStoredUser } from '../../auth';
+import { useDebouncedValue, useLoad } from '../../hooks';
+import type {
+  CopilotReconcileReviewDetail,
+  EngagementDetail,
+  ReconcileBatch,
+  ReconcileDifference,
+  PocDetail,
+  PocExperiment,
+  PocRun,
+  User,
+} from '../../types';
 import {
   Badge,
   Button,
@@ -10,6 +20,7 @@ import {
   ErrorBox,
   Field,
   Input,
+  Modal,
   Select,
   Spinner,
   Stat,
@@ -71,6 +82,30 @@ export function PocTab({
     [engagementId],
   );
   const g3 = useLoad(() => api.g3Checks(engagementId), [engagementId]);
+  const copilotReviews = useLoad(
+    () => api.listCopilotReconcileReviews(engagementId),
+    [engagementId],
+  );
+  const [selectedReview, setSelectedReview] = useState<CopilotReconcileReviewDetail | null>(null);
+  const closeReview = () => {
+    setSelectedReview(null);
+    clearBatchFiltersFromUrl();
+  };
+  const [reviewError, setReviewError] = useState<unknown>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+
+  const openReview = async (id: string) => {
+    setReviewLoading(true);
+    setReviewError(null);
+    try {
+      const res = await api.getCopilotReconcileReview(id);
+      setSelectedReview(res.item);
+    } catch (err) {
+      setReviewError(err);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
 
   const reportable = detail.opportunities.filter(
     (o) => o.targetPhase === 'phase1' || o.targetPhase === 'phase2',
@@ -104,6 +139,7 @@ export function PocTab({
   const after = async () => {
     await reload();
     g3.reload();
+    void copilotReviews.reload();
     onChanged();
   };
 
@@ -220,6 +256,1644 @@ export function PocTab({
             </div>
           )}
         </div>
+      </div>
+
+      <Card
+        title="ai-copilot 对账复核记录"
+        subtitle="客户/车队对账单抽取、差异解释与人工决策的回写；由 ai-copilot 复核页推送。"
+        actions={
+          <Button size="sm" disabled={copilotReviews.loading} onClick={() => void copilotReviews.reload()}>
+            刷新
+          </Button>
+        }
+      >
+        {copilotReviews.loading && !copilotReviews.data ? <Spinner /> : null}
+        {copilotReviews.error ? (
+          <ErrorBox error={copilotReviews.error} onRetry={() => void copilotReviews.reload()} />
+        ) : null}
+        {copilotReviews.data ? (
+          copilotReviews.data.items.length === 0 ? (
+            <Empty
+              title="还没有对账复核记录"
+              hint="在 ai-copilot 复核页保存并推送后，会出现在这里。"
+            />
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>收到时间</th><th>类型</th><th>单据号</th>
+                    <th>差异</th><th>决策</th><th>来源</th><th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {copilotReviews.data.items.map((r) => (
+                    <tr key={r.id}>
+                      <td className="muted">{fmtDateTime(r.received_at)}</td>
+                      <td>{r.kind === 'statement' ? '客户对账单' : '车队结算单'}</td>
+                      <td className="mono">{r.document_id || '—'}</td>
+                      <td>
+                        <Badge tone={r.differences.length ? 'red' : 'green'}>
+                          {r.differences.length}
+                        </Badge>
+                      </td>
+                      <td className="muted">{decisionSummary(r.decisions)}</td>
+                      <td className="muted">{r.source}</td>
+                      <td className="actions-cell">
+                        <Button size="sm" onClick={() => void openReview(r.id)}>查看</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : null}
+      </Card>
+
+      <Modal
+        open={Boolean(selectedReview)}
+        title={selectedReview ? `对账复核 · ${selectedReview.document_id || selectedReview.id}` : '对账复核'}
+        subtitle={
+          selectedReview
+            ? `${selectedReview.kind === 'statement' ? '客户对账单' : '车队结算单'} · ${fmtDateTime(selectedReview.received_at)}`
+            : undefined
+        }
+        onClose={closeReview}
+        wide
+      >
+        {reviewError ? <ErrorBox error={reviewError} /> : null}
+        {reviewLoading ? (
+          <Spinner />
+        ) : selectedReview ? (
+          <ReconcileReviewDetail
+            review={selectedReview}
+            engagementId={engagementId}
+            users={users}
+            onChanged={after}
+            onAction={(patch) => setSelectedReview((prev) => (prev ? { ...prev, ...patch } : prev))}
+          />
+        ) : null}
+      </Modal>
+    </div>
+  );
+}
+
+const RECONCILE_DIFF_LABEL: Record<string, string> = {
+  amount_mismatch: '金额不符',
+  missing_line: '对账单缺行',
+  extra_line: '对账单多行',
+  duplicate: '重复',
+  tax_mismatch: '税额不符',
+  unit_price_mismatch: '单价不符',
+  quantity_mismatch: '数量不符',
+  period_mismatch: '账期不符',
+  customer_mismatch: '主体不符',
+  rounding: '舍入',
+  no_rate: '无合同价',
+};
+
+function localDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function addBusinessDays(start: Date, days: number, holidays: Set<string> = new Set()): Date {
+  const d = new Date(start.getTime());
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    const weekday = d.getDay();
+    if (weekday !== 0 && weekday !== 6 && !holidays.has(localDate(d))) added += 1;
+  }
+  return d;
+}
+
+function slaDate(severity: string, holidays: Set<string> = new Set()): string {
+  const days = severity === 'P0' ? 1 : severity === 'P1' ? 3 : severity === 'P2' ? 7 : 14;
+  return localDate(addBusinessDays(new Date(), days, holidays));
+}
+
+const VIEW_ROLE_LABEL: Record<string, string> = {
+  admin: '管理员',
+  director: '总监',
+  pm: '项目经理',
+  consultant: '顾问',
+  tech_lead: '技术负责人',
+};
+
+type BatchStatusFilter = '' | 'running' | 'completed' | 'failed' | 'cancelled';
+type BatchTypeFilter = '' | 'risk' | 'issue';
+
+const BATCH_FILTER_KEYS = {
+  review: 'batch_review',
+  status: 'batch_status',
+  type: 'batch_type',
+  from: 'batch_from',
+  to: 'batch_to',
+  view: 'batch_view',
+} as const;
+
+interface BatchFilters {
+  status: BatchStatusFilter;
+  type: BatchTypeFilter;
+  from: string;
+  to: string;
+}
+
+function readBatchFiltersFromUrl(reviewId: string): BatchFilters {
+  if (typeof window === 'undefined') {
+    return { status: '', type: '', from: '', to: '' };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const scopedReview = params.get(BATCH_FILTER_KEYS.review);
+  if (scopedReview && scopedReview !== reviewId) {
+    return { status: '', type: '', from: '', to: '' };
+  }
+  const status = params.get(BATCH_FILTER_KEYS.status) ?? '';
+  const type = params.get(BATCH_FILTER_KEYS.type) ?? '';
+  const from = params.get(BATCH_FILTER_KEYS.from) ?? '';
+  const to = params.get(BATCH_FILTER_KEYS.to) ?? '';
+  const validStatus = ['running', 'completed', 'failed', 'cancelled'];
+  const validType = ['risk', 'issue'];
+  const dateOk = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return {
+    status: validStatus.includes(status) ? (status as BatchStatusFilter) : '',
+    type: validType.includes(type) ? (type as BatchTypeFilter) : '',
+    from: dateOk(from) ? from : '',
+    to: dateOk(to) ? to : '',
+  };
+}
+
+function readBatchViewFromUrl(reviewId: string): string {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams(window.location.search);
+  const scopedReview = params.get(BATCH_FILTER_KEYS.review);
+  if (scopedReview && scopedReview !== reviewId) return '';
+  return params.get(BATCH_FILTER_KEYS.view) ?? '';
+}
+
+function writeBatchFiltersToUrl(
+  reviewId: string,
+  filters: BatchFilters,
+  viewId: string,
+) {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  const entries: Array<[string, string]> = [
+    [BATCH_FILTER_KEYS.status, filters.status],
+    [BATCH_FILTER_KEYS.type, filters.type],
+    [BATCH_FILTER_KEYS.from, filters.from],
+    [BATCH_FILTER_KEYS.to, filters.to],
+  ];
+  let hasFilter = false;
+  for (const [key, value] of entries) {
+    if (value) {
+      params.set(key, value);
+      hasFilter = true;
+    } else {
+      params.delete(key);
+    }
+  }
+  if (hasFilter) params.set(BATCH_FILTER_KEYS.review, reviewId);
+  else params.delete(BATCH_FILTER_KEYS.review);
+  if (viewId) params.set(BATCH_FILTER_KEYS.view, viewId);
+  else params.delete(BATCH_FILTER_KEYS.view);
+  const qs = params.toString();
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+  );
+}
+
+function clearBatchFiltersFromUrl() {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  params.delete(BATCH_FILTER_KEYS.review);
+  params.delete(BATCH_FILTER_KEYS.status);
+  params.delete(BATCH_FILTER_KEYS.type);
+  params.delete(BATCH_FILTER_KEYS.from);
+  params.delete(BATCH_FILTER_KEYS.to);
+  params.delete(BATCH_FILTER_KEYS.view);
+  const qs = params.toString();
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+  );
+}
+
+const BATCH_FILTER_STORAGE = 'ai-delivery-batch-filters';
+const BATCH_FILTER_REMEMBER = 'ai-delivery-batch-filters-remember';
+
+function normalizeBatchFilters(input: any): BatchFilters {
+  const validStatus = ['running', 'completed', 'failed', 'cancelled'];
+  const validType = ['risk', 'issue'];
+  const dateOk = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const status = typeof input?.status === 'string' ? input.status : '';
+  const type = typeof input?.type === 'string' ? input.type : '';
+  return {
+    status: validStatus.includes(status) ? (status as BatchStatusFilter) : '',
+    type: validType.includes(type) ? (type as BatchTypeFilter) : '',
+    from: dateOk(input?.from) ? String(input.from) : '',
+    to: dateOk(input?.to) ? String(input.to) : '',
+  };
+}
+
+function readRememberedBatchFilters(): BatchFilters | null {
+  if (typeof window === 'undefined') return null;
+  if (window.localStorage.getItem(BATCH_FILTER_REMEMBER) !== '1') return null;
+  try {
+    const raw = window.localStorage.getItem(BATCH_FILTER_STORAGE);
+    return raw ? normalizeBatchFilters(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRememberedBatchFilters(filters: BatchFilters, remember: boolean) {
+  if (typeof window === 'undefined') return;
+  if (!remember) {
+    window.localStorage.removeItem(BATCH_FILTER_STORAGE);
+    window.localStorage.removeItem(BATCH_FILTER_REMEMBER);
+    return;
+  }
+  window.localStorage.setItem(BATCH_FILTER_REMEMBER, '1');
+  window.localStorage.setItem(BATCH_FILTER_STORAGE, JSON.stringify(filters));
+}
+
+const ACTION_STATUS_LABEL: Record<string, string> = {
+  open: '待处理',
+  in_progress: '处理中',
+  mitigated: '已缓解',
+  resolved: '已解决',
+  closed: '已关闭',
+  rejected: '已拒绝',
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function statusLabel(status?: string | null): string {
+  if (!status) return '已生成';
+  return ACTION_STATUS_LABEL[status] ?? status;
+}
+
+function decisionSummary(decisions: Array<{ decision: string }>): string {
+  if (!decisions.length) return '—';
+  const counts: Record<string, number> = {};
+  for (const d of decisions) counts[d.decision] = (counts[d.decision] ?? 0) + 1;
+  return Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' / ');
+}
+
+function ReconcileReviewDetail({
+  review,
+  engagementId,
+  users,
+  onChanged,
+  onAction,
+}: {
+  review: CopilotReconcileReviewDetail;
+  engagementId: string;
+  users: User[];
+  onChanged: () => Promise<void> | void;
+  onAction: (patch: Partial<CopilotReconcileReviewDetail>) => void;
+}) {
+  const doc = review.document as any;
+  const [actionBusy, setActionBusy] = useState<'risk' | 'issue' | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    type: 'risk' | 'issue';
+    done: number;
+    total: number;
+  } | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [resumeTarget, setResumeTarget] = useState<ReconcileBatch | null>(null);
+  const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(new Set());
+  const [exportingBatches, setExportingBatches] = useState(false);
+  const [exportingItems, setExportingItems] = useState(false);
+  const [exportingZip, setExportingZip] = useState(false);
+  const urlFilters = useMemo(() => readBatchFiltersFromUrl(review.id), [review.id]);
+  const urlViewId = useMemo(() => readBatchViewFromUrl(review.id), [review.id]);
+  const rememberedFilters = useMemo(() => {
+    const hasUrlFilter = Boolean(
+      urlFilters.status || urlFilters.type || urlFilters.from || urlFilters.to,
+    );
+    return hasUrlFilter ? null : readRememberedBatchFilters();
+  }, [urlFilters]);
+  const [exportStatus, setExportStatus] = useState<BatchStatusFilter>(
+    urlFilters.status || rememberedFilters?.status || '',
+  );
+  const [exportType, setExportType] = useState<BatchTypeFilter>(
+    urlFilters.type || rememberedFilters?.type || '',
+  );
+  const [exportFrom, setExportFrom] = useState(
+    urlFilters.from || rememberedFilters?.from || '',
+  );
+  const [exportTo, setExportTo] = useState(
+    urlFilters.to || rememberedFilters?.to || '',
+  );
+  const [selectedViewId, setSelectedViewId] = useState(urlViewId);
+  const [pendingViewId, setPendingViewId] = useState(urlViewId);
+  const [shareView, setShareView] = useState(false);
+  const [sharedRole, setSharedRole] = useState<
+    '' | 'admin' | 'director' | 'pm' | 'consultant' | 'tech_lead'
+  >('');
+  const [sharedUserIds, setSharedUserIds] = useState<string[]>([]);
+  const [rememberFilters, setRememberFilters] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : window.localStorage.getItem(BATCH_FILTER_REMEMBER) === '1',
+  );
+  const filterValues = useMemo(
+    () => ({
+      status: exportStatus,
+      type: exportType,
+      from: exportFrom,
+      to: exportTo,
+    }),
+    [exportStatus, exportType, exportFrom, exportTo],
+  );
+  const debouncedFilters = useDebouncedValue(filterValues, 300);
+  const filterError =
+    exportFrom && exportTo && exportFrom > exportTo
+      ? '开始日期不能晚于结束日期'
+      : '';
+  const debouncedFilterError =
+    debouncedFilters.from &&
+    debouncedFilters.to &&
+    debouncedFilters.from > debouncedFilters.to
+      ? '开始日期不能晚于结束日期'
+      : '';
+  const [resumeOwner, setResumeOwner] = useState('');
+  const [resumeSeverity, setResumeSeverity] = useState<'P0' | 'P1' | 'P2' | 'P3'>('P2');
+  const [resumeDue, setResumeDue] = useState('');
+  const [owner, setOwner] = useState(() => getStoredUser()?.id ?? users[0]?.id ?? '');
+  const holidays = useLoad(() => api.listHolidays({ effective: true }), []);
+  const [batchLimit, setBatchLimit] = useState(20);
+  const batches = useLoad(
+    () =>
+      debouncedFilterError
+        ? Promise.resolve({
+            items: [],
+            total: 0,
+            batch_total: 0,
+            roots_returned: 0,
+            limit: batchLimit,
+            offset: 0,
+          })
+        : api.listReconcileBatches(review.id, {
+            limit: batchLimit,
+            ...(debouncedFilters.status ? { status: debouncedFilters.status } : {}),
+            ...(debouncedFilters.type ? { action_type: debouncedFilters.type } : {}),
+            ...(debouncedFilters.from ? { from: debouncedFilters.from } : {}),
+            ...(debouncedFilters.to ? { to: debouncedFilters.to } : {}),
+          }),
+    [review.id, batchLimit, debouncedFilters, debouncedFilterError],
+  );
+  const estimate = useLoad(
+    () =>
+      debouncedFilterError
+        ? Promise.resolve({
+            batches: 0,
+            items: 0,
+            estimated_bytes: { summary: 0, items: 0, zip: 0 },
+            large: false,
+            filters: {},
+          })
+        : api.getBatchExportEstimate(review.id, {
+            ...(debouncedFilters.status ? { status: debouncedFilters.status } : {}),
+            ...(debouncedFilters.type ? { action_type: debouncedFilters.type } : {}),
+            ...(debouncedFilters.from ? { from: debouncedFilters.from } : {}),
+            ...(debouncedFilters.to ? { to: debouncedFilters.to } : {}),
+          }),
+    [review.id, debouncedFilters, debouncedFilterError],
+  );
+  const views = useLoad(
+    () => api.listBatchFilterViews(review.id),
+    [review.id],
+  );
+  const [auditLimit] = useState(5);
+  const [auditOffset, setAuditOffset] = useState(0);
+  const [exportingAudits, setExportingAudits] = useState(false);
+  const viewAudits = useLoad(
+    () => api.listBatchFilterViewAudits(review.id, { limit: auditLimit, offset: auditOffset }),
+    [review.id, auditLimit, auditOffset],
+  );
+  useEffect(() => {
+    if (!pendingViewId) return;
+    const items = views.data?.items;
+    if (!items) return;
+    const view = items.find((v) => v.id === pendingViewId);
+    if (view) {
+      setExportStatus(view.status ?? '');
+      setExportType(view.action_type ?? '');
+      setExportFrom(view.from ?? '');
+      setExportTo(view.to ?? '');
+      setSelectedViewId(view.id);
+      setShareView(Boolean(view.shared));
+      setSharedRole(view.shared_role ?? '');
+      setSharedUserIds(view.shared_user_ids ?? []);
+    } else {
+      setSelectedViewId('');
+    }
+    setPendingViewId('');
+  }, [pendingViewId, views.data]);
+
+  const selectedView = (views.data?.items ?? []).find(
+    (v) => v.id === selectedViewId,
+  );
+  useEffect(() => {
+    writeBatchFiltersToUrl(
+      review.id,
+      {
+        status: exportStatus,
+        type: exportType,
+        from: exportFrom,
+        to: exportTo,
+      },
+      selectedViewId,
+    );
+  }, [exportStatus, exportType, exportFrom, exportTo, selectedViewId]);
+
+  useEffect(() => {
+    saveRememberedBatchFilters(
+      {
+        status: exportStatus,
+        type: exportType,
+        from: exportFrom,
+        to: exportTo,
+      },
+      rememberFilters,
+    );
+  }, [rememberFilters, exportStatus, exportType, exportFrom, exportTo]);
+  const holidaySet = useMemo(
+    () => new Set((holidays.data?.items ?? []).map((h) => h.date)),
+    [holidays.data],
+  );
+  const [dueDate, setDueDate] = useState(() => slaDate('P2'));
+  const [severity, setSeverity] = useState<'P0' | 'P1' | 'P2' | 'P3'>('P2');
+
+  useEffect(() => {
+    if (holidays.data) setDueDate(slaDate(severity, holidaySet));
+  }, [holidays.data, holidaySet, severity]);
+  const lines: Array<Record<string, any>> = doc.lines ?? [];
+  const decisions = new Map(review.decisions.map((d) => [d.difference_id, d]));
+  const lineFields = review.kind === 'statement'
+    ? ['waybill_no', 'container_no', 'container_type', 'amount', 'tax_amount', 'total_amount', 'due_date']
+    : ['trip_no', 'waybill_no', 'plate_no', 'route', 'container_type', 'quantity', 'unit_price', 'amount', 'deduction'];
+  const lineLabels: Record<string, string> = {
+    waybill_no: '运单号', container_no: '箱号', container_type: '箱型',
+    amount: '金额', tax_amount: '税额', total_amount: '价税合计', due_date: '到期日',
+    trip_no: '趟次', plate_no: '车牌', route: '线路', quantity: '数量',
+    unit_price: '单价', deduction: '扣款',
+  };
+  const actionFor = (differenceId: string | undefined, type: 'risk' | 'issue') =>
+    differenceId
+      ? review.actions?.find((a) => a.difference_id === differenceId && a.action_type === type)
+      : undefined;
+
+  const selectableDiffs = review.differences.filter((d) => {
+    const decision = d.difference_id ? decisions.get(d.difference_id)?.decision : undefined;
+    return Boolean(d.difference_id) && decision !== '忽略';
+  });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(selectableDiffs.map((d) => d.difference_id as string)),
+  );
+  const selectedDiffs = selectableDiffs.filter((d) => selectedIds.has(d.difference_id as string));
+  const allSelected = selectableDiffs.length > 0 && selectedDiffs.length === selectableDiffs.length;
+  const toggleDiff = (differenceId: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(differenceId)) next.delete(differenceId);
+      else next.add(differenceId);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelectedIds(
+      allSelected
+        ? new Set()
+        : new Set(selectableDiffs.map((d) => d.difference_id as string)),
+    );
+  const riskEligible = selectedDiffs.filter((d) => !actionFor(d.difference_id, 'risk'));
+  const issueEligible = selectedDiffs.filter((d) => !actionFor(d.difference_id, 'issue'));
+  const docLabel = String(doc.statement_no ?? doc.settlement_no ?? review.document_id ?? review.id);
+  const kindLabel = review.kind === 'statement' ? '客户对账单' : '车队结算单';
+
+  const batchItems = batches.data?.items ?? [];
+  const batchRows = batchItems.map((b) => ({ batch: b, depth: b.depth ?? 0 }));
+  const rootsReturned =
+    batches.data?.roots_returned ??
+    batchItems.filter((b) => !b.parent_batch_id).length;
+  const rootTotal = batches.data?.total ?? 0;
+  const childCounts = new Map<string, number>();
+  let currentRootId: string | null = null;
+  for (const row of batchRows) {
+    if (row.depth === 0) currentRootId = row.batch.id;
+    else if (currentRootId) {
+      childCounts.set(currentRootId, (childCounts.get(currentRootId) ?? 0) + 1);
+    }
+  }
+  const visibleBatchRows: Array<{ batch: ReconcileBatch; depth: number }> = [];
+  currentRootId = null;
+  for (const row of batchRows) {
+    if (row.depth === 0) {
+      currentRootId = row.batch.id;
+      visibleBatchRows.push(row);
+    } else if (!currentRootId || !collapsedRoots.has(currentRootId)) {
+      visibleBatchRows.push(row);
+    }
+  }
+
+  const actionDetail = (diffs: ReconcileDifference[] = selectedDiffs) =>
+    diffs
+      .map((d) => {
+        const decision = d.difference_id ? decisions.get(d.difference_id) : undefined;
+        const label = RECONCILE_DIFF_LABEL[d.type] ?? d.type;
+        return [
+          `- ${label} ${d.waybill_no || d.trip_no || ''} 差额 ${d.delta ?? '—'}`,
+          `可能原因：${d.possible_causes?.join('；') || '—'}`,
+          `建议：${d.suggested_action || '—'}`,
+          `决策：${decision?.decision || '—'}${decision?.note ? `（${decision.note}）` : ''}`,
+        ].join('；');
+      })
+      .join('\n');
+
+  const riskPayload = (d: ReconcileDifference) => {
+    const delta = Math.abs(Number(d.delta ?? 0));
+    return {
+      type: 'risk' as const,
+      difference_id: d.difference_id,
+      owner: owner || null,
+      due_date: dueDate || null,
+      probability: delta >= 1000 ? 4 : 3,
+      impact: delta >= 5000 ? 5 : delta >= 1000 ? 4 : 3,
+      title: `对账差异：${kindLabel} ${docLabel} / ${d.waybill_no || d.trip_no || d.type}`,
+      detail: `关联复核记录 ${review.id}\n${actionDetail([d])}`,
+    };
+  };
+
+  const issuePayload = (d: ReconcileDifference) => {
+    const delta = Math.abs(Number(d.delta ?? 0));
+    return {
+      type: 'issue' as const,
+      difference_id: d.difference_id,
+      owner: owner || null,
+      due_date: dueDate || null,
+      severity,
+      title: `对账差异跟进：${kindLabel} ${docLabel} / ${d.waybill_no || d.trip_no || d.type}`,
+      detail: `关联复核记录 ${review.id}\n${actionDetail([d])}`,
+      impact_text: `应收/应付差异 ${delta.toLocaleString()} 元`,
+    };
+  };
+
+  const appendActions = (
+    type: 'risk' | 'issue',
+    rows: Array<{ d: ReconcileDifference; res: { action_id?: string | null; item_id: string; item_code?: string } }>,
+  ) => {
+    if (!rows.length) return;
+    onAction({
+      actions: [
+        ...(review.actions ?? []),
+        ...rows.map(({ d, res }) => ({
+          id: res.action_id ?? res.item_id,
+          difference_id: d.difference_id as string,
+          action_type: type,
+          target_id: res.item_id,
+          item_code: res.item_code ?? null,
+          item_status: 'open',
+          created_at: new Date().toISOString(),
+        })),
+      ],
+    });
+  };
+
+  const runSingle = async (type: 'risk' | 'issue', d: ReconcileDifference) => {
+    if (!d.difference_id) return;
+    setActionBusy(type);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const res = await api.createReconcileReviewAction(
+        review.id,
+        type === 'risk' ? riskPayload(d) : issuePayload(d),
+      );
+      appendActions(type, [{ d, res }]);
+      setActionNotice(
+        res.duplicate
+          ? `该差异已生成过${type === 'risk' ? '风险' : '待办'}。`
+          : type === 'risk'
+            ? '已生成风险，可在「风险与局限」页查看。'
+            : `已生成交付待办${res.item_code ? ` ${res.item_code}` : ''}，可在「交付」页查看。`,
+      );
+      await onChanged();
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const consumeBatchStream = async (
+    type: 'risk' | 'issue',
+    total: number,
+    runner: (onEvent: (event: BatchActionEvent) => void) => Promise<void>,
+  ) => {
+    setActionBusy(type);
+    setActionError(null);
+    setActionNotice(null);
+    setBatchProgress({ type, done: 0, total });
+
+    const diffById = new Map(
+      review.differences
+        .filter((d) => d.difference_id)
+        .map((d) => [d.difference_id as string, d]),
+    );
+    const createdRows: Array<{
+      d: ReconcileDifference;
+      res: { action_id?: string | null; item_id: string; item_code?: string };
+    }> = [];
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+    let firstError: string | undefined;
+    let errored = false;
+    let cancelled = false;
+    try {
+      await runner((event) => {
+        if (event.done) {
+          if (typeof event.created === 'number') created = event.created;
+          if (typeof event.skipped === 'number') skipped = event.skipped;
+          if (typeof event.failed === 'number') failed = event.failed;
+          if (event.cancelled) cancelled = true;
+          return;
+        }
+        const d = event.difference_id ? diffById.get(event.difference_id) : undefined;
+        if (event.status === 'created') {
+          created += 1;
+          if (d && event.item_id) {
+            createdRows.push({
+              d,
+              res: {
+                action_id: event.action_id,
+                item_id: event.item_id,
+                item_code: event.item_code ?? undefined,
+              },
+            });
+          }
+        } else if (event.status === 'duplicate') {
+          skipped += 1;
+        } else {
+          failed += 1;
+          if (event.error && !firstError) firstError = event.error;
+        }
+        setBatchProgress({
+          type,
+          done: created + skipped + failed,
+          total,
+        });
+      });
+    } catch (err) {
+      errored = true;
+      setActionError(err);
+    } finally {
+      appendActions(type, createdRows);
+      setBatchProgress(null);
+      const label = type === 'risk' ? '风险' : '待办';
+      if (cancelled) {
+        setActionNotice(
+          `批次已取消：已生成 ${created} 条${label}，跳过 ${skipped} 条，失败 ${failed} 条。`,
+        );
+      } else if (!errored) {
+        setActionNotice(
+          `已生成 ${created} 条${label}，跳过 ${skipped} 条已存在` +
+            (failed ? `，失败 ${failed} 条${firstError ? `（${firstError}）` : ''}` : '') +
+            '。',
+        );
+      } else if (created || skipped || failed) {
+        setActionNotice(
+          `已生成 ${created} 条${label}，跳过 ${skipped} 条，失败 ${failed} 条（连接中断）。`,
+        );
+      }
+      setActionBusy(null);
+      await batches.reload();
+      await onChanged();
+    }
+  };
+
+  const runBatch = async (
+    type: 'risk' | 'issue',
+    only?: ReconcileDifference[],
+  ) => {
+    const targets = only ?? (type === 'risk' ? riskEligible : issueEligible);
+    if (!targets.length) return;
+    await consumeBatchStream(type, targets.length, (onEvent) =>
+      api.streamReconcileReviewActionsBatch(
+        review.id,
+        {
+          type,
+          difference_ids: targets.map((d) => d.difference_id as string),
+          owner: owner || null,
+          due_date: dueDate || null,
+          severity,
+        },
+        onEvent,
+      ),
+    );
+  };
+
+  const retryBatch = async (batch: ReconcileBatch) => {
+    if (!batch.failed_count) return;
+    await consumeBatchStream(batch.action_type, batch.failed_count, (onEvent) =>
+      api.streamRetryReconcileBatch(batch.id, onEvent),
+    );
+  };
+
+  const openResume = (batch: ReconcileBatch) => {
+    const severity = (
+      ['P0', 'P1', 'P2', 'P3'].includes(batch.severity) ? batch.severity : 'P2'
+    ) as 'P0' | 'P1' | 'P2' | 'P3';
+    setResumeTarget(batch);
+    setResumeOwner(batch.owner ?? getStoredUser()?.id ?? '');
+    setResumeSeverity(severity);
+    setResumeDue(batch.due_date ?? slaDate(severity, holidaySet));
+  };
+
+  const confirmResume = async () => {
+    const batch = resumeTarget;
+    if (!batch) return;
+    const total = batch.remaining_difference_ids?.length ?? 0;
+    if (!total) return;
+    setResumeTarget(null);
+    await consumeBatchStream(batch.action_type, total, (onEvent) =>
+      api.streamResumeReconcileBatch(
+        batch.id,
+        {
+          owner: resumeOwner || null,
+          severity: resumeSeverity,
+          due_date: resumeDue || null,
+        },
+        onEvent,
+      ),
+    );
+  };
+
+  const toggleGroup = (rootId: string) => {
+    setCollapsedRoots((prev) => {
+      const next = new Set(prev);
+      if (next.has(rootId)) next.delete(rootId);
+      else next.add(rootId);
+      return next;
+    });
+  };
+
+  const clearBatchFilters = () => {
+    setExportStatus('');
+    setExportType('');
+    setExportFrom('');
+    setExportTo('');
+    setSelectedViewId('');
+    setBatchLimit(20);
+  };
+
+  const applyBatchView = (viewId: string) => {
+    setSelectedViewId(viewId);
+    if (!viewId) return;
+    const view = (views.data?.items ?? []).find((v) => v.id === viewId);
+    if (!view) return;
+    setExportStatus(view.status ?? '');
+    setExportType(view.action_type ?? '');
+    setExportFrom(view.from ?? '');
+    setExportTo(view.to ?? '');
+    setShareView(Boolean(view.shared));
+    setSharedRole(view.shared_role ?? '');
+    setSharedUserIds(view.shared_user_ids ?? []);
+    setBatchLimit(20);
+  };
+
+  const saveBatchView = async () => {
+    const name = window.prompt('视图名称', '');
+    if (name === null || !name.trim()) return;
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const res = await api.saveBatchFilterView(review.id, {
+        name: name.trim(),
+        shared: shareView,
+        shared_role: sharedRole || null,
+        shared_user_ids: sharedUserIds,
+        ...batchExportFilters(),
+      });
+      setSelectedViewId(res.item.id);
+      await views.reload();
+      setAuditOffset(0);
+      await viewAudits.reload();
+      setActionNotice('筛选视图已保存。');
+    } catch (err) {
+      setActionError(err);
+    }
+  };
+
+  const deleteBatchView = async () => {
+    if (!selectedViewId) return;
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      await api.deleteBatchFilterView(selectedViewId);
+      setSelectedViewId('');
+      await views.reload();
+      setAuditOffset(0);
+      await viewAudits.reload();
+      setActionNotice('筛选视图已删除。');
+    } catch (err) {
+      setActionError(err);
+    }
+  };
+
+  const batchExportFilters = () => ({
+    ...(exportStatus ? { status: exportStatus } : {}),
+    ...(exportType ? { action_type: exportType } : {}),
+    ...(exportFrom ? { from: exportFrom } : {}),
+    ...(exportTo ? { to: exportTo } : {}),
+  });
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportBatches = async () => {
+    setExportingBatches(true);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportReconcileBatchesCsv(review.id, batchExportFilters());
+      downloadBlob(blob, `copilot-batches-${review.id}.csv`);
+      setActionNotice('批量历史已导出 CSV。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingBatches(false);
+    }
+  };
+
+  const exportBatchItems = async () => {
+    setExportingItems(true);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportReconcileBatchItemsCsv(review.id, batchExportFilters());
+      downloadBlob(blob, `copilot-batch-items-${review.id}.csv`);
+      setActionNotice('批量逐条明细已导出 CSV。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingItems(false);
+    }
+  };
+
+  const exportViewAudits = async () => {
+    setExportingAudits(true);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportBatchFilterViewAuditsCsv(review.id);
+      downloadBlob(blob, `copilot-batch-filter-view-audits-${review.id}.csv`);
+      setActionNotice('视图审计已导出 CSV。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingAudits(false);
+    }
+  };
+
+  const exportBatchesZip = async () => {
+    setExportingZip(true);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const blob = await api.exportReconcileBatchesZip(review.id, batchExportFilters());
+      downloadBlob(blob, `copilot-batches-${review.id}.zip`);
+      setActionNotice('批量汇总与明细已打包为 ZIP。');
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setExportingZip(false);
+    }
+  };
+
+  const cancelBatch = async (batch: ReconcileBatch) => {
+    const reason = window.prompt('取消原因（可留空）', '');
+    if (reason === null) return;
+    const trimmed = reason.trim();
+    setCancellingId(batch.id);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      await api.cancelReconcileBatch(batch.id, { reason: trimmed || null });
+      setActionNotice(
+        trimmed
+          ? `批量任务已取消：${trimmed}`
+          : '批量任务已取消，已生成的动作保留。',
+      );
+      await batches.reload();
+    } catch (err) {
+      setActionError(err);
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  const createRisk = (d: ReconcileDifference) => runSingle('risk', d);
+  const createIssue = (d: ReconcileDifference) => runSingle('issue', d);
+
+  return (
+    <div>
+      {actionError ? <ErrorBox error={actionError} /> : null}
+      <div className="form-grid" style={{ marginBottom: 10 }}>
+        <Field label="待办负责人">
+          <Select value={owner} onChange={(e) => setOwner(e.target.value)}>
+            <option value="">不指定</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="待办截止日期">
+          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </Field>
+        <Field label="待办级别">
+          <Select
+            value={severity}
+            onChange={(e) => {
+              const v = e.target.value as 'P0' | 'P1' | 'P2' | 'P3';
+              setSeverity(v);
+              setDueDate(slaDate(v, holidaySet));
+            }}
+          >
+            <option value="P0">P0</option>
+            <option value="P1">P1</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+          </Select>
+        </Field>
+      </div>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={!riskEligible.length || actionBusy !== null}
+          onClick={() => void runBatch('risk')}
+        >
+          {actionBusy === 'risk' ? '生成中…' : `批量生成风险（${riskEligible.length}）`}
+        </Button>
+        <Button
+          size="sm"
+          disabled={!issueEligible.length || actionBusy !== null}
+          onClick={() => void runBatch('issue')}
+        >
+          {actionBusy === 'issue' ? '生成中…' : `批量生成待办（${issueEligible.length}）`}
+        </Button>
+        <span className="hint">
+          已选 {selectedDiffs.length} / 可处理 {selectableDiffs.length} 条
+        </span>
+        {review.risk_id ? (
+          <span className="hint">风险状态：{statusLabel(review.risk_status)}</span>
+        ) : null}
+        {review.issue_id ? (
+          <span className="hint">待办状态：{statusLabel(review.issue_status)}</span>
+        ) : null}
+        {batchProgress ? (
+          <span className="hint">
+            处理中 {batchProgress.done}/{batchProgress.total} 条
+          </span>
+        ) : null}
+        {batchProgress ? (
+          <div className="progress" style={{ width: 180 }}>
+            <span
+              style={{
+                width: `${Math.round(
+                  (batchProgress.done / Math.max(1, batchProgress.total)) * 100,
+                )}%`,
+              }}
+            />
+          </div>
+        ) : null}
+        {actionNotice ? <span className="hint">{actionNotice}</span> : null}
+      </div>
+      <div className="stat-grid">
+        <Stat label="类型" value={review.kind === 'statement' ? '对账单' : '结算单'} tone="brand" />
+        <Stat label="明细行" value={lines.length} tone="blue" />
+        <Stat label="差异" value={review.differences.length} tone={review.differences.length ? 'red' : 'green'} />
+        <Stat label="决策" value={decisionSummary(review.decisions)} tone="amber" />
+      </div>
+
+      <div className="form-grid">
+        <Field label="单据号"><Input value={String(doc.statement_no ?? doc.settlement_no ?? '')} disabled /></Field>
+        <Field label={review.kind === 'statement' ? '客户' : '车队'}>
+          <Input value={String(doc.customer_name ?? doc.carrier_name ?? '')} disabled />
+        </Field>
+        <Field label="账期">
+          <Input
+            value={`${doc.period_start ?? '—'} → ${doc.period_end ?? '—'}`}
+            disabled
+          />
+        </Field>
+        <Field label="合计"><Input value={String(doc.total_amount ?? '')} disabled /></Field>
+      </div>
+
+      <div className="table-wrap" style={{ marginTop: 12 }}>
+        <table>
+          <thead>
+            <tr><th>#</th>{lineFields.map((f) => <th key={f}>{lineLabels[f] ?? f}</th>)}</tr>
+          </thead>
+          <tbody>
+            {lines.map((line, i) => (
+              <tr key={i}>
+                <td>{String(line.line_no ?? i + 1)}</td>
+                {lineFields.map((f) => <td key={f}>{String(line[f] ?? '—')}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-wrap" style={{ marginTop: 12 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  aria-label="全选差异"
+                  checked={allSelected}
+                  disabled={!selectableDiffs.length}
+                  onChange={toggleAll}
+                />
+              </th>
+              <th>类型</th><th>运单/趟次</th><th>对账单</th><th>系统</th><th>差额</th>
+              <th>可能原因</th><th>建议动作</th><th>决策</th><th>备注</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {review.differences.length === 0 ? (
+              <tr><td colSpan={11} className="muted">没有差异</td></tr>
+            ) : review.differences.map((d, i) => {
+              const decision = d.difference_id ? decisions.get(d.difference_id) : undefined;
+              const riskAction = actionFor(d.difference_id, 'risk');
+              const issueAction = actionFor(d.difference_id, 'issue');
+              const riskStatus = review.risk_id ? review.risk_status : riskAction?.item_status;
+              const issueStatus = review.issue_id ? review.issue_status : issueAction?.item_status;
+              return (
+                <tr key={d.difference_id || i}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={`选择差异 ${d.difference_id ?? i + 1}`}
+                      checked={Boolean(d.difference_id && selectedIds.has(d.difference_id))}
+                      disabled={!d.difference_id || decision?.decision === '忽略'}
+                      title={decision?.decision === '忽略' ? '已标记忽略，不参与批量生成' : undefined}
+                      onChange={() => d.difference_id && toggleDiff(d.difference_id)}
+                    />
+                  </td>
+                  <td><Badge tone="red">{RECONCILE_DIFF_LABEL[d.type] ?? d.type}</Badge></td>
+                  <td>{d.waybill_no || d.trip_no || '—'}</td>
+                  <td>{d.statement_amount ?? '—'}</td>
+                  <td>{d.system_amount ?? '—'}</td>
+                  <td>{d.delta ?? '—'}</td>
+                  <td className="muted">{d.possible_causes?.join('；') || '—'}</td>
+                  <td className="muted">{d.suggested_action || '—'}</td>
+                  <td>{decision?.decision || '—'}</td>
+                  <td className="muted">{decision?.note || '—'}</td>
+                  <td className="actions-cell">
+                    <Button
+                      size="sm"
+                      disabled={
+                        !d.difference_id ||
+                        actionBusy !== null ||
+                        Boolean(review.risk_id) ||
+                        Boolean(actionFor(d.difference_id, 'risk'))
+                      }
+                      onClick={() => void createRisk(d)}
+                    >
+                      {actionFor(d.difference_id, 'risk') || review.risk_id
+                        ? `风险·${statusLabel(riskStatus)}`
+                        : '风险'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={
+                        !d.difference_id ||
+                        actionBusy !== null ||
+                        Boolean(review.issue_id) ||
+                        Boolean(actionFor(d.difference_id, 'issue'))
+                      }
+                      onClick={() => void createIssue(d)}
+                    >
+                      {actionFor(d.difference_id, 'issue') || review.issue_id
+                        ? `待办·${statusLabel(issueStatus)}`
+                        : '待办'}
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div className="row" style={{ marginBottom: 6 }}>
+          <strong>批量生成记录</strong>
+          <Button size="sm" onClick={() => void batches.reload()}>
+            刷新
+          </Button>
+          <Button
+            size="sm"
+            disabled={exportingBatches || batchItems.length === 0 || Boolean(filterError)}
+            onClick={() => void exportBatches()}
+          >
+            {exportingBatches ? '导出中…' : '导出 CSV'}
+          </Button>
+          <Button
+            size="sm"
+            disabled={exportingItems || batchItems.length === 0 || Boolean(filterError)}
+            onClick={() => void exportBatchItems()}
+          >
+            {exportingItems ? '导出中…' : '导出明细 CSV'}
+          </Button>
+          <Button
+            size="sm"
+            disabled={exportingZip || batchItems.length === 0 || Boolean(filterError)}
+            onClick={() => void exportBatchesZip()}
+          >
+            {exportingZip ? '打包中…' : '导出 ZIP'}
+          </Button>
+        </div>
+        <div className="form-grid" style={{ marginBottom: 8 }}>
+          <Field label="导出状态">
+            <Select
+              value={exportStatus}
+              onChange={(e) => {
+                setExportStatus(e.target.value as BatchStatusFilter);
+                setSelectedViewId('');
+                setBatchLimit(20);
+              }}
+            >
+              <option value="">全部</option>
+              <option value="running">进行中</option>
+              <option value="completed">已完成</option>
+              <option value="failed">失败</option>
+              <option value="cancelled">已取消</option>
+            </Select>
+          </Field>
+          <Field label="导出类型">
+            <Select
+              value={exportType}
+              onChange={(e) => {
+                setExportType(e.target.value as BatchTypeFilter);
+                setSelectedViewId('');
+                setBatchLimit(20);
+              }}
+            >
+              <option value="">全部</option>
+              <option value="risk">风险</option>
+              <option value="issue">待办</option>
+            </Select>
+          </Field>
+          <Field label="开始日期">
+            <Input
+              type="date"
+              value={exportFrom}
+              onChange={(e) => {
+                setExportFrom(e.target.value);
+                setSelectedViewId('');
+                setBatchLimit(20);
+              }}
+            />
+          </Field>
+          <Field label="结束日期">
+            <Input
+              type="date"
+              value={exportTo}
+              onChange={(e) => {
+                setExportTo(e.target.value);
+                setSelectedViewId('');
+                setBatchLimit(20);
+              }}
+            />
+          </Field>
+        </div>
+        <div className="row" style={{ marginTop: -6, marginBottom: 4 }}>
+          <Select
+            value={selectedViewId}
+            onChange={(e) => applyBatchView(e.target.value)}
+            style={{ maxWidth: 220 }}
+          >
+            <option value="">选择已保存视图</option>
+            {(views.data?.items ?? []).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+                {v.shared ? '（全员）' : ''}
+                {v.shared_role ? `（${VIEW_ROLE_LABEL[v.shared_role] ?? v.shared_role}）` : ''}
+                {v.shared_user_ids?.length
+                  ? `（指定 ${v.shared_user_ids.length} 人）`
+                  : ''}
+                {!v.is_owner && v.owner_name ? ` · ${v.owner_name}` : ''}
+              </option>
+            ))}
+          </Select>
+          <Button size="sm" disabled={Boolean(filterError)} onClick={() => void saveBatchView()}>
+            保存视图
+          </Button>
+          <Button
+            size="sm"
+            disabled={!selectedViewId || !selectedView?.is_owner}
+            onClick={() => void deleteBatchView()}
+          >
+            删除视图
+          </Button>
+          <Button size="sm" onClick={clearBatchFilters}>
+            清空筛选
+          </Button>
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={rememberFilters}
+              onChange={(e) => setRememberFilters(e.target.checked)}
+            />
+            <span>记住筛选</span>
+          </label>
+        </div>
+        <div className="row" style={{ marginTop: -2, marginBottom: 4 }}>
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={shareView}
+              onChange={(e) => setShareView(e.target.checked)}
+            />
+            <span>全员共享</span>
+          </label>
+          <Select
+            value={sharedRole}
+            onChange={(e) =>
+              setSharedRole(
+                e.target.value as
+                  | ''
+                  | 'admin'
+                  | 'director'
+                  | 'pm'
+                  | 'consultant'
+                  | 'tech_lead',
+              )
+            }
+            style={{ maxWidth: 180 }}
+          >
+            <option value="">按角色共享</option>
+            <option value="admin">管理员</option>
+            <option value="director">总监</option>
+            <option value="pm">项目经理</option>
+            <option value="consultant">顾问</option>
+            <option value="tech_lead">技术负责人</option>
+          </Select>
+          <Select
+            multiple
+            size={3}
+            value={sharedUserIds}
+            onChange={(e) =>
+              setSharedUserIds(
+                Array.from(e.target.selectedOptions).map((o) => o.value),
+              )
+            }
+            style={{ minWidth: 180 }}
+          >
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </Select>
+          <span className="hint">指定同事（可多选）</span>
+        </div>
+        {filterError ? (
+          <p style={{ marginTop: -4, color: '#b42318' }}>{filterError}</p>
+        ) : null}
+        <p className="muted" style={{ marginTop: -4 }}>
+          筛选同时作用于列表和导出；按批次组筛选，组内任一批次命中即整组显示。
+          {filterError
+            ? ''
+            : estimate.loading
+              ? ' 正在估算导出体积…'
+              : estimate.data
+                ? ` 预计 ${estimate.data.batches} 个批次 / ${estimate.data.items} 条明细 · 约 ${formatBytes(
+                    estimate.data.estimated_bytes.zip,
+                  )}（ZIP）${estimate.data.large ? '，数据较大，建议缩小筛选范围' : ''}`
+                : ''}
+        </p>
+        {batches.error ? <ErrorBox error={batches.error} /> : null}
+        {batchItems.length === 0 ? (
+          <p className="muted">
+            {exportStatus || exportType || exportFrom || exportTo
+              ? '没有匹配筛选条件的批量记录。'
+              : '暂无批量生成记录。'}
+          </p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th><th>类型</th><th>状态</th><th>结果</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleBatchRows.map(({ batch: b, depth }) => (
+                  <tr key={b.id}>
+                    <td
+                      className="muted"
+                      style={{ paddingLeft: 8 + depth * 16 }}
+                    >
+                      {depth === 0 && (childCounts.get(b.id) ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          className="link-btn"
+                          style={{ marginRight: 6 }}
+                          onClick={() => toggleGroup(b.id)}
+                          title={collapsedRoots.has(b.id) ? '展开子批次' : '收起子批次'}
+                        >
+                          {collapsedRoots.has(b.id)
+                            ? `▸${childCounts.get(b.id)}`
+                            : '▾'}
+                        </button>
+                      ) : null}
+                      {depth > 0 ? '↳ ' : ''}
+                      {fmtDateTime(b.created_at)}
+                    </td>
+                    <td>
+                      {b.action_type === 'risk' ? '风险' : '待办'}
+                      {b.parent_batch_id ? (
+                        <Badge tone="gray">
+                          {b.parent_relation === 'resume' ? '继续' : '重试'}
+                        </Badge>
+                      ) : null}
+                    </td>
+                    <td>
+                      <Badge
+                        tone={
+                          b.status === 'completed'
+                            ? 'green'
+                            : b.status === 'failed'
+                              ? 'red'
+                              : b.status === 'cancelled'
+                                ? 'gray'
+                                : 'amber'
+                        }
+                      >
+                        {b.status === 'completed'
+                          ? '已完成'
+                          : b.status === 'failed'
+                            ? '失败'
+                            : b.status === 'cancelled'
+                              ? '已取消'
+                              : '进行中'}
+                      </Badge>
+                      {b.status === 'cancelled' &&
+                      (b.cancel_reason || b.cancelled_by_name) ? (
+                        <div
+                          className="muted"
+                          style={{
+                            marginTop: 2,
+                            maxWidth: 180,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={[b.cancel_reason, b.cancelled_by_name]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        >
+                          {b.cancel_reason || '未填原因'}
+                          {b.cancelled_by_name ? ` · ${b.cancelled_by_name}` : ''}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="muted">
+                      成功 {b.created_count} · 跳过 {b.skipped_count} · 失败 {b.failed_count}
+                      {b.status === 'cancelled' &&
+                      !b.has_child &&
+                      (b.remaining_difference_ids?.length ?? 0) > 0
+                        ? ` · 剩余 ${b.remaining_difference_ids?.length}`
+                        : ''}
+                    </td>
+                    <td className="actions-cell">
+                      {b.status === 'running' ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={cancellingId === b.id}
+                          onClick={() => void cancelBatch(b)}
+                        >
+                          {cancellingId === b.id ? '取消中…' : '取消'}
+                        </Button>
+                      ) : b.status === 'cancelled' &&
+                        !b.has_child &&
+                        (b.remaining_difference_ids?.length ?? 0) > 0 ? (
+                        <Button
+                          size="sm"
+                          disabled={actionBusy !== null}
+                          onClick={() => openResume(b)}
+                        >
+                          继续剩余（{b.remaining_difference_ids?.length}）
+                        </Button>
+                      ) : b.status === 'failed' && b.failed_count > 0 && !b.has_child ? (
+                        <Button
+                          size="sm"
+                          disabled={actionBusy !== null}
+                          onClick={() => void retryBatch(b)}
+                        >
+                          重试失败项（{b.failed_count}）
+                        </Button>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="row" style={{ marginTop: 6 }}>
+          <span className="muted">
+            已显示 {rootsReturned} / {rootTotal} 组 · {batchItems.length} 条
+          </span>
+          {rootsReturned < rootTotal ? (
+            <Button
+              size="sm"
+              disabled={batches.loading}
+              onClick={() => setBatchLimit((n) => n + 20)}
+            >
+              {batches.loading ? '加载中…' : '加载更多'}
+            </Button>
+          ) : null}
+        </div>
+        {resumeTarget ? (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 10,
+              border: '1px solid rgba(0, 0, 0, 0.12)',
+              borderRadius: 8,
+            }}
+          >
+            <div className="row" style={{ marginBottom: 8 }}>
+              <strong>继续剩余差异</strong>
+              <span className="muted">
+                共 {resumeTarget.remaining_difference_ids?.length ?? 0} 条
+              </span>
+            </div>
+            <div className="form-grid">
+              <Field label="负责人">
+                <Select
+                  value={resumeOwner}
+                  onChange={(e) => setResumeOwner(e.target.value)}
+                >
+                  <option value="">不指定</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="待办级别">
+                <Select
+                  value={resumeSeverity}
+                  onChange={(e) => {
+                    const v = e.target.value as 'P0' | 'P1' | 'P2' | 'P3';
+                    setResumeSeverity(v);
+                    setResumeDue(slaDate(v, holidaySet));
+                  }}
+                >
+                  <option value="P0">P0</option>
+                  <option value="P1">P1</option>
+                  <option value="P2">P2</option>
+                  <option value="P3">P3</option>
+                </Select>
+              </Field>
+              <Field label="截止日期">
+                <Input
+                  type="date"
+                  value={resumeDue}
+                  onChange={(e) => setResumeDue(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="row">
+              <Button size="sm" variant="primary" onClick={() => void confirmResume()}>
+                继续执行
+              </Button>
+              <Button size="sm" onClick={() => setResumeTarget(null)}>
+                取消
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div className="row" style={{ marginBottom: 6 }}>
+          <strong>视图审计</strong>
+          <Button size="sm" onClick={() => void viewAudits.reload()}>
+            刷新
+          </Button>
+          <Button
+            size="sm"
+            disabled={exportingAudits}
+            onClick={() => void exportViewAudits()}
+          >
+            {exportingAudits ? '导出中…' : '导出审计 CSV'}
+          </Button>
+        </div>
+        {viewAudits.error ? <ErrorBox error={viewAudits.error} /> : null}
+        {(viewAudits.data?.items ?? []).length === 0 ? (
+          <p className="muted">暂无筛选视图审计。</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th><th>操作</th><th>视图</th><th>操作人</th><th>共享设置</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(viewAudits.data?.items ?? []).map((a) => {
+                  const detail = a.detail ?? {};
+                  const sharing = [
+                    detail.shared ? '全员' : '',
+                    detail.shared_role
+                      ? VIEW_ROLE_LABEL[detail.shared_role] ?? detail.shared_role
+                      : '',
+                    Array.isArray(detail.shared_user_ids) && detail.shared_user_ids.length
+                      ? `指定 ${detail.shared_user_ids.length} 人`
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' / ');
+                  return (
+                    <tr key={a.id}>
+                      <td className="muted">{fmtDateTime(a.created_at)}</td>
+                      <td>
+                        <Badge tone={a.action.startsWith('DELETE') ? 'red' : 'blue'}>
+                          {a.action.startsWith('DELETE') ? '删除' : '保存'}
+                        </Badge>
+                      </td>
+                      <td>{detail.name || '—'}</td>
+                      <td>{a.actor_name || '—'}</td>
+                      <td className="muted">{sharing || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(viewAudits.data?.items ?? []).length > 0 ? (
+          <div className="row" style={{ marginTop: 6 }}>
+            <span className="muted">
+              第 {auditOffset + 1}–
+              {auditOffset + (viewAudits.data?.items.length ?? 0)} 条 / 共{' '}
+              {viewAudits.data?.total ?? 0} 条
+            </span>
+            <Button
+              size="sm"
+              disabled={auditOffset === 0}
+              onClick={() => setAuditOffset(Math.max(0, auditOffset - auditLimit))}
+            >
+              上一页
+            </Button>
+            <Button
+              size="sm"
+              disabled={
+                auditOffset + (viewAudits.data?.items.length ?? 0) >=
+                (viewAudits.data?.total ?? 0)
+              }
+              onClick={() => setAuditOffset(auditOffset + auditLimit)}
+            >
+              下一页
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

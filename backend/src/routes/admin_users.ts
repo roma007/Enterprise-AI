@@ -6,6 +6,7 @@ import { httpError } from '../services/s1';
 import { revokeAllForUser } from '../services/sessions';
 import { assertPasswordPolicy, passwordReused, rememberPassword } from '../services/password_policy';
 import { requestOrg } from '../services/tenant';
+import { assertQuota } from '../services/plans';
 
 const uuid = z.uuid();
 const roleEnum = z.enum(['admin', 'director', 'pm', 'consultant', 'tech_lead']);
@@ -81,6 +82,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
 
   app.post('/api/admin/users', async (req, reply) => {
     const org = await requestOrg(req);
+    await assertQuota(org, 'users');
     const body = createBody.parse(req.body);
     assertPasswordPolicy(body.password, body.email);
     const exists = await one(

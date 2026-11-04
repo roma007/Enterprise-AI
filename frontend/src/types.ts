@@ -328,6 +328,9 @@ export interface Risk {
   impact: number;
   mitigation: string | null;
   status: string;
+  owner: string | null;
+  owner_name?: string | null;
+  due_date: string | null;
 }
 
 export interface Dependency {
@@ -1008,4 +1011,249 @@ export interface AdminUser {
   last_login_at: string | null;
   created_at: string;
   active_sessions: number;
+}
+
+export type PlanCode = 'trial' | 'free' | 'pro' | 'enterprise';
+
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  plan: PlanCode;
+  status: 'active' | 'suspended';
+  settings: Record<string, unknown>;
+  created_at: string;
+  trial_ends_at: string | null;
+  billing_email: string | null;
+  plan_name?: string | null;
+  trial_days_left?: number | null;
+  user_count: number;
+  client_count: number;
+  engagement_count: number;
+}
+
+export interface PlanDefinition {
+  code: PlanCode;
+  name: string;
+  description: string;
+  price_monthly: number;
+  price_yearly: number;
+  currency: string;
+  max_users: number;
+  max_clients: number;
+  max_engagements: number;
+  max_pdf_jobs_month: number;
+}
+
+export interface OrgBilling {
+  id: string;
+  name: string;
+  slug: string;
+  plan: PlanCode;
+  plan_name: string;
+  plan_status: 'trialing' | 'trial_expired' | 'active' | 'expired' | 'suspended';
+  status: 'active' | 'suspended';
+  trial_ends_at: string | null;
+  days_left: number | null;
+  plan_started_at: string | null;
+  plan_expires_at: string | null;
+  renewal_days_left: number | null;
+  auto_renew: boolean;
+  billing_cycle: 'monthly' | 'yearly';
+  billing_email: string | null;
+  limits: {
+    users: number;
+    clients: number;
+    engagements: number;
+    pdf_jobs_month: number;
+  };
+  usage: {
+    users: number;
+    clients: number;
+    engagements: number;
+    pdf_jobs_month: number;
+  };
+  price: { currency: string; monthly: number; yearly: number };
+}
+
+export interface Invoice {
+  id: string;
+  org_id: string;
+  invoice_no: string;
+  plan: string;
+  cycle: 'monthly' | 'yearly';
+  amount: number;
+  currency: string;
+  status: 'pending' | 'paid' | 'void' | 'overdue';
+  period_start: string;
+  period_end: string;
+  due_at: string;
+  paid_at: string | null;
+  provider: string;
+  external_id: string | null;
+  created_at: string;
+  org_name?: string;
+  org_slug?: string;
+}
+
+export interface ReconcileDifference {
+  difference_id?: string;
+  type: string;
+  waybill_no?: string | null;
+  trip_no?: string | null;
+  statement_amount?: number | null;
+  system_amount?: number | null;
+  delta?: number | null;
+  evidence?: string[];
+  possible_causes?: string[];
+  suggested_action?: string | null;
+  confidence?: number;
+  source?: string;
+}
+
+export interface ReconcileDecision {
+  difference_id: string;
+  decision: string;
+  note?: string;
+}
+
+export interface CopilotReconcileReview {
+  id: string;
+  kind: 'statement' | 'settlement';
+  document_id: string | null;
+  status: string;
+  summary: Record<string, unknown>;
+  differences: ReconcileDifference[];
+  decisions: ReconcileDecision[];
+  risk_id?: string | null;
+  issue_id?: string | null;
+  source: string;
+  received_at: string;
+}
+
+export interface ReconcileAction {
+  id: string;
+  difference_id: string;
+  action_type: 'risk' | 'issue';
+  target_id: string;
+  item_code?: string | null;
+  item_title?: string | null;
+  item_status?: string | null;
+  created_at: string;
+}
+
+export interface CopilotReconcileReviewDetail extends CopilotReconcileReview {
+  risk_status?: string | null;
+  issue_status?: string | null;
+  actions?: ReconcileAction[];
+  document: Record<string, unknown> & {
+    lines?: Array<Record<string, unknown>>;
+    statement_no?: string | null;
+    settlement_no?: string | null;
+    customer_name?: string | null;
+    carrier_name?: string | null;
+    period_start?: string | null;
+    period_end?: string | null;
+    total_amount?: number | null;
+  };
+  payload?: Record<string, unknown>;
+}
+
+export interface Holiday {
+  id: string;
+  org_id: string | null;
+  region: string;
+  date: string;
+  name: string;
+  active: boolean;
+}
+
+export interface ReconcileBatch {
+  id: string;
+  review_id: string;
+  parent_batch_id: string | null;
+  action_type: 'risk' | 'issue';
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  requested_count: number;
+  created_count: number;
+  skipped_count: number;
+  failed_count: number;
+  owner: string | null;
+  severity: string;
+  due_date: string | null;
+  created_by: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+  finished_at: string | null;
+  failed_difference_ids?: string[];
+  remaining_difference_ids?: string[];
+  has_child?: boolean;
+  parent_relation?: 'retry' | 'resume' | null;
+  depth?: number;
+  difference_ids?: string[];
+  cancelled_by?: string | null;
+  cancelled_by_name?: string | null;
+  cancel_reason?: string | null;
+  cancelled_at?: string | null;
+}
+
+export interface BatchFilterView {
+  id: string;
+  name: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | null;
+  action_type: 'risk' | 'issue' | null;
+  from: string | null;
+  to: string | null;
+  shared: boolean;
+  shared_role: 'admin' | 'director' | 'pm' | 'consultant' | 'tech_lead' | null;
+  shared_user_ids: string[];
+  is_owner: boolean;
+  owner_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  ref_type: string | null;
+  ref_id: string | null;
+  read_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  actor_name?: string | null;
+}
+
+export interface BatchFilterViewAudit {
+  id: string;
+  action: string;
+  user_id: string | null;
+  actor_name?: string | null;
+  detail: Record<string, any>;
+  created_at: string;
+  archived_at?: string | null;
+  is_archived?: boolean;
+}
+
+export interface NotificationAudit {
+  id: string;
+  action: string;
+  user_id: string | null;
+  actor_name?: string | null;
+  detail: Record<string, any>;
+  created_at: string;
+}
+
+export interface CollabAudit {
+  id: string;
+  audit_type: 'notification' | 'filter_view' | 'export';
+  action: string;
+  user_id: string | null;
+  actor_name?: string | null;
+  detail: Record<string, any>;
+  created_at: string;
+  archived_at?: string | null;
 }

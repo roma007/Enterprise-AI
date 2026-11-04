@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>试点一 · 对账单/结算单复核</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
+        --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;
+         display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  header a{margin-left:12px;font-size:12px;color:var(--muted);text-decoration:none}
+  .wrap{padding:16px;max-width:1400px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .card .body{padding:12px 14px}
+  textarea{width:100%;min-height:130px;border:1px solid var(--line);border-radius:8px;padding:10px;
+           font:12.5px/1.6 ui-monospace,Menlo,monospace;resize:vertical;outline:none}
+  input,select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;
+               background:#fff;min-width:0}
+  input:focus,select:focus,textarea:focus{border-color:var(--brand);outline:none}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  label.field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  label.field input,label.field select{color:var(--ink)}
+  button{font:inherit;font-size:13px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .kpi div{flex:1;min-width:100px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  td input{width:100%;padding:4px 6px;font-size:12px}
+  .tag{padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap}
+  .t-ok{background:#e6f4ea;color:var(--ok)}
+  .t-amount_mismatch,.t-unit_price_mismatch,.t-no_rate,.t-missing_line,.t-extra_line{background:#fde8e8;color:var(--err)}
+  .t-warn{background:#fdf3e2;color:var(--warn)}
+  .muted{color:var(--muted)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1}
+  .hint{color:var(--muted);font-size:12px}
+  .notice{padding:8px 10px;border-radius:8px;margin-bottom:10px;font-size:12.5px}
+  .notice-warn{background:#fff7e6;color:#8a5a00;border:1px solid #f3d19c}
+  .notice-err{background:#fde8e8;color:#9b2c2c;border:1px solid #f5b5b5}
+  .notice-ok{background:#e6f4ea;color:#22543d;border:1px solid #b7e1c1}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>试点一 · 对账单 / 结算单复核</h1>
+  <span class="sub">抽取 → 规则比对 → 差异解释 → 人工确认 → 保存/回写</span>
+  <a href="/">← 托书</a>
+  <a href="/reconcile">自动对账</a>
+  <a href="/settlement">外协结算</a>
+  <a href="/pilot" style="color:var(--brand);font-weight:600">复核</a>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 输入</h2>
+    <div class="body">
+      <div class="row" style="margin-bottom:10px">
+        <label class="field" style="min-width:150px">
+          单据类型
+          <select id="kind">
+            <option value="statement">客户对账单（应收）</option>
+            <option value="settlement">车队结算单（应付）</option>
+          </select>
+        </label>
+        <label class="field" style="min-width:220px">
+          上传 PDF / 图片 / CSV
+          <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.txt,.tsv,.xlsx" />
+        </label>
+        <button id="btnUpload">上传并抽取</button>
+        <button id="btnDemo">加载示例</button>
+        <span class="hint" id="hint">也可以直接粘贴文本</span>
+      </div>
+      <textarea id="text" placeholder="粘贴对账单/结算单文本，或点“加载示例”"></textarea>
+      <div id="ratesBox" style="display:none;margin-top:10px">
+        <label class="field">
+          合同价表（结算单比对用）
+          <textarea id="rates" style="min-height:80px" placeholder="车队	线路	箱型	单价"></textarea>
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="btnRun">抽取并比对</button>
+        <span class="hint" id="runHint"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="resultCard" style="display:none">
+    <h2>② 抽取结果与复核</h2>
+    <div class="body">
+      <div id="notices"></div>
+      <div class="kpi" id="kpi"></div>
+
+      <div class="grid">
+        <div>
+          <h3 style="font-size:13px;margin:6px 0 8px">表头字段</h3>
+          <div class="grid3" id="headerFields"></div>
+        </div>
+        <div>
+          <h3 style="font-size:13px;margin:6px 0 8px">合同价 / 比对基准</h3>
+          <div class="hint" id="basisHint">对账单以“已确认托书”为系统运单；结算单以合同价为基准。</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:13px;margin:16px 0 8px">明细行</h3>
+      <div style="overflow:auto"><table id="lines"></table></div>
+
+      <h3 style="font-size:13px;margin:16px 0 8px">差异与解释</h3>
+      <div style="overflow:auto"><table id="diffs"></table></div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="btnRecompare">按当前编辑重新比对</button>
+        <button class="primary" id="btnSave">保存复核</button>
+        <span class="hint" id="saveHint"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="pushCard" style="display:none">
+    <h2>③ 回写交付平台</h2>
+    <div class="body">
+      <div class="grid">
+        <label class="field">
+          交付平台项目 ID（engagement_id）
+          <input id="engagementId" placeholder="留空则使用 DELIVERY_ENGAGEMENT_ID" />
+        </label>
+        <div class="row" style="align-items:flex-end">
+          <button class="primary" id="btnPush">推送到对账记录</button>
+          <span class="hint" id="pushHint"></span>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">回写前先保存；同一内容重复推送是幂等的。</div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let STATE = { kind: 'statement', doc: null, result: null, diffs: [], decisions: {}, reviewId: null, waybills: null };
+let DEMO = null;
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+function esc(v){return String(v ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function num(v){return v===null||v===undefined||v===''?'':Number(v).toLocaleString();}
+function setKind(){STATE.kind=$('#kind').value;$('#ratesBox').style.display=STATE.kind==='settlement'?'block':'none';}
+$('#kind').onchange=()=>{setKind();};
+
+function badge(type){
+  const label={amount_mismatch:'金额不符',missing_line:'对账单缺行',extra_line:'对账单多行',
+    duplicate:'重复',tax_mismatch:'税额不符',unit_price_mismatch:'单价不符',
+    quantity_mismatch:'数量不符',period_mismatch:'账期不符',customer_mismatch:'主体不符',
+    rounding:'舍入',no_rate:'无合同价'}[type]||type;
+  return `<span class="tag t-${esc(type)}">${esc(label)}</span>`;
+}
+
+function headerField(key,label,type='text'){
+  const v=STATE.doc?.[key]??'';
+  return `<label class="field">${esc(label)}<input data-hkey="${esc(key)}" type="${type}" value="${esc(v)}" /></label>`;
+}
+
+function renderHeader(){
+  const h = STATE.kind==='statement'
+    ? headerField('statement_no','对账单号')+headerField('customer_name','客户')+
+      headerField('period_start','账期开始','date')+headerField('period_end','账期结束','date')+
+      headerField('total_amount','合计','number')
+    : headerField('settlement_no','结算单号')+headerField('carrier_name','车队/承运商')+
+      headerField('period_start','周期开始','date')+headerField('period_end','周期结束','date')+
+      headerField('total_amount','合计','number');
+  $('#headerFields').innerHTML=h;
+  $('#headerFields').querySelectorAll('input').forEach(el=>{
+    el.oninput=()=>{STATE.doc[el.dataset.hkey]=el.type==='number'?(el.value===''?0:Number(el.value)):el.value;STATE.reviewId=null;};
+  });
+}
+
+function lineFields(){
+  return STATE.kind==='statement'
+    ? [['waybill_no','运单号'],['container_no','箱号'],['container_type','箱型'],
+       ['amount','金额'],['tax_amount','税额'],['total_amount','价税合计'],['due_date','到期日']]
+    : [['trip_no','趟次'],['waybill_no','运单号'],['plate_no','车牌'],['route','线路'],
+       ['container_type','箱型'],['quantity','数量'],['unit_price','单价'],
+       ['amount','金额'],['deduction','扣款']];
+}
+
+function renderLines(){
+  const fields=lineFields();
+  const head='<tr><th>#</th>'+fields.map(f=>`<th>${esc(f[1])}</th>`).join('')+'</tr>';
+  const body=(STATE.doc?.lines||[]).map((line,i)=>{
+    return '<tr><td>'+esc(line.line_no||i+1)+'</td>'+fields.map(([k])=>{
+      const isNum=['amount','tax_amount','total_amount','quantity','unit_price','deduction'].includes(k);
+      return `<td><input data-li="${i}" data-lk="${esc(k)}" type="${isNum?'number':'text'}" value="${esc(line[k]??'')}" /></td>`;
+    }).join('')+'</tr>';
+  }).join('');
+  $('#lines').innerHTML=head+body;
+  $('#lines').querySelectorAll('input').forEach(el=>{
+    el.oninput=()=>{
+      const line=STATE.doc.lines[Number(el.dataset.li)];
+      line[el.dataset.lk]=el.type==='number'?(el.value===''?null:Number(el.value)):el.value;
+      STATE.reviewId=null;
+    };
+  });
+}
+
+function decisionOf(id){return STATE.decisions[id]?.decision || '采纳';}
+function noteOf(id){return STATE.decisions[id]?.note || '';}
+
+function renderDiffs(){
+  const head='<tr><th>类型</th><th>运单/趟次</th><th>对账单</th><th>系统</th><th>差额</th><th>可能原因</th><th>建议动作</th><th>处理</th><th>备注</th></tr>';
+  const body=(STATE.diffs||[]).map(d=>{
+    const id=d.difference_id||'';
+    return `<tr>
+      <td>${badge(d.type)}</td>
+      <td>${esc(d.waybill_no||d.trip_no||'')}</td>
+      <td>${num(d.statement_amount)}</td>
+      <td>${num(d.system_amount)}</td>
+      <td>${num(d.delta)}</td>
+      <td>${esc((d.possible_causes||[]).join('；'))}</td>
+      <td>${esc(d.suggested_action||'')}</td>
+      <td><select data-did="${esc(id)}">
+        <option value="采纳" ${decisionOf(id)==='采纳'?'selected':''}>采纳</option>
+        <option value="修改后采纳" ${decisionOf(id)==='修改后采纳'?'selected':''}>修改后采纳</option>
+        <option value="忽略" ${decisionOf(id)==='忽略'?'selected':''}>忽略</option>
+      </select></td>
+      <td><input data-nid="${esc(id)}" value="${esc(noteOf(id))}" placeholder="原因/处理" /></td>
+    </tr>`;
+  }).join('');
+  $('#diffs').innerHTML=head+(body||'<tr><td colspan="9" class="muted">没有差异</td></tr>');
+  $('#diffs').querySelectorAll('select').forEach(el=>{
+    el.onchange=()=>{STATE.decisions[el.dataset.did]={...STATE.decisions[el.dataset.did],decision:el.value};};
+  });
+  $('#diffs').querySelectorAll('input').forEach(el=>{
+    el.oninput=()=>{STATE.decisions[el.dataset.nid]={...STATE.decisions[el.dataset.nid],note:el.value};};
+  });
+}
+
+function render(){
+  if(!STATE.doc) return;
+  $('#resultCard').style.display='block';
+  renderHeader(); renderLines(); renderDiffs();
+  const d=STATE.doc;
+  const warn=(d.warnings||[]).map(w=>`<div class="notice notice-warn">${esc(w)}</div>`).join('');
+  const ocr=d.source_format==='pdf_scan'||d.source_format==='image';
+  $('#notices').innerHTML = warn + (ocr?`<div class="notice notice-warn">OCR 结果：低置信/列粘连请重点复核。</div>`:'') +
+    (d.needs_review?`<div class="notice notice-err">系统标记 needs_review，请人工确认后再保存。</div>`:'');
+  const counts={};
+  (STATE.diffs||[]).forEach(x=>counts[x.type]=(counts[x.type]||0)+1);
+  $('#kpi').innerHTML=`
+    <div><b>${esc(d.document_id||'')}</b><span>单据</span></div>
+    <div><b>${(d.lines||[]).length}</b><span>明细行</span></div>
+    <div><b>${num(d.total_amount)}</b><span>合计</span></div>
+    <div><b style="color:${STATE.diffs.length?'var(--err)':'var(--ok)'}">${STATE.diffs.length}</b><span>差异</span></div>
+    <div><b>${esc(d.source_format||'')}</b><span>来源</span></div>`;
+  $('#pushCard').style.display='block';
+  $('#saveHint').textContent='';
+}
+
+async function runReview(payload){
+  $('#btnRun').disabled=true; $('#runHint').textContent='处理中…';
+  try{
+    const r=await fetch('/api/pilot/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok){toast('处理失败：'+((await r.text()).slice(0,120)));return;}
+    const data=await r.json();
+    STATE.doc=data.document; STATE.result=data.result; STATE.diffs=data.differences||[];
+    STATE.reviewId=null; render(); toast('已完成抽取与比对');
+  } finally { $('#btnRun').disabled=false; $('#runHint').textContent=''; }
+}
+
+$('#btnDemo').onclick = async () => {
+  const d=await (await fetch('/api/pilot/demo')).json();
+  DEMO=d; STATE.waybills=d.waybills;
+  if(STATE.kind==='statement') $('#text').value=d.statement_text;
+  else { $('#text').value=d.settlement_text; $('#rates').value=d.rates_text; }
+  toast('示例已加载，点“抽取并比对”');
+};
+
+$('#btnRun').onclick = async () => {
+  setKind();
+  const payload={kind:STATE.kind,text:$('#text').value};
+  if(STATE.kind==='statement' && STATE.waybills) payload.waybills=STATE.waybills;
+  if(STATE.kind==='settlement') payload.rates_text=$('#rates').value;
+  await runReview(payload);
+};
+
+$('#btnUpload').onclick = async () => {
+  const f=$('#file').files[0]; if(!f){toast('先选文件');return;}
+  setKind();
+  const fd=new FormData(); fd.append('file',f);
+  const path=STATE.kind==='statement'?'/api/statement/extract/file':'/api/settlement/extract/file';
+  $('#btnUpload').disabled=true; $('#runHint').textContent='识别中…';
+  try{
+    const r=await fetch(path,{method:'POST',body:fd});
+    if(!r.ok){toast('识别失败：'+((await r.text()).slice(0,120)));return;}
+    const data=await r.json();
+    const payload={kind:STATE.kind,document:data.data};
+    if(STATE.kind==='statement' && STATE.waybills) payload.waybills=STATE.waybills;
+    if(STATE.kind==='settlement') payload.rates_text=$('#rates').value;
+    await runReview(payload);
+  } finally { $('#btnUpload').disabled=false; $('#runHint').textContent=''; }
+};
+
+$('#btnRecompare').onclick = async () => {
+  if(!STATE.doc){toast('先抽取');return;}
+  const payload={kind:STATE.kind,document:STATE.doc};
+  if(STATE.kind==='statement' && STATE.waybills) payload.waybills=STATE.waybills;
+  if(STATE.kind==='settlement') payload.rates_text=$('#rates').value;
+  await runReview(payload);
+};
+
+$('#btnSave').onclick = async () => {
+  if(!STATE.doc){toast('先抽取');return;}
+  const decisions=(STATE.diffs||[]).map(d=>({
+    difference_id:d.difference_id,
+    decision:decisionOf(d.difference_id),
+    note:noteOf(d.difference_id),
+  }));
+  const summary={lines:(STATE.doc.lines||[]).length,differences:(STATE.diffs||[]).length,
+    decisions:decisions.reduce((a,x)=>{a[x.decision]=(a[x.decision]||0)+1;return a;}, {})};
+  $('#btnSave').disabled=true;
+  try{
+    const r=await fetch('/api/pilot/reviews',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:STATE.kind,document:STATE.doc,differences:STATE.diffs,decisions,summary})});
+    if(!r.ok){toast('保存失败：'+((await r.text()).slice(0,120)));return;}
+    const data=await r.json();
+    STATE.reviewId=data.id;
+    $('#saveHint').textContent='已保存：'+data.id+(data.duplicate?'（重复内容，已复用）':'');
+    toast('复核已保存');
+  } finally { $('#btnSave').disabled=false; }
+};
+
+$('#btnPush').onclick = async () => {
+  if(!STATE.reviewId){toast('先保存复核');return;}
+  $('#btnPush').disabled=true; $('#pushHint').textContent='推送中…';
+  try{
+    const r=await fetch(`/api/pilot/reviews/${STATE.reviewId}/push`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({engagement_id:$('#engagementId').value.trim()||null})});
+    const data=await r.json();
+    if(!r.ok){$('#pushHint').textContent=data.detail||'推送失败';toast('推送失败');return;}
+    $('#pushHint').textContent=data.ok?'已写入交付平台':'未成功：'+(data.delivery?.error||'');
+    toast(data.ok?'已回写交付平台':'回写未成功');
+  } finally { $('#btnPush').disabled=false; }
+};
+
+setKind();
+</script>
+</body>
+</html>

@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { one, query, withTransaction } from '../db';
 import { archiveAuditLogs } from '../services/audit_archive';
 import { httpError } from '../services/s1';
+import { requirePlatformAdmin } from '../services/permissions';
+import { pdfStorageInfo } from '../services/pdf_cache';
+import { cacheDriver, redisHealthy } from '../services/redis';
 import { requestOrg } from '../services/tenant';
 import { pageResult, parsePage } from '../services/pagination';
 import { listTrash, restoreBatch, type TrashItem } from '../services/trash';
@@ -14,6 +17,34 @@ interface TrashBatch {
 }
 
 export async function systemRoutes(app: FastifyInstance) {
+  app.get('/api/system/storage', async (req) => {
+    requirePlatformAdmin(req);
+    return pdfStorageInfo();
+  });
+
+  app.get('/api/system/cache', async (req) => {
+    requirePlatformAdmin(req);
+    return {
+      driver: cacheDriver(),
+      healthy: await redisHealthy(),
+    };
+  });
+
+  app.get('/api/system/db-context', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth) return reply.code(401).send({ error: 'UNAUTHORIZED', message: '请先登录' });
+    const row = await one<{ current_user: string; org_id: string | null; pid: number }>(
+      `SELECT current_user, current_setting('app.org_id', true) AS org_id, pg_backend_pid() AS pid`,
+    );
+    const again = await one<{ pid: number }>(`SELECT pg_backend_pid() AS pid`);
+    return {
+      current_user: row?.current_user ?? null,
+      org_id: row?.org_id ?? null,
+      platform_admin: Boolean(auth.platform_admin),
+      connection_reused: Boolean(row && again && row.pid === again.pid),
+    };
+  });
+
   app.get('/api/trash', async (req) => {
     const org = await requestOrg(req);
     const items = await listTrash(org);

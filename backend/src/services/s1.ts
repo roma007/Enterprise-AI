@@ -1,10 +1,16 @@
 import type pg from 'pg';
 import { one, withTransaction } from '../db';
 
-export function httpError(statusCode: number, code: string, message: string): Error {
+export function httpError(
+  statusCode: number,
+  code: string,
+  message: string,
+  details?: unknown,
+): Error {
   const err: any = new Error(message);
   err.statusCode = statusCode;
   err.code = code;
+  if (details !== undefined) err.details = details;
   return err;
 }
 

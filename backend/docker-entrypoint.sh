@@ -6,8 +6,10 @@ until psql "$DATABASE_URL" -c "select 1" >/dev/null 2>&1; do
   sleep 2
 done
 
-echo "[entrypoint] running migrations..."
-npm run db:migrate
+if [ "${SKIP_MIGRATIONS:-false}" != "true" ]; then
+  echo "[entrypoint] running migrations..."
+  npm run db:migrate
+fi
 
 if [ "${SEED_DEMO:-false}" = "true" ]; then
   COUNT=$(psql "$DATABASE_URL" -tAc "select count(*) from clients" | tr -d ' ')
@@ -19,4 +21,7 @@ if [ "${SEED_DEMO:-false}" = "true" ]; then
   fi
 fi
 
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
 exec npm run start

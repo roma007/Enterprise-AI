@@ -6,6 +6,37 @@
 
 ## 进行中
 
+- [ ] **多租户 / HA 改造**
+  - [x] 租户模型：`organizations` 增加 slug / status / settings
+  - [x] 供应商自助注册 + 首管理员 + 会话
+  - [x] 同一邮箱多组织时按 `org_slug` 登录
+  - [x] 跨租户注册/客户隔离回归
+  - [x] 平台管理员 + 租户列表 + 暂停/恢复 + 组织设置
+  - [x] PostgreSQL RLS + 请求级 org 上下文 + 受限数据库角色
+  - [x] 租户影响评估 + 数据导出 + 删除（暂停/恢复已完成）
+  - [x] 请求级数据库连接复用（RLS 上下文随请求释放）
+  - [x] PDF 任务改为 PostgreSQL 队列 + SKIP LOCKED worker（支持多实例）
+  - [x] PDF 缓存切换到 local / S3 对象存储抽象
+  - [x] 试用到期、套餐配额与账单视图（支付/发票仍为线下）
+  - [x] PDF 任务 PostgreSQL 队列 + SKIP LOCKED worker
+  - [x] 对象存储抽象：local / S3(MinIO)
+  - [x] S3 联调：本地 S3 兼容服务验证 PUT/GET/DELETE、跨进程与 PDF 缓存
+  - [x] Redis：登录限流 + 会话缓存（未配置自动回退内存）
+  - [x] 多副本 Compose：migrate job + 2 副本 backend + nginx 负载均衡
+  - [x] Kubernetes 滚动发布清单（maxUnavailable 0、迁移 Job、PDB）
+  - [x] 真实多副本压测与故障演练（`npm run soak:replicas`）
+  - [x] 逻辑备份恢复演练（`make drill-restore`，含 RLS 权限修复）
+  - [x] PITR 时间点恢复演练（`make drill-pitr`，含前后对照）
+  - [x] SLO 定义、告警规则与值班 Runbook（`ops/slo.md`、`ops/alerts.yml`）
+  - [x] 滚动发布与回滚演练（本地 3 副本 + nginx + readiness gate）
+  - [ ] K8s 预发集群真实滚动发布
+  - [x] 账单生成、模拟支付、平台确认、HMAC 回调与订阅到期
+  - [x] 自动续费账单任务（`npm run billing:run`，不自动扣款）
+  - [ ] 真实支付厂商 SDK、发票与自动扣费
+  - [x] 告警路由/抑制演练（`npm run drill:alerts`，17 条告警 + 9 个场景）
+  - [ ] Alertmanager 真实触发与值班复盘
+  - [ ] 交付系统组件化与云上/内网安装编排
+
 - [ ] **工程加固**
   - [x] 角色权限分级（admin / director / pm / consultant / tech_lead）
   - [x] 越权统一 403 + 前端入口收敛
@@ -17,7 +48,7 @@
   - [x] 审计归档表 + 预演/执行接口 + 热表/归档切换 + CLI
   - [x] 前端大列表“加载更多”（项目/痛点/盘点/机会点/交付物/知识库）
   - [x] 路由级 + 页签级代码分割（首屏入口约 240KB）
-  - [x] Playwright 冒烟 10 条（项目/页签/搜索/页签记忆/知识库/PDF/分享/会话/用户/审计）并纳入 CI
+  - [x] Playwright 冒烟 13 条（项目/页签/搜索/页签记忆/知识库/PDF/分享/会话/用户/租户/组织套餐/审计）并纳入 CI
   - [x] 服务端 PDF 导出（无头 Chromium，Docker 已装 chromium + 中文 CJK 字体）
   - [x] 页签 hover 预加载 + 按项目记忆上次页签
   - [x] PDF 生成缓存（按版本/内容哈希，`x-pdf-cache` + `refresh=1`）

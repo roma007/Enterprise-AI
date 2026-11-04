@@ -1,4 +1,4 @@
-.PHONY: up down logs ps backup restore metrics archive pdf-cleanup share-cleanup sessions-cleanup
+.PHONY: up down logs ps backup restore metrics archive pdf-cleanup share-cleanup sessions-cleanup worker-logs migrate-prod drill-restore drill-pitr drill-rollout drill-alerts drill-s3 billing-run
 
 up:
 	docker compose up -d --build
@@ -33,3 +33,27 @@ share-cleanup:
 
 sessions-cleanup:
 	docker compose exec -T backend npm run sessions:cleanup -- --days=30
+
+worker-logs:
+	docker compose logs -f pdf-worker
+
+migrate-prod:
+	docker compose run --rm migrate
+
+drill-restore:
+	./scripts/restore-drill.sh
+
+drill-pitr:
+	./scripts/pitr-drill.sh
+
+drill-rollout:
+	cd backend && npm run drill:rollout
+
+drill-alerts:
+	cd backend && npm run drill:alerts
+
+drill-s3:
+	cd backend && npm run drill:s3
+
+billing-run:
+	cd backend && npm run billing:run

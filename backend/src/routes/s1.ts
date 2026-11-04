@@ -11,6 +11,7 @@ import {
   replaceProcessModel,
 } from '../services/s1';
 import { requestOrg } from '../services/tenant';
+import { assertQuota } from '../services/plans';
 import { pageResult, parsePage } from '../services/pagination';
 import { softDeleteClient, softDeleteEngagement } from '../services/trash';
 
@@ -228,6 +229,8 @@ const riskFields = z.object({
   impact: z.coerce.number().int().min(1).max(5),
   mitigation: z.string().nullish(),
   status: z.enum(['open', 'mitigated', 'closed']),
+  owner: uuid.nullish(),
+  due_date: dateStr.nullish(),
 });
 
 const checklistItem = z.object({
@@ -278,6 +281,7 @@ export async function s1Routes(app: FastifyInstance) {
   app.post('/api/clients', async (req, reply) => {
     const body = clientFields.partial({ industry: true, tags: true }).parse(req.body);
     const orgId = await requestOrg(req);
+    await assertQuota(orgId, 'clients');
     const row = await one(
       `INSERT INTO clients (org_id, name, industry, sub_industry, scale, region, annual_revenue, tags, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
@@ -364,6 +368,7 @@ export async function s1Routes(app: FastifyInstance) {
       })
       .parse(req.body);
     const orgId = await requestOrg(req);
+    await assertQuota(orgId, 'engagements');
     const client = await one<any>(`SELECT * FROM clients WHERE id = $1 AND org_id = $2`, [
       body.client_id,
       orgId,
@@ -1167,8 +1172,11 @@ export async function s1Routes(app: FastifyInstance) {
     const { id } = z.object({ id: uuid }).parse(req.params);
     return {
       items: await query(
-        `SELECT * FROM risks WHERE engagement_id = $1
-          ORDER BY (status = 'open') DESC, (probability * impact) DESC, title`, [id]),
+        `SELECT r.*, u.name AS owner_name
+           FROM risks r
+           LEFT JOIN users u ON u.id = r.owner
+          WHERE r.engagement_id = $1
+          ORDER BY (r.status = 'open') DESC, (r.probability * r.impact) DESC, r.title`, [id]),
     };
   });
 
@@ -1177,9 +1185,14 @@ export async function s1Routes(app: FastifyInstance) {
     await engagementOr404(id);
     const body = riskFields.partial({ status: true }).parse(req.body);
     const row = await one(
-      `INSERT INTO risks (engagement_id, title, category, probability, impact, mitigation, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [id, body.title, body.category, body.probability, body.impact, body.mitigation ?? null, body.status ?? 'open'],
+      `INSERT INTO risks
+         (engagement_id, title, category, probability, impact, mitigation, status, owner, due_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [
+        id, body.title, body.category, body.probability, body.impact,
+        body.mitigation ?? null, body.status ?? 'open',
+        body.owner ?? null, body.due_date ?? null,
+      ],
     );
     return reply.code(201).send({ item: row });
   });
@@ -1190,6 +1203,7 @@ export async function s1Routes(app: FastifyInstance) {
     return {
       item: await updateById('risks', id, body, [
         'title', 'category', 'probability', 'impact', 'mitigation', 'status',
+        'owner', 'due_date',
       ]),
     };
   });

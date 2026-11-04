@@ -1,0 +1,59 @@
+{
+  "statement": {
+    "document_id": "stmt-demo-001",
+    "lines": 2,
+    "warnings": [],
+    "reconcile": {
+      "statement_lines": 2,
+      "waybills": 3,
+      "rows": 3,
+      "ok": 1,
+      "amount_diff": 1,
+      "missing_in_system": 0,
+      "missing_in_statement": 1,
+      "statement_total": 5434.0,
+      "system_total": 10400.0,
+      "diff_total": -4966.0,
+      "needs_action": 2
+    },
+    "differences": 2,
+    "difference_types": {
+      "amount_mismatch": 1,
+      "missing_line": 1
+    },
+    "explanation_sources": {
+      "llm+rule": 2
+    }
+  },
+  "settlement": {
+    "document_id": "set-demo-001",
+    "lines": 2,
+    "warnings": [],
+    "settle": {
+      "bills": 2,
+      "ok": 1,
+      "overcharge": 0,
+      "undercharge": 1,
+      "no_rate": 0,
+      "expected_total": 8600.0,
+      "claimed_total": 8500.0,
+      "diff_total": -100.0,
+      "overcharge_amount": 0.0,
+      "undercharge_amount": -100.0,
+      "need_action": 1
+    },
+    "differences": 1,
+    "difference_types": {
+      "unit_price_mismatch": 1
+    },
+    "explanation_sources": {
+      "llm+rule": 1
+    }
+  },
+  "outputs": {
+    "statement_extracted": "/Users/mengfeng/我的文档/源码/Enterprise AI/会客包/试点一/reports/statement_extracted.example.jsonl",
+    "statement_differences": "/Users/mengfeng/我的文档/源码/Enterprise AI/会客包/试点一/reports/statement_differences.example.jsonl",
+    "settlement_extracted": "/Users/mengfeng/我的文档/源码/Enterprise AI/会客包/试点一/reports/settlement_extracted.example.jsonl",
+    "settlement_differences": "/Users/mengfeng/我的文档/源码/Enterprise AI/会客包/试点一/reports/settlement_differences.example.jsonl"
+  }
+}

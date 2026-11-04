@@ -4,7 +4,9 @@ export interface StoredUser {
   email: string;
   org_id: string;
   org_name: string;
+  org_slug?: string;
   role: string;
+  platform_admin?: boolean;
 }
 
 const TOKEN_KEY = 'ai-delivery-token';

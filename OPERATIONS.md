@@ -49,6 +49,14 @@ psql "$DATABASE_URL" -c "select action,status_code,created_at from audit_logs wh
 | `slow_requests_total` | 慢请求累计 |
 | `process_uptime_seconds` | 进程运行时长 |
 | `db_up` | `SELECT 1` 探活 |
+| `db_pool_total_connections` / `db_pool_idle_connections` | 连接池使用中 / 空闲 |
+| `db_pool_waiting_requests` / `db_pool_max_connections` | 等待连接的请求 / 单进程池上限 |
+| `redis_configured` / `redis_up` | 是否配置 Redis / PING 健康 |
+| `pdf_jobs_pending` / `pdf_jobs_running` | PDF 队列待处理 / 渲染中 |
+| `pdf_jobs_done_24h` / `pdf_jobs_failed_24h` | 24 小时内完成 / 失败任务 |
+| `pdf_jobs_oldest_pending_seconds` | 最老待处理任务等待秒数 |
+| `ai_delivery_backup_last_success_timestamp_seconds` | 最近一次备份成功时间（node_exporter textfile） |
+| `ai_delivery_restore_drill_last_success_timestamp_seconds` | 最近一次恢复演练成功时间（textfile） |
 
 常用 PromQL：
 
@@ -66,6 +74,16 @@ rate(slow_requests_total[5m])
 
 # 各路由请求量 Top
 topk(10, sum by (route) (rate(http_requests_total[5m])))
+
+# PDF 24h 失败率
+sum(pdf_jobs_failed_24h)
+/
+clamp_min(sum(pdf_jobs_done_24h) + sum(pdf_jobs_failed_24h), 1)
+
+# 数据库连接池使用率
+sum(db_pool_total_connections)
+/
+clamp_min(sum(db_pool_max_connections), 1)
 ```
 
 示例配置：
@@ -73,6 +91,7 @@ topk(10, sum by (route) (rate(http_requests_total[5m])))
 - [`ops/prometheus.scrape.example.yml`](../ops/prometheus.scrape.example.yml)
 - [`ops/alerts.yml`](../ops/alerts.yml)
 - [`ops/grafana-dashboard.json`](../ops/grafana-dashboard.json)（导入 Grafana，选择 Prometheus 数据源）
+- [`ops/slo.md`](../ops/slo.md)（SLO、错误预算、告警路由与值班 Runbook）
 
 设置 `METRICS_TOKEN` 后，Prometheus 需带 Bearer：
 
@@ -109,6 +128,9 @@ scrape_configs:
 
 # 每天 03:10 归档 180 天前的客户分享访问明细
 10 3 * * * cd /opt/ai-delivery && docker compose exec -T backend npm run share:archive -- --days=180 >> /var/log/ai-delivery/share-archive.log 2>&1
+
+# 每天 03:20 账单任务：逾期标记 + 自动续费账单（不会自动扣款）
+20 3 * * * cd /opt/ai-delivery && docker compose exec -T backend npm run billing:run >> /var/log/ai-delivery/billing.log 2>&1
 
 # 每天 03:20 清理 30 天前的已过期/已撤销登录会话
 20 3 * * * cd /opt/ai-delivery && docker compose exec -T backend npm run sessions:cleanup -- --days=30 >> /var/log/ai-delivery/sessions-cleanup.log 2>&1
@@ -147,21 +169,50 @@ scrape_configs:
 - `SELECT count(*) FROM pg_stat_activity;` 是否打满。
 - 恢复后确认 `/api/health` 的 `tables/migrations` 正常。
 
-### 4.3 PDF 导出失败
+### 4.3 PDF 队列与 worker
+
+- API 默认内联 worker；生产建议 `PDF_WORKER_INLINE=false`，单独运行一个或多个 `npm run worker:pdf` / `pdf-worker` 容器。
+- 任务通过 `pdf_jobs` + `FOR UPDATE SKIP LOCKED` 认领，多实例不会重复处理。
+- 失败/失联任务：`PDF_JOB_LEASE_MINUTES`（默认 15）后可被重新认领；`attempts` 记录次数。
+- 查看队列：`select status,count(*) from pdf_jobs group by status;`
+- 共享 PDF 缓存：本地需同一 `PDF_CACHE_DIR`；容器使用 `pdfcache` 卷。多主机部署应换 S3/MinIO。
+
+### 4.4 对象存储 / S3
+
+- `GET /api/system/storage`（平台管理员）查看当前驱动与目标。
+- 本地默认写 `PDF_CACHE_DIR`；多主机/容器必须切 S3/MinIO，否则 API 与 worker 读不到同一份缓存。
+- MinIO 示例：
+  ```bash
+  docker compose --profile s3 up -d minio
+  # .env
+  STORAGE_DRIVER=s3
+  S3_ENDPOINT=http://minio:9000
+  S3_BUCKET=ai-delivery
+  S3_ACCESS_KEY_ID=minioadmin
+  S3_SECRET_ACCESS_KEY=minioadmin
+  ```
+  首次需创建 bucket（MinIO Console 或 `mc mb`）。
+- 生产建议为 bucket 配置 30 天生命周期，替代应用侧 TTL。
+- 本地联调：`make drill-s3`（`s3rver` 本地 S3 兼容服务），验证 PUT/GET/DELETE、404、Content-Type、prefix、跨进程读取，以及 API + 2 个 worker 的 PDF 缓存读写。
+- 2026-11-03 实测：2/2 PDF 任务完成，S3 缓存约 1.4MB，API 从 S3 读回内容一致。
+- S3 兼容实现若对新版灵活校验和支持不完整，客户端已设置 `requestChecksumCalculation=WHEN_REQUIRED` / `responseChecksumValidation=WHEN_REQUIRED`。
+- S3 不可用时 PDF 任务会失败；Word/HTML 导出不受影响。
+
+### 4.5 PDF 导出失败
 
 - 错误 `PDF_ENGINE_UNAVAILABLE`：当前环境没有 Chromium，设置 `PDF_CHROME_PATH` 或使用 Docker 镜像（已内置 chromium + fonts-noto-cjk）。
 - 任务 `failed`：`GET /api/pdf-jobs/:id` 查看 `error`；常见为浏览器崩溃、超时、字体缺失。
 - 同步接口 `500 PDF_RENDER_FAILED`：看后端日志 `pdf render failed` 与 requestId。
 - 缓存 `410`：PDF 文件已按 TTL 清理，重新生成即可。
 
-### 4.4 403 项目访问
+### 4.6 403 项目访问
 
 - `PROJECT_FORBIDDEN`：项目已配置成员，当前用户不在成员名单。
 - `PROJECT_READONLY`：只读成员执行了写操作。
 - `FORBIDDEN`：组织角色不足（如顾问改标杆、看审计归档）。
 - 处理：项目负责人在「成员」页添加/调整角色，或由管理员/总监操作。
 
-### 4.5 磁盘增长
+### 4.7 磁盘增长
 
 排查顺序：
 
@@ -176,14 +227,14 @@ du -sh backend/.pdf-cache backups
 - 审计归档：导出归档表后按合规要求清理。
 - 容器日志：配置 Docker `log-opts` 轮转。
 
-### 4.6 登录 429
+### 4.8 登录 429
 
 - 默认 5 次失败 / 15 分钟（`LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_MS`），按 IP + 邮箱计数。
 - 超限返回 429 `LOGIN_RATE_LIMITED`；限流期间正确密码也会被拦截，等待窗口结束即可。
 - 反向代理后需设置 `TRUST_PROXY=true`，否则所有用户可能共享网关 IP 的计数。
 - 进程重启会清空计数；多实例部署需网关/Redis 级别的统一下限流。
 
-### 4.7 分享 429
+### 4.9 分享 429
 
 - 默认每 IP + token 60 次/分钟；调 `PUBLIC_SHARE_RATE_LIMIT` / `PUBLIC_SHARE_RATE_WINDOW_MS`。
 - 反向代理后所有请求可能来自网关 IP：设置 `TRUST_PROXY=true`，并确保只信任自己的网关。
@@ -209,17 +260,100 @@ du -sh backend/.pdf-cache backups
 - 撤销后 token 立即失效；前端下一次请求会收到 401 并跳回登录。
 - 会话默认 8 小时过期；过期/撤销记录默认保留 30 天后由 cron 清理（活跃会话永不删除）。
 
-### 4.9 用户与账号
+### 4.10 Redis / 缓存
+
+- 生产/多实例必须配置 `REDIS_URL`；未配置时登录限流与会话缓存回退进程内存，多副本之间不共享。
+- `GET /api/system/cache` 查看驱动与 `PING` 健康状态。
+- 会话缓存 TTL 30 秒；撤销、强制下线、暂停租户会删除对应缓存。
+- Redis 不可用时限流回退内存、会话校验回退数据库；不会阻断业务，但多实例一致性下降。
+- Redis 不持久化会话本身，会话真值仍在 PostgreSQL `user_sessions`。
+
+### 4.11 租户隔离与 RLS
+
+- 正常 API 请求使用受限角色 `ai_delivery_app`，数据库按 `app.org_id` 行级隔离；每个请求复用一条连接，结束后清理角色与上下文。
+- 连接池上限 `PG_POOL_MAX` 默认 20；高并发需监控 `pg_stat_activity` 并调大。
+- 验证当前请求上下文：`GET /api/system/db-context`。
+- 直接使用数据库 owner 连接会绕过 RLS；只允许运维/迁移使用。
+- 若报 `permission denied to set role "ai_delivery_app"`：由 DBA 创建角色并授权给应用连接用户，或临时设置 `DB_APP_ROLE=off`（仅限排障）。
+- 登录、公开分享、健康检查使用服务角色，不参与 RLS 上下文。
+
+### 4.12 用户与账号
 
 - 管理员/总监在「用户管理」页创建账号、调整角色、禁用、重置密码。
 - 禁用或重置密码会立即撤销该用户全部会话。
 - 组织至少保留一名启用的管理员；不能禁用当前登录账号。
 - 审计日志记录创建/修改/重置动作，可用 `action` 或对象类型检索。
 
-### 4.10 指标 401
+### 4.13 多副本与发布
+
+- Compose：`migrate` 一次性迁移 → backend 多副本 → nginx 网关；生产零停机建议使用 `ops/k8s/`。
+- K8s 发布顺序：expand 迁移 → backend（maxUnavailable 0）→ worker → frontend → 观察指标 → 下一轮 contract 迁移。
+- 多副本前提：Redis、S3/MinIO、外部/托管 PostgreSQL、`PDF_WORKER_INLINE=false`。
+- 迁移 Job 先于 Deployment；禁止应用启动时并发迁移。
+- 回滚：`kubectl rollout undo deployment/ai-delivery-backend`；数据库迁移保持 expand-contract。
+
+**本地多副本演练**：
+
+```bash
+npm run smoke:replicas   # 快速冒烟：故障切换 + 双 worker
+npm run soak:replicas    # 持续压测：QPS/P95 + 压测中故障 + Redis 宕机 + PDF 积压
+cd backend && npm run drill:rollout   # 滚动发布/回滚：readiness → 切流 → 停旧副本
+```
+
+`soak:replicas` 会启动 2 个 API、nginx、独立 Redis（6391）和 2 个 PDF worker，验证：
+
+- 持续并发下 P95 与失败率；连接池峰值不超过 `副本数 × PG_POOL_MAX`
+- 压测中杀掉一个副本，nginx 自动切换且失败率 ≤ 2%
+- 副本重启后恢复服务
+- Redis 宕机后登录限流回退内存、会话校验回退数据库
+- PDF 队列积压由双 worker 分担完成
+- `/metrics` 的 `db_up`、请求量与耗时直方图
+
+可调参数：`SOAK_CONCURRENCY`、`SOAK_DURATION_MS`、`SOAK_P95_LIMIT_MS`、`SOAK_PDF_JOBS`、`PG_POOL_MAX`。
+
+`drill:rollout` 启动 3 个 API + nginx，先起新版本并通过 `/api/health` 版本校验，再切 nginx upstream，最后停旧副本；随后用数据库不可用的坏版本验证 readiness 拦截，再完整回滚。发布/回滚全过程持续压测，并校验 `x-app-version` 流量分布。
+
+> 演练脚本会直接操作本地数据库并清理生成的测试交付物；生产环境请用独立环境或 K8s 预发集群。
+
+### 4.14 备份、恢复与 PITR
+
+- 每日备份：`make backup`；异地保存至少一份。
+- 恢复：`make restore FILE=backups/xxx.dump`；恢复脚本会重建 RLS 应用角色权限。
+- 逻辑恢复演练：`make drill-restore`（备份 → 临时库恢复 → 结构与 RLS 校验 → 清理）。
+- PITR 演练：`make drill-pitr`（临时集群 + WAL 归档 → 时间点恢复 → 前后对照）。
+- 生产 PITR：托管 PostgreSQL 开启自动备份 + PITR；自建需 `wal_level=replica`、`archive_mode=on`，WAL 与基础备份异地保存。
+- 恢复演练不能只看“命令成功”，必须校验业务表行数、迁移版本、RLS 隔离与关键租户。
+- 备份/演练心跳：设置 `PROM_TEXTFILE_DIR` 指向 node_exporter textfile 目录，`backup.sh` / `restore-drill.sh` 会写入 `.prom`，供 `BackupStale` / `RestoreDrillStale` 告警使用。
+- SLO、错误预算与值班 Runbook：`ops/slo.md`。
+
+### 4.15 告警值班演练
+
+- 规则：`ops/alerts.yml`（17 条告警，均带 `severity` / `service` 标签）。
+- 路由与抑制：`ops/alertmanager.yml`。
+- 本地演练：`make drill-alerts` 或 `cd backend && npm run drill:alerts`。
+- 校验内容：critical → `pager`、数据库 critical → `dba-oncall`、warning → `chat`、info → `weekly`；同服务 critical 抑制 warning；跨服务不误抑制。
+- 生产还需：接入真实 Alertmanager webhook/电话，执行一次 **触发 → 认领 → 静默 → 升级 → 恢复** 演练，并记录响应时间。
+
+### 4.16 指标 401
 
 - 设置了 `METRICS_TOKEN`，Prometheus 未带 Bearer 或 `?token=`。
 - 不要把 `/metrics` 裸暴露公网；只允许监控网段访问。
+
+### 4.17 租户试用、配额与计费
+
+- 套餐目录：`tenant_plans`（trial / free / pro / enterprise），含用户、客户、项目、本月 PDF 任务上限与月费/年费。
+- 新注册租户自动 14 天试用；`trial_ends_at` 到期后登录返回 403 `TRIAL_EXPIRED`，现有会话失效。
+- 配额检查：创建用户 / 客户 / 项目 / PDF 任务前执行；超限返回 403 `QUOTA_EXCEEDED`，`details` 含 `resource/limit/used/plan`。
+- 租户查看：`GET /api/org/billing`（前端 `#/org`「套餐与用量」）。
+- 平台管理：`GET /api/platform/plans`；`PATCH /api/platform/tenants/:id` 支持 `plan`、`trial_ends_at`、`billing_email`；前端 `#/tenants` 可调整套餐、延长试用。
+- 支付模式：`PAYMENT_PROVIDER=mock`（本地模拟支付）/ `manual`（平台确认收款）/ `callback`（网关回调）。
+- 账单状态：`pending` → `paid` / `void`；逾期 3 天自动标记 `overdue`。
+- 租户自助：`POST /api/org/billing/checkout` 生成账单；`mock` 模式可调用 `/api/org/billing/invoices/:id/pay` 模拟支付。
+- 平台确认：`GET /api/platform/invoices`、`POST /api/platform/invoices/:id/mark-paid`、`.../void`；前端 `#/tenants` 底部「最近账单」。
+- 网关回调：`POST /api/billing/callback`，`x-billing-signature = HMAC-SHA256(invoice_id:status:external_id, BILLING_WEBHOOK_SECRET)`。
+- 自动续费：`npm run billing:run`（`make billing-run`）生成续费账单并标记逾期；**不会自动扣款**。
+- 订阅到期：付费套餐 `plan_expires_at` 过期后登录返回 403 `SUBSCRIPTION_EXPIRED`，现有会话失效。
+- 当前**未接具体支付厂商 SDK、发票与自动扣费**；`price_monthly/yearly` 仅用于账单金额。
 
 ---
 
@@ -254,7 +388,8 @@ du -sh backend/.pdf-cache backups
 
 ## 7. 演练清单
 
-- [ ] 从备份恢复到一个空库，/api/health 正常
+- [x] 从备份恢复到一个空库，校验表/迁移/行数/RLS（`make drill-restore`）
+- [x] PITR 时间点恢复与前后对照（`make drill-pitr`）
 - [ ] 停掉数据库，确认 `/metrics` 的 `db_up=0` 与告警触发
 - [ ] 制造一次 5xx，确认错误体带 requestId，日志/审计可检索
 - [ ] 移除项目成员，确认 403 与列表过滤

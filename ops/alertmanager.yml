@@ -1,0 +1,81 @@
+# Alertmanager 路由与抑制示例
+# 生产替换 webhook 地址；Alertmanager 支持 ${ENV} 展开
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # 数据库关键告警单独路由给 DBA 值班
+    - matchers:
+        - 'severity="critical"'
+        - 'service="database"'
+      receiver: dba-oncall
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # 其他 critical 走电话/Pager
+    - matchers:
+        - 'severity="critical"'
+      receiver: pager
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # warning 走值班群，次日处理
+    - matchers:
+        - 'severity="warning"'
+      receiver: chat
+      group_wait: 1m
+      repeat_interval: 4h
+
+    # info 进周报
+    - matchers:
+        - 'severity="info"'
+      receiver: weekly
+      group_wait: 5m
+      repeat_interval: 24h
+
+inhibit_rules:
+  # 同服务已有 critical 时，抑制该服务所有 warning，避免告警风暴
+  - source_matchers:
+      - 'severity="critical"'
+    target_matchers:
+      - 'severity="warning"'
+    equal: [service]
+
+  # 后端整体不可达时，抑制同服务的 info（如 NoTraffic）
+  - source_matchers:
+      - 'alertname="BackendDown"'
+    target_matchers:
+      - 'service="api"'
+    equal: [service]
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: http://alert-router:9095/default
+        send_resolved: true
+
+  - name: pager
+    webhook_configs:
+      - url: http://alert-router:9095/pager
+        send_resolved: true
+
+  - name: dba-oncall
+    webhook_configs:
+      - url: http://alert-router:9095/dba
+        send_resolved: true
+
+  - name: chat
+    webhook_configs:
+      - url: http://alert-router:9095/chat
+        send_resolved: true
+
+  - name: weekly
+    webhook_configs:
+      - url: http://alert-router:9095/weekly
+        send_resolved: true

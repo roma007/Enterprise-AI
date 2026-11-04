@@ -45,6 +45,19 @@ import type {
   ShareView,
   UserSession,
   AdminUser,
+  OrganizationSummary,
+  OrgBilling,
+  PlanDefinition,
+  Invoice,
+  CopilotReconcileReview,
+  CopilotReconcileReviewDetail,
+  ReconcileBatch,
+  BatchFilterView,
+  UserNotification,
+  BatchFilterViewAudit,
+  NotificationAudit,
+  CollabAudit,
+  Holiday,
   ValueOverview,
   MetricTarget,
   MetricSnapshot,
@@ -62,6 +75,38 @@ import type {
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
 
+export interface BatchExportFilters {
+  status?: 'running' | 'completed' | 'failed' | 'cancelled';
+  action_type?: 'risk' | 'issue';
+  from?: string;
+  to?: string;
+}
+
+function batchExportQuery(filters: BatchExportFilters = {}): string {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.action_type) params.set('action_type', filters.action_type);
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export interface BatchActionEvent {
+  difference_id?: string;
+  status?: 'created' | 'duplicate' | 'failed';
+  item_id?: string;
+  item_code?: string | null;
+  action_id?: string | null;
+  code?: string;
+  error?: string;
+  done?: boolean;
+  created?: number;
+  skipped?: number;
+  failed?: number;
+  cancelled?: boolean;
+}
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -75,6 +120,66 @@ export class ApiError extends Error {
     this.issues = body?.issues;
     this.details = body;
   }
+}
+
+async function requestStream(
+  path: string,
+  body: unknown,
+  onEvent: (event: BatchActionEvent) => void,
+): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let parsed: any = null;
+    if (text) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = text;
+      }
+    }
+    throw new ApiError(res.status, parsed as ApiErrorBody);
+  }
+  if (!res.body) {
+    throw new ApiError(500, { error: 'NO_STREAM', message: '浏览器不支持流式响应' } as ApiErrorBody);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      onEvent(JSON.parse(line) as BatchActionEvent);
+    }
+  }
+  const tail = buffer.trim();
+  if (tail) onEvent(JSON.parse(tail) as BatchActionEvent);
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+  if (!res.ok) {
+    const text = await res.text();
+    let body: any = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
+    }
+    throw new ApiError(res.status, body as ApiErrorBody);
+  }
+  return res.blob();
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -264,6 +369,8 @@ export const api = {
     request<{ items: Risk[] }>(`/api/engagements/${id}/risks`),
   createRisk: (id: string, payload: Record<string, unknown>) =>
     request<{ item: Risk }>(`/api/engagements/${id}/risks`, json('POST', payload)),
+  updateRisk: (rid: string, payload: Record<string, unknown>) =>
+    request<{ item: Risk }>(`/api/risks/${rid}`, json('PATCH', payload)),
   deleteRisk: (rid: string) =>
     request<{ ok: boolean }>(`/api/risks/${rid}`, { method: 'DELETE' }),
 
@@ -847,10 +954,596 @@ export const api = {
 
   // 认证
   authConfig: () => request<{ required: boolean }>('/api/auth/config'),
-  login: (email: string, password: string) =>
-    request<{ token: string; user: StoredUser }>('/api/auth/login', json('POST', { email, password })),
+  login: (email: string, password: string, orgSlug?: string) =>
+    request<{ token: string; user: StoredUser }>(
+      '/api/auth/login',
+      json('POST', { email, password, org_slug: orgSlug || undefined }),
+    ),
+  register: (payload: {
+    org_name: string;
+    org_slug?: string;
+    name: string;
+    email: string;
+    password: string;
+  }) => request<{ token: string; user: StoredUser }>('/api/auth/register', json('POST', payload)),
   me: () => request<{ user: StoredUser }>('/api/me'),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  getOrg: () => request<{ item: OrganizationSummary }>('/api/org'),
+  getOrgBilling: () => request<{ item: OrgBilling }>('/api/org/billing'),
+  listOrgInvoices: () =>
+    request<{ items: Invoice[] }>('/api/org/billing/invoices'),
+  createCheckout: (payload: { plan?: string; cycle?: 'monthly' | 'yearly' }) =>
+    request<{ item: Invoice; provider: string; mock: boolean; reused: boolean }>(
+      '/api/org/billing/checkout',
+      json('POST', payload),
+    ),
+  payMockInvoice: (id: string) =>
+    request<{ item: Invoice; billing: OrgBilling }>(
+      `/api/org/billing/invoices/${id}/pay`,
+      { method: 'POST' },
+    ),
+  retimeOrgSnapshots: () =>
+    request<{ ok: boolean; updated: number; timezone: string }>(
+      '/api/org/snapshots/retime',
+      json('POST', {}),
+    ),
+  updateOrg: (payload: Record<string, unknown>) =>
+    request<{ item: OrganizationSummary }>('/api/org', json('PATCH', payload)),
+  listPlatformTenants: () =>
+    request<{ items: OrganizationSummary[] }>('/api/platform/tenants'),
+  listPlatformPlans: () =>
+    request<{ items: PlanDefinition[] }>('/api/platform/plans'),
+  listHolidays: (opts: { year?: number; effective?: boolean } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.year) params.set('year', String(opts.year));
+    if (opts.effective) params.set('effective', '1');
+    const qs = params.toString();
+    return request<{ items: Holiday[] }>(`/api/holidays${qs ? `?${qs}` : ''}`);
+  },
+  createHoliday: (payload: { date: string; name: string; region?: string }) =>
+    request<{ item: Holiday }>('/api/holidays', json('POST', payload)),
+  deleteHoliday: (id: string) =>
+    request<{ ok: boolean }>(`/api/holidays/${id}`, { method: 'DELETE' }),
+  listCopilotReconcileReviews: (engagementId: string) =>
+    request<{ items: CopilotReconcileReview[] }>(
+      `/api/engagements/${engagementId}/copilot-reconcile-reviews`,
+    ),
+  getCopilotReconcileReview: (id: string) =>
+    request<{ item: CopilotReconcileReviewDetail }>(
+      `/api/copilot-reconcile-reviews/${id}`,
+    ),
+  createReconcileReviewAction: (id: string, payload: Record<string, unknown>) =>
+    request<{
+      ok: boolean;
+      duplicate: boolean;
+      type: 'risk' | 'issue';
+      item_id: string;
+      item_code?: string;
+      action_id?: string | null;
+      difference_id?: string | null;
+    }>(
+      `/api/copilot-reconcile-reviews/${id}/actions`,
+      json('POST', payload),
+    ),
+  createReconcileReviewActionsBatch: (
+    id: string,
+    payload: {
+      type: 'risk' | 'issue';
+      difference_ids: string[];
+      owner?: string | null;
+      due_date?: string | null;
+      severity?: 'P0' | 'P1' | 'P2' | 'P3';
+    },
+  ) =>
+    request<{
+      ok: boolean;
+      type: 'risk' | 'issue';
+      created: number;
+      skipped: number;
+      failed: number;
+      items: Array<{
+        difference_id: string;
+        status: 'created' | 'duplicate' | 'failed';
+        item_id?: string;
+        item_code?: string | null;
+        action_id?: string | null;
+        code?: string;
+        error?: string;
+      }>;
+    }>(`/api/copilot-reconcile-reviews/${id}/actions/batch`, json('POST', payload)),
+
+  streamReconcileReviewActionsBatch: async (
+    id: string,
+    payload: {
+      type: 'risk' | 'issue';
+      difference_ids: string[];
+      owner?: string | null;
+      due_date?: string | null;
+      severity?: 'P0' | 'P1' | 'P2' | 'P3';
+    },
+    onEvent: (event: BatchActionEvent) => void,
+  ): Promise<void> => {
+    await requestStream(
+      `/api/copilot-reconcile-reviews/${id}/actions/batch/stream`,
+      payload,
+      onEvent,
+    );
+  },
+  listReconcileBatches: (
+    reviewId: string,
+    opts: ({ limit?: number; offset?: number } & BatchExportFilters) = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    if (opts.status) params.set('status', opts.status);
+    if (opts.action_type) params.set('action_type', opts.action_type);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    const qs = params.toString();
+    return request<{
+      items: ReconcileBatch[];
+      total: number;
+      batch_total: number;
+      roots_returned: number;
+      limit: number;
+      offset: number;
+    }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/action-batches${qs ? `?${qs}` : ''}`,
+    );
+  },
+  streamRetryReconcileBatch: (
+    batchId: string,
+    onEvent: (event: BatchActionEvent) => void,
+  ) => requestStream(`/api/copilot-reconcile-batches/${batchId}/retry/stream`, {}, onEvent),
+  notificationsUnreadCount: () =>
+    request<{ count: number }>('/api/notifications/unread-count'),
+  listNotifications: (
+    opts: {
+      unread?: boolean;
+      kind?: string;
+      from?: string;
+      to?: string;
+      trash?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.unread) params.set('unread', '1');
+    if (opts.kind) params.set('kind', opts.kind);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.trash) params.set('trash', '1');
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{
+      items: UserNotification[];
+      total: number;
+      unread_count: number;
+      kinds: string[];
+      trash_retention_days: number;
+      limit: number;
+      offset: number;
+    }>(`/api/notifications${qs ? `?${qs}` : ''}`);
+  },
+  markNotificationRead: (id: string) =>
+    request<{ ok: boolean }>(`/api/notifications/${id}/read`, json('POST', {})),
+  markAllNotificationsRead: () =>
+    request<{ ok: boolean; updated: number }>(
+      '/api/notifications/read-all',
+      json('POST', {}),
+    ),
+  listNotificationAudits: (
+    opts: {
+      action?: string;
+      from?: string;
+      to?: string;
+      actor_id?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{
+      items: NotificationAudit[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/notification-audits${qs ? `?${qs}` : ''}`);
+  },
+  exportNotificationAuditsCsv: (opts: {
+    action?: string;
+    from?: string;
+    to?: string;
+    actor_id?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    const qs = params.toString();
+    return requestBlob(
+      `/api/notification-audits/export.csv${qs ? `?${qs}` : ''}`,
+    );
+  },
+  getCollabAuditStats: (
+    opts: {
+      from?: string;
+      to?: string;
+      actor_id?: string;
+      scope?: 'live' | 'archive' | 'all';
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    if (opts.scope) params.set('scope', opts.scope);
+    const qs = params.toString();
+    return request<{
+      total: number;
+      by_type: { notification: number; filter_view: number; export: number };
+      top_actions: Array<{ action: string; count: number }>;
+      top_actors: Array<{
+        user_id: string | null;
+        actor_name: string | null;
+        count: number;
+      }>;
+      retention_days: number;
+    }>(`/api/collab-audits/stats${qs ? `?${qs}` : ''}`);
+  },
+  listCollabAudits: (
+    opts: {
+      type?: 'all' | 'notification' | 'filter_view' | 'export';
+      action?: string;
+      from?: string;
+      to?: string;
+      actor_id?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.type && opts.type !== 'all') params.set('type', opts.type);
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{
+      items: CollabAudit[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/collab-audits${qs ? `?${qs}` : ''}`);
+  },
+  listCollabAuditsMerged: (
+    opts: {
+      type?: 'all' | 'notification' | 'filter_view' | 'export';
+      action?: string;
+      from?: string;
+      to?: string;
+      actor_id?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.type && opts.type !== 'all') params.set('type', opts.type);
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{
+      items: CollabAudit[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/collab-audits/merged${qs ? `?${qs}` : ''}`);
+  },
+  exportCollabSnapshotsCsv: (
+    days = 30,
+    bucket: 'day' | 'week' | 'month' = 'day',
+  ) =>
+    requestBlob(
+      `/api/collab-audits/snapshots/export.csv?days=${days}&bucket=${bucket}`,
+    ),
+  listCollabSnapshots: (
+    opts: { days?: number; bucket?: 'day' | 'week' | 'month' } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.days) params.set('days', String(opts.days));
+    if (opts.bucket) params.set('bucket', opts.bucket);
+    const qs = params.toString();
+    return request<{
+      items: Array<{
+        id: string;
+        snapshot_date: string;
+        total: number;
+        notification_count: number;
+        filter_view_count: number;
+        export_count: number;
+        created_at: string;
+        delta_total: number;
+        delta_notification: number;
+        delta_filter_view: number;
+        delta_export: number;
+        period_start: string;
+        period_end: string;
+      }>;
+      bucket: 'day' | 'week' | 'month';
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/collab-audits/snapshots${qs ? `?${qs}` : ''}`);
+  },
+  listCollabAuditArchive: (
+    opts: {
+      type?: 'all' | 'notification' | 'filter_view' | 'export';
+      action?: string;
+      from?: string;
+      to?: string;
+      actor_id?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.type && opts.type !== 'all') params.set('type', opts.type);
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{
+      items: CollabAudit[];
+      total: number;
+      last_archive: {
+        count: number;
+        days: number;
+        created_at: string;
+      } | null;
+      limit: number;
+      offset: number;
+    }>(`/api/collab-audits/archive${qs ? `?${qs}` : ''}`);
+  },
+  exportCollabMergedCsv: (opts: {
+    type?: 'all' | 'notification' | 'filter_view' | 'export';
+    action?: string;
+    from?: string;
+    to?: string;
+    actor_id?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.type && opts.type !== 'all') params.set('type', opts.type);
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    const qs = params.toString();
+    return requestBlob(
+      `/api/collab-audits/merged/export.csv${qs ? `?${qs}` : ''}`,
+    );
+  },
+  listCollabArchiveRuns: (
+    opts: { limit?: number; offset?: number; from?: string; to?: string } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    const qs = params.toString();
+    return request<{
+      items: Array<{ id: string; count: number; days: number; created_at: string }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/collab-audits/archive-runs${qs ? `?${qs}` : ''}`);
+  },
+  exportCollabArchiveCsv: (opts: {
+    type?: 'all' | 'notification' | 'filter_view' | 'export';
+    action?: string;
+    from?: string;
+    to?: string;
+    actor_id?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.type && opts.type !== 'all') params.set('type', opts.type);
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    const qs = params.toString();
+    return requestBlob(
+      `/api/collab-audits/archive/export.csv${qs ? `?${qs}` : ''}`,
+    );
+  },
+  exportCollabAuditsCsv: (opts: {
+    type?: 'all' | 'notification' | 'filter_view' | 'export';
+    action?: string;
+    from?: string;
+    to?: string;
+    actor_id?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.type && opts.type !== 'all') params.set('type', opts.type);
+    if (opts.action) params.set('action', opts.action);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.actor_id) params.set('actor_id', opts.actor_id);
+    const qs = params.toString();
+    return requestBlob(`/api/collab-audits/export.csv${qs ? `?${qs}` : ''}`);
+  },
+  restoreNotifications: (ids: string[]) =>
+    request<{ ok: boolean; restored: number }>(
+      '/api/notifications/restore',
+      json('POST', { ids }),
+    ),
+  purgeNotifications: (ids: string[]) =>
+    request<{ ok: boolean; deleted: number }>(
+      '/api/notifications/purge',
+      json('POST', { ids }),
+    ),
+  deleteNotifications: (
+    payload:
+      | { ids: string[] }
+      | {
+          all: true;
+          unread?: boolean;
+          kind?: string;
+          from?: string;
+          to?: string;
+        },
+  ) =>
+    request<{ ok: boolean; deleted: number }>(
+      '/api/notifications/delete',
+      json('POST', payload),
+    ),
+  exportBatchFilterViewAuditsCsv: (reviewId: string) =>
+    requestBlob(
+      `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-view-audits/export.csv`,
+    ),
+  listBatchFilterViewAudits: (
+    reviewId: string,
+    opts: { limit?: number; offset?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{
+      items: BatchFilterViewAudit[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-view-audits${qs ? `?${qs}` : ''}`,
+    );
+  },
+  listBatchFilterViews: (reviewId: string) =>
+    request<{ items: BatchFilterView[] }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-views`,
+    ),
+  saveBatchFilterView: (
+    reviewId: string,
+    payload: {
+      name: string;
+      status?: 'running' | 'completed' | 'failed' | 'cancelled' | null;
+      action_type?: 'risk' | 'issue' | null;
+      from?: string | null;
+      to?: string | null;
+      shared?: boolean;
+      shared_role?: 'admin' | 'director' | 'pm' | 'consultant' | 'tech_lead' | null;
+      shared_user_ids?: string[];
+    },
+  ) =>
+    request<{ item: BatchFilterView }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/batch-filter-views`,
+      json('POST', payload),
+    ),
+  deleteBatchFilterView: (viewId: string) =>
+    request<{ ok: boolean }>(`/api/copilot-batch-filter-views/${viewId}`, {
+      method: 'DELETE',
+    }),
+  getBatchExportEstimate: (reviewId: string, filters: BatchExportFilters = {}) =>
+    request<{
+      batches: number;
+      items: number;
+      estimated_bytes: { summary: number; items: number; zip: number };
+      large: boolean;
+      filters: BatchExportFilters;
+    }>(
+      `/api/copilot-reconcile-reviews/${reviewId}/action-batches/export-estimate${batchExportQuery(filters)}`,
+    ),
+  exportReconcileBatchesCsv: (
+    reviewId: string,
+    filters: BatchExportFilters = {},
+  ) =>
+    requestBlob(
+      `/api/copilot-reconcile-reviews/${reviewId}/action-batches/export.csv${batchExportQuery(filters)}`,
+    ),
+  exportReconcileBatchItemsCsv: (
+    reviewId: string,
+    filters: BatchExportFilters = {},
+  ) =>
+    requestBlob(
+      `/api/copilot-reconcile-reviews/${reviewId}/action-batches/export-items.csv${batchExportQuery(filters)}`,
+    ),
+  exportReconcileBatchesZip: (
+    reviewId: string,
+    filters: BatchExportFilters = {},
+  ) =>
+    requestBlob(
+      `/api/copilot-reconcile-reviews/${reviewId}/action-batches/export.zip${batchExportQuery(filters)}`,
+    ),
+  cancelReconcileBatch: (
+    batchId: string,
+    payload: { reason?: string | null } = {},
+  ) =>
+    request<{ item: ReconcileBatch }>(
+      `/api/copilot-reconcile-batches/${batchId}/cancel`,
+      json('POST', payload),
+    ),
+  streamResumeReconcileBatch: (
+    batchId: string,
+    payload: {
+      owner?: string | null;
+      severity?: 'P0' | 'P1' | 'P2' | 'P3';
+      due_date?: string | null;
+    },
+    onEvent: (event: BatchActionEvent) => void,
+  ) =>
+    requestStream(
+      `/api/copilot-reconcile-batches/${batchId}/resume/stream`,
+      payload,
+      onEvent,
+    ),
+  listPlatformInvoices: () =>
+    request<{ items: Invoice[] }>('/api/platform/invoices'),
+  markPlatformInvoicePaid: (id: string) =>
+    request<{ item: Invoice }>(`/api/platform/invoices/${id}/mark-paid`, {
+      method: 'POST',
+    }),
+  voidPlatformInvoice: (id: string) =>
+    request<{ item: Invoice }>(`/api/platform/invoices/${id}/void`, {
+      method: 'POST',
+    }),
+  updatePlatformTenant: (id: string, payload: Record<string, unknown>) =>
+    request<{ item: OrganizationSummary }>(
+      `/api/platform/tenants/${id}`,
+      json('PATCH', payload),
+    ),
+  exportPlatformTenant: async (id: string) => {
+    const res = await fetch(`${BASE}/api/platform/tenants/${id}/export`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    return res.blob();
+  },
+  deletePlatformTenant: (id: string, confirm: string) =>
+    request<{ ok: boolean; deleted: string }>(
+      `/api/platform/tenants/${id}?confirm=${encodeURIComponent(confirm)}`,
+      { method: 'DELETE' },
+    ),
+
   listAdminUsers: () => request<{ items: AdminUser[] }>('/api/admin/users'),
   createAdminUser: (payload: Record<string, unknown>) =>
     request<{ item: AdminUser }>('/api/admin/users', json('POST', payload)),

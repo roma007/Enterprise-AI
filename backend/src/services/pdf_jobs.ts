@@ -1,11 +1,40 @@
+import { randomUUID } from 'node:crypto';
 import { one, query } from '../db';
 import { buildPrintHtml } from './export';
 import { htmlToPdf } from './pdf';
 import { cachedPdf, pdfCacheKey } from './pdf_cache';
 
-const queue: string[] = [];
-let draining = false;
-let started = false;
+const WORKER_ID = `${process.env.HOSTNAME ?? 'worker'}:${process.pid}:${randomUUID().slice(0, 8)}`;
+
+function envInt(name: string, fallback: number, min = 1): number {
+  const value = Number(process.env[name] ?? fallback);
+  return Number.isFinite(value) && value >= min ? value : fallback;
+}
+
+async function claimJob(): Promise<string | null> {
+  const leaseMinutes = envInt('PDF_JOB_LEASE_MINUTES', 15);
+  const row = await one<{ id: string }>(
+    `WITH candidate AS (
+       SELECT id FROM pdf_jobs
+        WHERE status = 'queued'
+           OR (status = 'running' AND (locked_at IS NULL OR locked_at < now() - ($2::int * interval '1 minute')))
+        ORDER BY created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+     )
+     UPDATE pdf_jobs j
+        SET status = 'running',
+            locked_by = $1,
+            locked_at = now(),
+            started_at = COALESCE(j.started_at, now()),
+            attempts = j.attempts + 1
+       FROM candidate c
+      WHERE j.id = c.id
+      RETURNING j.id`,
+    [WORKER_ID, leaseMinutes],
+  );
+  return row?.id ?? null;
+}
 
 async function processJob(jobId: string): Promise<void> {
   const job = await one<any>(
@@ -19,12 +48,14 @@ async function processJob(jobId: string): Promise<void> {
       WHERE j.id = $1`,
     [jobId],
   );
-  if (!job || job.status === 'done' || job.status === 'failed') return;
-
-  await query(
-    `UPDATE pdf_jobs SET status = 'running', started_at = now() WHERE id = $1`,
-    [jobId],
-  );
+  if (!job) {
+    await query(
+      `UPDATE pdf_jobs SET status = 'failed', error = '交付物不存在', finished_at = now()
+        WHERE id = $1`,
+      [jobId],
+    );
+    return;
+  }
 
   try {
     const html = buildPrintHtml(
@@ -48,61 +79,51 @@ async function processJob(jobId: string): Promise<void> {
     await cachedPdf(key, () => htmlToPdf(html));
     await query(
       `UPDATE pdf_jobs
-          SET status = 'done', cache_key = $2, error = NULL, finished_at = now()
-        WHERE id = $1`,
-      [jobId, key],
+          SET status = 'done', cache_key = $2, error = NULL, finished_at = now(),
+              locked_at = NULL
+        WHERE id = $1 AND locked_by = $3`,
+      [jobId, key, WORKER_ID],
     );
   } catch (err: any) {
     await query(
       `UPDATE pdf_jobs
-          SET status = 'failed', error = $2, finished_at = now()
-        WHERE id = $1`,
-      [jobId, String(err?.message ?? err).slice(0, 500)],
+          SET status = 'failed', error = $2, finished_at = now(), locked_at = NULL
+        WHERE id = $1 AND locked_by = $3`,
+      [jobId, String(err?.message ?? err).slice(0, 500), WORKER_ID],
     );
   }
 }
 
-async function drain(): Promise<void> {
-  if (draining) return;
-  draining = true;
-  try {
-    while (queue.length) {
-      const id = queue.shift();
-      if (id) await processJob(id);
+/**
+ * PostgreSQL 队列 worker：多实例通过 SKIP LOCKED 竞争任务；
+ * 返回停止函数，API 进程可内联运行，也可用 `npm run worker:pdf` 独立运行。
+ */
+export function startPdfWorker(): () => void {
+  let stopped = false;
+  let timer: NodeJS.Timeout | null = null;
+
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      for (;;) {
+        if (stopped) break;
+        const id = await claimJob();
+        if (!id) break;
+        await processJob(id);
+      }
+    } catch (err) {
+      console.error('[pdf-worker] poll failed', err);
+    } finally {
+      if (!stopped) timer = setTimeout(tick, 1000);
     }
-  } finally {
-    draining = false;
-  }
-}
+  };
 
-export function enqueuePdfJob(jobId: string): void {
-  queue.push(jobId);
-  void drain();
+  void tick();
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
 }
-
-/** 启动时恢复队列：中断的 running 标记失败，queued 重新入队。 */
-export async function startPdfWorker(): Promise<void> {
-  if (started) return;
-  started = true;
-  await query(
-    `UPDATE pdf_jobs
-        SET status = 'failed', error = '服务重启中断', finished_at = now()
-      WHERE status = 'running'`,
-  );
-  const rows = await query<{ id: string }>(
-    `SELECT id FROM pdf_jobs WHERE status = 'queued' ORDER BY created_at`,
-  );
-  for (const row of rows) queue.push(row.id);
-  void drain();
-}
-
-/** 测试用：等待当前队列清空。 */
-export async function waitForPdfQueue(): Promise<void> {
-  while (draining || queue.length) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-}
-
 
 export interface PdfJobCleanupResult {
   before: string;

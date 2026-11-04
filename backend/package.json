@@ -20,16 +20,30 @@
     "pdf:cleanup": "tsx scripts/cleanup-pdf-jobs.ts",
     "share:cleanup": "tsx scripts/cleanup-share-views.ts",
     "share:archive": "tsx scripts/cleanup-share-views.ts",
-    "sessions:cleanup": "tsx scripts/cleanup-user-sessions.ts"
+    "sessions:cleanup": "tsx scripts/cleanup-user-sessions.ts",
+    "worker:pdf": "tsx scripts/pdf-worker.ts",
+    "smoke:replicas": "tsx scripts/multi-replica-smoke.ts",
+    "soak:replicas": "tsx scripts/multi-replica-soak.ts",
+    "drill:rollout": "tsx scripts/rolling-release-drill.ts",
+    "drill:alerts": "tsx scripts/alert-route-drill.ts",
+    "drill:s3": "tsx scripts/s3-drill.ts",
+    "billing:run": "tsx scripts/billing-run.ts",
+    "batches:reap": "tsx scripts/reap-batches.ts",
+    "notifications:cleanup": "tsx scripts/cleanup-notifications.ts",
+    "collab-audits:archive": "tsx scripts/archive-collab-audits.ts",
+    "collab-audits:snapshot": "tsx scripts/snapshot-collab-audits.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
     "@fastify/multipart": "^10.1.6",
+    "@fastify/request-context": "^7.0.5",
     "@fastify/swagger": "^9.9.2",
     "@fastify/swagger-ui": "^6.1.2",
     "docx": "^9.15.0",
     "dotenv": "^18.0.9",
     "exceljs": "^4.4.0",
     "fastify": "^5.2.1",
+    "ioredis": "^6.0.0",
     "marked": "^18.1.2",
     "pg": "^8.13.1",
     "zod": "^4.6.7"
@@ -37,7 +51,9 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
+    "s3rver": "^3.7.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.9.1"
   }
 }

@@ -1,0 +1,41 @@
+{
+  "kind": "settlement",
+  "gold": "会客包/试点一/samples/settlement_gold.example.jsonl",
+  "pred": "会客包/试点一/samples/settlement_pred.example.jsonl",
+  "metrics": {
+    "documents": {
+      "gold": 1,
+      "pred": 1,
+      "matched": 1,
+      "missing": [],
+      "extra": []
+    },
+    "header_accuracy": 1.0,
+    "line_field_accuracy_matched": 0.9444,
+    "line_recall": 1.0,
+    "line_precision": 1.0,
+    "total_amount_accuracy": 1.0,
+    "diff_recall": 1.0,
+    "diff_precision": 1.0,
+    "diff_false_positive_rate": 0.0,
+    "counts": {
+      "gold_lines": 2,
+      "pred_lines": 2,
+      "matched_lines": 2,
+      "gold_differences": 1,
+      "pred_differences": 1,
+      "matched_differences": 1
+    },
+    "thresholds": {
+      "header_accuracy": 0.98,
+      "line_field_accuracy_matched": 0.95,
+      "line_recall": 0.98,
+      "total_amount_accuracy": 1.0,
+      "diff_recall": 0.95,
+      "diff_precision": 0.95
+    },
+    "failed_thresholds": [
+      "line_field_accuracy_matched"
+    ]
+  }
+}

@@ -60,7 +60,21 @@ function parseKey(key: string): [string, string, string] {
   return [method, route, status];
 }
 
-export function renderPrometheus(options: { dbUp: boolean }): string {
+export interface RuntimeMetrics {
+  dbUp: boolean;
+  dbPool: { total: number; idle: number; waiting: number; max: number };
+  redisConfigured: boolean;
+  redisUp: boolean;
+  pdfQueue: {
+    pending: number;
+    running: number;
+    done24h: number;
+    failed24h: number;
+    oldestPendingSeconds: number;
+  };
+}
+
+export function renderPrometheus(options: RuntimeMetrics): string {
   const lines: string[] = [];
   lines.push('# HELP http_requests_total Total HTTP requests by method/route/status.');
   lines.push('# TYPE http_requests_total counter');
@@ -91,6 +105,42 @@ export function renderPrometheus(options: { dbUp: boolean }): string {
   lines.push('# HELP db_up Whether the database responds to SELECT 1.');
   lines.push('# TYPE db_up gauge');
   lines.push(`db_up ${options.dbUp ? 1 : 0}`);
+
+  lines.push('# HELP db_pool_total_connections Current PostgreSQL pool connections.');
+  lines.push('# TYPE db_pool_total_connections gauge');
+  lines.push(`db_pool_total_connections ${options.dbPool.total}`);
+  lines.push('# HELP db_pool_idle_connections Idle PostgreSQL pool connections.');
+  lines.push('# TYPE db_pool_idle_connections gauge');
+  lines.push(`db_pool_idle_connections ${options.dbPool.idle}`);
+  lines.push('# HELP db_pool_waiting_requests Requests waiting for a pool connection.');
+  lines.push('# TYPE db_pool_waiting_requests gauge');
+  lines.push(`db_pool_waiting_requests ${options.dbPool.waiting}`);
+  lines.push('# HELP db_pool_max_connections Configured pool size per process.');
+  lines.push('# TYPE db_pool_max_connections gauge');
+  lines.push(`db_pool_max_connections ${options.dbPool.max}`);
+
+  lines.push('# HELP redis_configured Whether REDIS_URL is configured.');
+  lines.push('# TYPE redis_configured gauge');
+  lines.push(`redis_configured ${options.redisConfigured ? 1 : 0}`);
+  lines.push('# HELP redis_up Whether Redis responds to PING.');
+  lines.push('# TYPE redis_up gauge');
+  lines.push(`redis_up ${options.redisUp ? 1 : 0}`);
+
+  lines.push('# HELP pdf_jobs_pending PDF jobs waiting in the database queue.');
+  lines.push('# TYPE pdf_jobs_pending gauge');
+  lines.push(`pdf_jobs_pending ${options.pdfQueue.pending}`);
+  lines.push('# HELP pdf_jobs_running PDF jobs currently being rendered.');
+  lines.push('# TYPE pdf_jobs_running gauge');
+  lines.push(`pdf_jobs_running ${options.pdfQueue.running}`);
+  lines.push('# HELP pdf_jobs_done_24h PDF jobs completed in the last 24 hours.');
+  lines.push('# TYPE pdf_jobs_done_24h gauge');
+  lines.push(`pdf_jobs_done_24h ${options.pdfQueue.done24h}`);
+  lines.push('# HELP pdf_jobs_failed_24h PDF jobs failed in the last 24 hours.');
+  lines.push('# TYPE pdf_jobs_failed_24h gauge');
+  lines.push(`pdf_jobs_failed_24h ${options.pdfQueue.failed24h}`);
+  lines.push('# HELP pdf_jobs_oldest_pending_seconds Age of the oldest queued PDF job.');
+  lines.push('# TYPE pdf_jobs_oldest_pending_seconds gauge');
+  lines.push(`pdf_jobs_oldest_pending_seconds ${options.pdfQueue.oldestPendingSeconds}`);
 
   return `${lines.join('\n')}\n`;
 }

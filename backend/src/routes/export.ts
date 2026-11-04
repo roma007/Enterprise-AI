@@ -4,7 +4,9 @@ import { one, query } from '../db';
 import { buildDocx, buildPrintHtml } from '../services/export';
 import { htmlToPdf } from '../services/pdf';
 import { cachedPdf, pdfCacheKey, readPdfCache } from '../services/pdf_cache';
-import { cleanupPdfJobs, enqueuePdfJob } from '../services/pdf_jobs';
+import { cleanupPdfJobs } from '../services/pdf_jobs';
+import { requestOrg } from '../services/tenant';
+import { assertQuota } from '../services/plans';
 import { queryBool } from '../utils/query';
 
 const params = z.object({ id: z.uuid() });
@@ -55,6 +57,8 @@ export async function exportRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/deliverables/:id/pdf-jobs', async (req, reply) => {
+    const org = await requestOrg(req);
+    await assertQuota(org, 'pdf_jobs_month');
     const { id } = params.parse(req.params);
     const deliverable = await loadDeliverable(id);
     if (!deliverable) {
@@ -66,7 +70,6 @@ export async function exportRoutes(app: FastifyInstance) {
        VALUES ($1, 'queued', $2) RETURNING *`,
       [id, auth?.sub ?? null],
     );
-    enqueuePdfJob(job.id);
     return reply.code(202).send({ item: job });
   });
 
@@ -181,7 +184,10 @@ export async function exportRoutes(app: FastifyInstance) {
         .header('content-disposition', disposition(deliverable.title, deliverable.version, 'pdf'))
         .send(buffer);
     } catch (err: any) {
-      if (err?.statusCode && err.statusCode < 500) {
+      if (
+        err?.statusCode &&
+        (err.statusCode < 500 || err.statusCode === 503)
+      ) {
         return reply.code(err.statusCode).send({ error: err.code, message: err.message });
       }
       req.log.error({ err, requestId: req.id }, 'pdf render failed');

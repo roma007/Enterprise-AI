@@ -20,19 +20,19 @@ TRUNCATE organizations, users, memberships, industry_templates, clients, stakeho
 -- ---------------------------------------------------------------------
 -- 供应商租户 + 用户
 -- ---------------------------------------------------------------------
-INSERT INTO organizations (id, name, plan, industry_focus) VALUES
- ('a0000000-0000-4000-8000-000000000001', '恒智 AI', 'pro', '{logistics}');
+INSERT INTO organizations (id, name, slug, plan, industry_focus, billing_email) VALUES
+ ('a0000000-0000-4000-8000-000000000001', '恒智 AI', 'hengzhi', 'pro', '{logistics}', 'billing@hengzhi.ai');
 
 -- 演示用户统一密码：demo1234
-INSERT INTO users (id, org_id, name, email, status, password_hash) VALUES
+INSERT INTO users (id, org_id, name, email, status, password_hash, is_platform_admin) VALUES
  ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', '张顾问', 'zhang@hengzhi.ai', 'active',
-  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a'),
+  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a', false),
  ('a1000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001', '王 PM',  'wang@hengzhi.ai',  'active',
-  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a'),
+  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a', false),
  ('a1000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001', '刘工',   'liu@hengzhi.ai',   'active',
-  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a'),
+  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a', false),
  ('a1000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000001', '系统管理员', 'admin@hengzhi.ai', 'active',
-  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a');
+  'scrypt$ai-delivery-demo$3e160eedcf2d31860592c0ca6e2b64d0fcabe1bb00c5024d110bf3ceca143e7b0849b9ba49746cc797ba16ebce6c45226301b3ca98b8fc0e0ce03e415c93992a', true);
 
 INSERT INTO memberships (user_id, org_id, role, default_rate) VALUES
  ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'consultant', 2800),

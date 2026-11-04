@@ -29,7 +29,25 @@ const SessionsPage = lazy(() =>
 const UsersPage = lazy(() =>
   import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })),
 );
+const RegisterPage = lazy(() =>
+  import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })),
+);
+const NotificationsPage = lazy(() =>
+  import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })),
+);
+const CollabAuditPage = lazy(() =>
+  import('./pages/CollabAuditPage').then((m) => ({
+    default: m.CollabAuditPage,
+  })),
+);
+const OrgPage = lazy(() =>
+  import('./pages/OrgPage').then((m) => ({ default: m.OrgPage })),
+);
+const PlatformTenantsPage = lazy(() =>
+  import('./pages/PlatformTenantsPage').then((m) => ({ default: m.PlatformTenantsPage })),
+);
 import { cn } from './utils';
+import { Badge } from './ui';
 
 type Route =
   | { page: 'dashboard' }
@@ -41,7 +59,12 @@ type Route =
   | { page: 'audit' }
   | { page: 'share'; token: string }
   | { page: 'sessions' }
-  | { page: 'users' };
+  | { page: 'users' }
+  | { page: 'register' }
+  | { page: 'org' }
+  | { page: 'tenants' }
+  | { page: 'notifications' }
+  | { page: 'collab-audits' };
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '');
@@ -55,6 +78,11 @@ function parseHash(): Route {
   if (parts[0] === 'share' && parts[1]) return { page: 'share', token: parts[1] };
   if (parts[0] === 'sessions') return { page: 'sessions' };
   if (parts[0] === 'users') return { page: 'users' };
+  if (parts[0] === 'register') return { page: 'register' };
+  if (parts[0] === 'org') return { page: 'org' };
+  if (parts[0] === 'tenants') return { page: 'tenants' };
+  if (parts[0] === 'notifications') return { page: 'notifications' };
+  if (parts[0] === 'collab-audits') return { page: 'collab-audits' };
   return { page: 'dashboard' };
 }
 
@@ -67,6 +95,7 @@ export default function App() {
   const [health, setHealth] = useState<'checking' | 'ok' | 'down'>('checking');
   const [user, setUser] = useState<StoredUser | null>(getStoredUser);
   const [authRequired, setAuthRequired] = useState<boolean | null>(null);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -102,6 +131,22 @@ export default function App() {
       .catch(() => setHealth('down'));
   }, [route.page]);
 
+  useEffect(() => {
+    const refresh = () => {
+      if (!user) {
+        setUnread(0);
+        return;
+      }
+      api
+        .notificationsUnreadCount()
+        .then((r) => setUnread(r.count))
+        .catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener('notifications-updated', refresh);
+    return () => window.removeEventListener('notifications-updated', refresh);
+  }, [user, route.page]);
+
   const canManage = !user || ['admin', 'director', 'pm'].includes(user.role);
   const canAdmin = !user || ['admin', 'director'].includes(user.role);
 
@@ -130,6 +175,21 @@ export default function App() {
         }
       >
         <PublicSharePage token={route.token} />
+      </Suspense>
+    );
+  }
+
+  if (route.page === 'register') {
+    return (
+      <Suspense
+        fallback={
+          <div className="boot-screen">
+            <span className="spinner-dot" />
+            正在加载…
+          </div>
+        }
+      >
+        <RegisterPage onRegistered={handleLogin} />
       </Suspense>
     );
   }
@@ -167,6 +227,18 @@ export default function App() {
             <span className="nav-icon">▦</span>
             项目列表
           </a>
+          {user ? (
+            <a
+              className={cn('nav-item', route.page === 'notifications' && 'nav-active')}
+              href="#/notifications"
+            >
+              <span className="nav-icon">✉</span>
+              通知
+              {unread > 0 ? (
+                <Badge tone="red">{unread > 99 ? '99+' : unread}</Badge>
+              ) : null}
+            </a>
+          ) : null}
           {route.page === 'engagement' && (
             <a className="nav-item nav-active" href={`#/engagements/${route.id}`}>
               <span className="nav-icon">◈</span>
@@ -196,6 +268,18 @@ export default function App() {
               回收站
             </a>
           ) : null}
+          {canAdmin ? (
+            <a
+              className={cn(
+                'nav-item',
+                route.page === 'collab-audits' && 'nav-active',
+              )}
+              href="#/collab-audits"
+            >
+              <span className="nav-icon">✎</span>
+              协作审计
+            </a>
+          ) : null}
           {canManage ? (
             <a
               className={cn('nav-item', route.page === 'audit' && 'nav-active')}
@@ -221,6 +305,24 @@ export default function App() {
             >
               <span className="nav-icon">☷</span>
               用户管理
+            </a>
+          ) : null}
+          {canAdmin ? (
+            <a
+              className={cn('nav-item', route.page === 'org' && 'nav-active')}
+              href="#/org"
+            >
+              <span className="nav-icon">⌂</span>
+              组织设置
+            </a>
+          ) : null}
+          {user?.platform_admin ? (
+            <a
+              className={cn('nav-item', route.page === 'tenants' && 'nav-active')}
+              href="#/tenants"
+            >
+              <span className="nav-icon">▥</span>
+              平台租户
             </a>
           ) : null}
         </nav>
@@ -275,6 +377,14 @@ export default function App() {
           <SessionsPage />
         ) : route.page === 'users' ? (
           <UsersPage />
+        ) : route.page === 'org' ? (
+          <OrgPage />
+        ) : route.page === 'tenants' ? (
+          <PlatformTenantsPage />
+        ) : route.page === 'notifications' ? (
+          <NotificationsPage />
+        ) : route.page === 'collab-audits' ? (
+          <CollabAuditPage />
         ) : (
           <Dashboard onOpen={(id) => navigate(`#/engagements/${id}`)} />
         )}

@@ -1,10 +1,11 @@
 import Fastify, { LogController } from 'fastify';
+import fastifyRequestContext, { requestContext } from '@fastify/request-context';
 import { randomBytes, randomUUID } from 'node:crypto';
 import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { z } from 'zod';
-import { one, query, withTransaction } from './db';
+import { acquireScopedClient, one, pool, query, releaseScopedClient, withTransaction } from './db';
 import { authRoutes } from './routes/auth';
 import { benchmarkRoutes } from './routes/benchmarks';
 import { confirmationRoutes } from './routes/confirmations';
@@ -17,6 +18,11 @@ import { r6Routes } from './routes/r6';
 import { memberRoutes } from './routes/members';
 import { publicRoutes } from './routes/public';
 import { adminUserRoutes } from './routes/admin_users';
+import { platformRoutes } from './routes/platform';
+import { billingRoutes } from './routes/billing';
+import { holidayRoutes } from './routes/holidays';
+import { notificationRoutes } from './routes/notifications';
+import { collabAuditRoutes } from './routes/collab_audits';
 import { s5DocRoutes } from './routes/s5_docs';
 import { s4DocRoutes } from './routes/s4_docs';
 import { s3DocRoutes } from './routes/s3_docs';
@@ -30,6 +36,7 @@ import { enforceRole } from './services/permissions';
 import { sessionActive } from './services/sessions';
 import { pageResult, parsePage } from './services/pagination';
 import { observeRequest, renderPrometheus } from './services/metrics';
+import { redisHealthy } from './services/redis';
 import { startPdfWorker } from './services/pdf_jobs';
 import { cleanupShareViews } from './services/share_access';
 import { guardResource, requestOrg } from './services/tenant';
@@ -38,6 +45,9 @@ import { loadBundle, chainFor, derivedFor, roiFor } from './repo';
 import { runChecks } from './rules/consistency';
 import { chainProduct, stageImpacts, THRESHOLD_WARNING } from './rules/chain';
 import { generateDeliverable } from './services/deliverables';
+
+// 发布版本由镜像/部署注入；默认保持兼容
+const APP_VERSION = (process.env.APP_VERSION ?? '0.1.0').trim() || '0.1.0';
 
 export function buildApp() {
 const app = Fastify({
@@ -66,9 +76,10 @@ const app = Fastify({
   }),
 });
 
-// 每个响应都带 x-request-id，便于前端/网关/日志串联
+// 每个响应都带 x-request-id / x-app-version，便于前端、网关、日志与发布演练串联
 app.addHook('onSend', async (req, reply, payload) => {
   reply.header('x-request-id', req.id);
+  reply.header('x-app-version', APP_VERSION);
   return payload;
 });
 
@@ -104,15 +115,23 @@ app.addHook('onResponse', async (req, reply) => {
   });
 });
 
-// 恢复未完成的 PDF 任务（中断的 running 标记失败，queued 重新入队）
-void startPdfWorker().catch(() => undefined);
+app.register(fastifyRequestContext);
+
+// PDF 队列：默认随 API 进程内联运行；生产可设 PDF_WORKER_INLINE=false 并独立启动 worker
+let stopPdfWorker: (() => void) | null = null;
+if (process.env.PDF_WORKER_INLINE !== 'false') {
+  stopPdfWorker = startPdfWorker();
+}
+app.addHook('onClose', async () => {
+  stopPdfWorker?.();
+});
 
 // ------------------------------------------------------------ OpenAPI
 app.register(swagger, {
   openapi: {
     info: {
       title: '企业 AI 化项目管理系统 API',
-      version: '0.1.0',
+      version: APP_VERSION,
       description:
         'S1 诊断阶段 API。请求/响应体的完整 JSON Schema 仍在补齐，当前先提供路径、方法与标签导航。',
     },
@@ -201,6 +220,7 @@ app.setErrorHandler((err: any, req, reply) => {
       error: err.code ?? 'REQUEST_ERROR',
       requestId,
       message: err.message,
+      ...(err.details !== undefined ? { details: err.details } : {}),
     });
   }
 
@@ -220,10 +240,13 @@ app.addHook('onRequest', async (req, reply) => {
   const isPublic =
     path === '/api/health' ||
     path === '/api/auth/login' ||
+    path === '/api/auth/register' ||
     path === '/api/auth/config' ||
+    path === '/api/billing/callback' ||
     path === '/api/openapi.json' ||
     path === '/metrics' ||
     path.startsWith('/api/public/') ||
+    path.startsWith('/api/billing/callback') ||
     path.startsWith('/api/hooks/') ||
     path.startsWith('/docs');
 
@@ -256,6 +279,32 @@ app.addHook('onRequest', async (req, reply) => {
 
 // 角色权限：只收口管理类动作；开发模式匿名访问不受影响
 app.addHook('onRequest', enforceRole);
+
+// 请求级租户上下文：供数据库 RLS 使用；登录/公开分享走服务角色
+app.addHook('onRequest', async (req) => {
+  const path = req.url.split('?')[0];
+  const skip =
+    path.startsWith('/api/auth/') ||
+    path.startsWith('/api/public/') ||
+    path.startsWith('/api/billing/callback') ||
+    path === '/api/health' ||
+    path === '/api/openapi.json' ||
+    path === '/metrics' ||
+    path.startsWith('/docs');
+  if (skip) return;
+  try {
+    const org = await requestOrg(req);
+    const auth = (req as any).authUser;
+    requestContext.set('orgId', org);
+    const platformAdmin = Boolean(auth?.platform_admin);
+    requestContext.set('platformAdmin', platformAdmin);
+    const client = await acquireScopedClient(org, platformAdmin);
+    requestContext.set('dbClient', client);
+    (req as any).__dbClient = client;
+  } catch {
+    // 未认证时由后续 guard 返回 401；无上下文时数据库走服务角色
+  }
+});
 
 app.addHook('preHandler', guardResource);
 
@@ -307,6 +356,15 @@ app.addHook('onResponse', async (req, reply) => {
   }
 });
 
+// 请求结束后释放复用连接并清理会话级 RLS 上下文
+app.addHook('onResponse', async (req) => {
+  const client = (req as any).__dbClient;
+  if (client) {
+    (req as any).__dbClient = null;
+    await releaseScopedClient(client).catch(() => undefined);
+  }
+});
+
 const engagementParams = z.object({ id: z.uuid() });
 
 // ------------------------------------------------------------------ OpenAPI
@@ -325,14 +383,67 @@ app.get('/metrics', async (req, reply) => {
   }
 
   let dbUp = true;
+  const pdfQueue = {
+    pending: 0,
+    running: 0,
+    done24h: 0,
+    failed24h: 0,
+    oldestPendingSeconds: 0,
+  };
   try {
     await one(`SELECT 1`);
+    try {
+      const row = await one<{
+        pending: number;
+        running: number;
+        done_24h: number;
+        failed_24h: number;
+        oldest_pending_seconds: number;
+      }>(
+        `SELECT
+           count(*) FILTER (WHERE status = 'queued')::int AS pending,
+           count(*) FILTER (WHERE status = 'running')::int AS running,
+           count(*) FILTER (WHERE status = 'done' AND finished_at > now() - interval '24 hours')::int AS done_24h,
+           count(*) FILTER (WHERE status = 'failed' AND finished_at > now() - interval '24 hours')::int AS failed_24h,
+           COALESCE(
+             EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status = 'queued'))),
+             0
+           )::int AS oldest_pending_seconds
+         FROM pdf_jobs`,
+      );
+      if (row) {
+        pdfQueue.pending = row.pending;
+        pdfQueue.running = row.running;
+        pdfQueue.done24h = row.done_24h;
+        pdfQueue.failed24h = row.failed_24h;
+        pdfQueue.oldestPendingSeconds = row.oldest_pending_seconds;
+      }
+    } catch {
+      // 旧库/迁移未完成时不阻断 /metrics，队列指标保持 0
+    }
   } catch {
     dbUp = false;
   }
+
+  const redisConfigured = Boolean((process.env.REDIS_URL ?? '').trim());
+  const redisUp = redisConfigured ? await redisHealthy() : false;
+
   return reply
     .header('content-type', 'text/plain; version=0.0.4; charset=utf-8')
-    .send(renderPrometheus({ dbUp }));
+    .send(
+      renderPrometheus({
+        dbUp,
+        dbPool: {
+          total: pool.totalCount,
+          idle: pool.idleCount,
+          waiting: pool.waitingCount,
+          max: Number(process.env.PG_POOL_MAX ?? 20),
+        },
+        redisConfigured,
+        redisUp,
+        pdfQueue,
+      }),
+    );
 });
 
 // ------------------------------------------------------------------ 健康
@@ -343,7 +454,7 @@ app.get('/api/health', async () => {
               WHERE table_schema = 'public' AND table_type = 'BASE TABLE') AS tables,
             (SELECT count(*) FROM schema_migrations) AS migrations`,
   );
-  return { ok: true, service: 'ai-delivery-backend', version: '0.1.0', db };
+  return { ok: true, service: 'ai-delivery-backend', version: APP_VERSION, db };
 });
 
 // -------------------------------------------------------------- 项目列表
@@ -1012,6 +1123,11 @@ app.get('/api/opportunities/:id/roi', async (req, reply) => {
   app.register(memberRoutes);
   app.register(publicRoutes);
   app.register(adminUserRoutes);
+  app.register(platformRoutes);
+  app.register(billingRoutes);
+  app.register(holidayRoutes);
+  app.register(notificationRoutes);
+  app.register(collabAuditRoutes);
   app.register(systemRoutes);
   app.register(exportRoutes);
   app.register(importRoutes);

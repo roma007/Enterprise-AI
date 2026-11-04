@@ -1,4 +1,5 @@
 import { one, query } from '../db';
+import { cacheSession, getCachedSession, invalidateSessions } from './session_cache';
 
 export async function createSession(input: {
   jti: string;
@@ -25,12 +26,23 @@ export async function createSession(input: {
 /** token 中的 jti 对应会话是否仍有效。 */
 export async function sessionActive(jti: string | undefined): Promise<boolean> {
   if (!jti) return false;
+  const cached = await getCachedSession(jti);
+  if (cached !== null) return cached;
   const row = await one(
-    `SELECT 1 FROM user_sessions
-      WHERE jti = $1 AND revoked_at IS NULL AND expires_at > now()`,
+    `SELECT 1 FROM user_sessions s
+       JOIN organizations o ON o.id = s.org_id
+       JOIN users u ON u.id = s.user_id
+      WHERE s.jti = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+        AND o.status = 'active'
+        AND (o.plan <> 'trial' OR o.trial_ends_at IS NULL
+             OR o.trial_ends_at > now() OR u.is_platform_admin)
+        AND (o.plan IN ('trial', 'free') OR o.plan_expires_at IS NULL
+             OR o.plan_expires_at > now() OR u.is_platform_admin)`,
     [jti],
   );
-  return Boolean(row);
+  const active = Boolean(row);
+  await cacheSession(jti, active);
+  return active;
 }
 
 export async function touchSession(jti: string | undefined): Promise<void> {
@@ -40,22 +52,24 @@ export async function touchSession(jti: string | undefined): Promise<void> {
 
 export async function revokeSession(jti: string | undefined): Promise<boolean> {
   if (!jti) return false;
-  const row = await one(
+  const row = await one<{ jti: string }>(
     `UPDATE user_sessions SET revoked_at = now()
-      WHERE jti = $1 AND revoked_at IS NULL RETURNING id`,
+      WHERE jti = $1 AND revoked_at IS NULL RETURNING jti`,
     [jti],
   );
+  if (row) await invalidateSessions([row.jti]);
   return Boolean(row);
 }
 
 export async function revokeAllForUser(userId: string, orgId: string): Promise<number> {
-  const rows = await query<{ id: string }>(
+  const rows = await query<{ jti: string }>(
     `UPDATE user_sessions SET revoked_at = now()
       WHERE user_id = $1 AND org_id = $2
         AND revoked_at IS NULL AND expires_at > now()
-      RETURNING id`,
+      RETURNING jti`,
     [userId, orgId],
   );
+  await invalidateSessions(rows.map((r) => r.jti));
   return rows.length;
 }
 
@@ -85,12 +99,13 @@ export async function revokeOwnSessionById(
   userId: string,
   orgId: string,
 ): Promise<boolean> {
-  const row = await one(
+  const row = await one<{ jti: string }>(
     `UPDATE user_sessions SET revoked_at = now()
       WHERE id = $1 AND user_id = $2 AND org_id = $3 AND revoked_at IS NULL
-      RETURNING id`,
+      RETURNING jti`,
     [id, userId, orgId],
   );
+  if (row) await invalidateSessions([row.jti]);
   return Boolean(row);
 }
 
@@ -130,16 +145,17 @@ export async function cleanupUserSessions(options: {
 
   let deleted = 0;
   for (let i = 0; i < 1000; i += 1) {
-    const rows = await query<{ id: string }>(
+    const rows = await query<{ id: string; jti: string }>(
       `DELETE FROM user_sessions
         WHERE id IN (
           SELECT id FROM user_sessions WHERE ${condition}
            ORDER BY COALESCE(revoked_at, expires_at)
            LIMIT $${params.length + 1}
         )
-        RETURNING id`,
+        RETURNING id, jti`,
       [...params, batchSize],
     );
+    await invalidateSessions(rows.map((r) => r.jti));
     deleted += rows.length;
     if (rows.length < batchSize) break;
   }
@@ -153,13 +169,27 @@ export async function revokeOtherSessions(
   orgId: string,
   currentJti: string | undefined,
 ): Promise<number> {
-  const rows = await query<{ id: string }>(
+  const rows = await query<{ jti: string }>(
     `UPDATE user_sessions SET revoked_at = now()
       WHERE user_id = $1 AND org_id = $2
         AND revoked_at IS NULL AND expires_at > now()
         AND ($3::uuid IS NULL OR jti <> $3::uuid)
-      RETURNING id`,
+      RETURNING jti`,
     [userId, orgId, currentJti ?? null],
   );
+  await invalidateSessions(rows.map((r) => r.jti));
+  return rows.length;
+}
+
+
+/** 平台暂停租户：撤销该组织全部会话并使缓存失效。 */
+export async function revokeSessionsByOrg(orgId: string): Promise<number> {
+  const rows = await query<{ jti: string }>(
+    `UPDATE user_sessions SET revoked_at = now()
+      WHERE org_id = $1 AND revoked_at IS NULL
+      RETURNING jti`,
+    [orgId],
+  );
+  await invalidateSessions(rows.map((r) => r.jti));
   return rows.length;
 }

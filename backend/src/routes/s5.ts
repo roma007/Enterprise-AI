@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { one, query } from '../db';
 import { httpError } from '../services/s1';
+import { requirePlatformAdmin } from '../services/permissions';
 
 const uuid = z.uuid();
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式应为 YYYY-MM-DD');
@@ -302,6 +303,7 @@ export async function s5Routes(app: FastifyInstance) {
   });
 
   app.post('/api/metric-definitions', async (req, reply) => {
+    requirePlatformAdmin(req);
     const body = metricDefCreate.parse(req.body);
     const row = await one(
       `INSERT INTO metric_definitions (key, name, unit, direction, category, formula, source, description)
@@ -315,6 +317,7 @@ export async function s5Routes(app: FastifyInstance) {
   });
 
   app.patch('/api/metric-definitions/:id', async (req) => {
+    requirePlatformAdmin(req);
     const { id } = z.object({ id: uuid }).parse(req.params);
     const body = metricDefPatch.parse(req.body);
     return {
@@ -327,6 +330,7 @@ export async function s5Routes(app: FastifyInstance) {
   });
 
   app.delete('/api/metric-definitions/:id', async (req) => {
+    requirePlatformAdmin(req);
     const { id } = z.object({ id: uuid }).parse(req.params);
     const row = await one(`DELETE FROM metric_definitions WHERE id = $1 RETURNING id`, [id]);
     if (!row) throw httpError(404, 'NOT_FOUND', '指标不存在');

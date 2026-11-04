@@ -277,6 +277,35 @@ test.describe('关键路径冒烟', () => {
       modal.locator('footer').getByRole('button', { name: '关闭' }),
     ).toBeVisible();
   });
+  test('审计日志可按当前筛选导出 CSV', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+
+    await page.goto('/#/audit');
+    await expect(
+      page.getByRole('heading', { name: '审计日志', level: 1 }),
+    ).toBeVisible();
+    const status = page
+      .locator('select')
+      .filter({ has: page.locator('option', { hasText: '全部状态' }) });
+    await status.selectOption('4xx');
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '导出 CSV' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toContain('审计日志');
+    expect(download.suggestedFilename()).toContain('.csv');
+  });
+
   test('审计筛选视图可保存并删除', async ({ page, request }) => {
     const login = await request.post('/api/auth/login', {
       data: { email: 'admin@hengzhi.ai', password: 'demo1234' },

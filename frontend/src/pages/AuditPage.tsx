@@ -132,6 +132,7 @@ export function AuditPage() {
   const auditViews = useLoad(() => api.listAuditFilterViews(), []);
   const [selectedViewId, setSelectedViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [viewError, setViewError] = useState<unknown>(null);
   const [shareMode, setShareMode] = useState<
     'none' | 'all' | 'role' | 'users'
@@ -354,6 +355,36 @@ export function AuditPage() {
     }
   };
 
+  const exportCsv = async () => {
+    setExporting(true);
+    setViewError(null);
+    try {
+      const blob = await api.exportAuditLogsCsv({
+        scope: mode,
+        q: search || undefined,
+        action: actionFilter || undefined,
+        object_type: objectTypeFilter || undefined,
+        status: statusFilter || undefined,
+        from: fromFilter || undefined,
+        to: toFilter || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `审计日志-${mode === 'archive' ? '归档' : '热表'}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+      setViewError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const previewArchive = async () => {
     setArchiving(true);
     setArchiveError(null);
@@ -528,6 +559,14 @@ export function AuditPage() {
                   }}
                 >
                   清空筛选
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={exporting}
+                  onClick={() => void exportCsv()}
+                >
+                  {exporting ? '导出中…' : '导出 CSV'}
                 </Button>
                 <Select
                   value={selectedViewId}

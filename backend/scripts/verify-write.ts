@@ -5663,6 +5663,41 @@ async function main() {
     );
     assert.equal(todayList.stats.total, todayList.total);
 
+    const csvExport = await app.inject({
+      method: 'GET',
+      url: '/api/audit-logs/export.csv?status=4xx',
+      headers: { authorization: `Bearer ${auditLogin.token}` },
+    });
+    assert.equal(csvExport.statusCode, 200, '审计导出应成功');
+    assert.match(csvExport.headers['content-type'] as string, /text\/csv/);
+    assert.ok(csvExport.body.includes('"状态码"'), 'CSV 应包含表头');
+    assert.match(csvExport.body, /"4\d\d"/, 'CSV 应包含 4xx 状态码');
+    assert.ok(
+      csvExport.body.split('\r\n').length <= 5001,
+      'CSV 最多导出 5000 条',
+    );
+    const exportLog = await one<{ count: number }>(
+      `SELECT count(*)::int AS count FROM audit_logs
+        WHERE action = 'EXPORT audit-logs' AND org_id = $1`,
+      [eng!.org_id],
+    );
+    assert.ok((exportLog?.count ?? 0) >= 1, '导出应写审计日志');
+
+    const csvArchive = await app.inject({
+      method: 'GET',
+      url: '/api/audit-logs/export.csv?scope=archive',
+      headers: { authorization: `Bearer ${auditLogin.token}` },
+    });
+    assert.equal(csvArchive.statusCode, 200, '归档导出应成功');
+    assert.ok(csvArchive.body.includes('"归档时间"'), '归档 CSV 应含归档时间');
+
+    const badExportRange = await auditCall(
+      'GET',
+      '/api/audit-logs/export.csv?from=2026-12-31&to=2026-01-01',
+    );
+    assert.equal(badExportRange.status, 400);
+    assert.equal(badExportRange.body.error, 'INVALID_DATE_RANGE');
+
     const viewName = `审计视图-${Date.now()}`;
     const savedView = ok(
       await auditCall('POST', '/api/audit-filter-views', {

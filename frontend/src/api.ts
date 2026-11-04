@@ -961,6 +961,27 @@ export const api = {
       remaining: number;
     }>('/api/audit-logs/archive', json('POST', payload)),
 
+  exportAuditLogsCsv: (params: {
+    scope?: 'live' | 'archive';
+    q?: string;
+    action?: string;
+    object_type?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+  } = {}) => {
+    const search = new URLSearchParams();
+    if (params.scope) search.set('scope', params.scope);
+    if (params.q) search.set('q', params.q);
+    if (params.action) search.set('action', params.action);
+    if (params.object_type) search.set('object_type', params.object_type);
+    if (params.status) search.set('status', params.status);
+    if (params.from) search.set('from', params.from);
+    if (params.to) search.set('to', params.to);
+    const qs = search.toString();
+    return requestBlob(`/api/audit-logs/export.csv${qs ? `?${qs}` : ''}`);
+  },
+
   listAuditFilterViews: () =>
     request<{ items: AuditFilterView[] }>('/api/audit-filter-views'),
   saveAuditFilterView: (payload: {

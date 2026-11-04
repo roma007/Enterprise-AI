@@ -281,6 +281,119 @@ export async function systemRoutes(app: FastifyInstance) {
     return { ...pageResult(rows, stats.total, page), stats };
   });
 
+  /** 导出当前筛选的审计日志（最多 5000 条）。 */
+  app.get('/api/audit-logs/export.csv', async (req, reply) => {
+    const auth = (req as any).authUser;
+    const q = z
+      .object({
+        scope: z.enum(['live', 'archive']).default('live'),
+        q: z.string().trim().optional(),
+        action: z.string().trim().optional(),
+        object_type: z.string().trim().optional(),
+        status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      })
+      .parse(req.query);
+    if (q.from && q.to && q.from > q.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
+    const org = await requestOrg(req);
+    const { where, params } = auditFilter(org, q);
+    const table = q.scope === 'archive' ? 'audit_logs_archive' : 'audit_logs';
+    const rows = await query<any>(
+      `SELECT a.created_at, a.action, a.object_type, a.object_id,
+              a.status_code, u.name AS user_name, a.user_id,
+              a.request_id, a.ip, a.user_agent, a.detail,
+              ${q.scope === 'archive' ? 'a.archived_at' : 'NULL::timestamptz AS archived_at'}
+         FROM ${table} a
+         LEFT JOIN users u ON u.id = a.user_id
+        WHERE ${where}
+        ORDER BY a.created_at DESC
+        LIMIT 5000`,
+      params,
+    );
+
+    const cell = (value: unknown) => {
+      let text =
+        value == null
+          ? ''
+          : typeof value === 'string'
+            ? value
+            : JSON.stringify(value);
+      // 防止 Excel/Sheets 把单元格当公式执行
+      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const header = [
+      '时间',
+      '操作',
+      '对象类型',
+      '对象 ID',
+      '状态码',
+      '操作人',
+      '请求 ID',
+      'IP',
+      'User-Agent',
+      '详情',
+      ...(q.scope === 'archive' ? ['归档时间'] : []),
+    ];
+    const lines = [header.map(cell).join(',')];
+    for (const row of rows) {
+      lines.push(
+        [
+          cell(row.created_at ? new Date(row.created_at).toISOString() : ''),
+          cell(row.action),
+          cell(row.object_type),
+          cell(row.object_id),
+          cell(row.status_code),
+          cell(row.user_name ?? row.user_id),
+          cell(row.request_id),
+          cell(row.ip),
+          cell(row.user_agent),
+          cell(row.detail),
+          ...(q.scope === 'archive' ? [cell(row.archived_at ? new Date(row.archived_at).toISOString() : '')] : []),
+        ].join(','),
+      );
+    }
+
+    if (auth?.sub && auth.org_id) {
+      try {
+        await query(
+          `INSERT INTO audit_logs
+             (org_id, user_id, action, object_type, status_code, ip, user_agent, detail)
+           VALUES ($1,$2,'EXPORT audit-logs','audit_log',200,$3,$4,$5::jsonb)`,
+          [
+            auth.org_id,
+            auth.sub,
+            req.ip ?? null,
+            req.headers['user-agent'] ?? null,
+            JSON.stringify({
+              scope: q.scope,
+              q: q.q ?? null,
+              action: q.action ?? null,
+              object_type: q.object_type ?? null,
+              status: q.status ?? null,
+              from: q.from ?? null,
+              to: q.to ?? null,
+              exported: rows.length,
+            }),
+          ],
+        );
+      } catch (err) {
+        req.log?.warn?.({ err }, 'audit export log failed');
+      }
+    }
+
+    const filename = `audit-logs-${q.scope}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${filename}"`)
+      .send(`\uFEFF${lines.join('\r\n')}`);
+  });
+
   const auditViewBody = z.object({
     name: z.string().trim().min(1).max(80),
     mode: z.enum(['live', 'archive']).default('live'),

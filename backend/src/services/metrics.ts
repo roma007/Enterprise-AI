@@ -18,6 +18,8 @@ const durations: RouteMetric = {
   buckets: BUCKETS_MS.map(() => 0),
 };
 let slowRequests = 0;
+let pdfCacheHits = 0;
+let pdfCacheMisses = 0;
 let startedAt = Date.now();
 
 const keyOf = (method: string, route: string, status: number) =>
@@ -74,6 +76,11 @@ export interface RuntimeMetrics {
   };
 }
 
+export function observePdfCache(status: 'HIT' | 'MISS'): void {
+  if (status === 'HIT') pdfCacheHits += 1;
+  else pdfCacheMisses += 1;
+}
+
 export function renderPrometheus(options: RuntimeMetrics): string {
   const lines: string[] = [];
   lines.push('# HELP http_requests_total Total HTTP requests by method/route/status.');
@@ -93,6 +100,13 @@ export function renderPrometheus(options: RuntimeMetrics): string {
   lines.push(`http_request_duration_ms_bucket{le="+Inf"} ${durations.count}`);
   lines.push(`http_request_duration_ms_sum ${durations.totalMs}`);
   lines.push(`http_request_duration_ms_count ${durations.count}`);
+
+  lines.push('# HELP pdf_cache_hits_total PDF cache hits.');
+  lines.push('# TYPE pdf_cache_hits_total counter');
+  lines.push(`pdf_cache_hits_total ${pdfCacheHits}`);
+  lines.push('# HELP pdf_cache_misses_total PDF cache misses.');
+  lines.push('# TYPE pdf_cache_misses_total counter');
+  lines.push(`pdf_cache_misses_total ${pdfCacheMisses}`);
 
   lines.push('# HELP slow_requests_total Requests slower than SLOW_REQUEST_MS.');
   lines.push('# TYPE slow_requests_total counter');
@@ -147,6 +161,8 @@ export function renderPrometheus(options: RuntimeMetrics): string {
 
 /** 仅测试用：清空进程内计数。 */
 export function resetMetrics(): void {
+  pdfCacheHits = 0;
+  pdfCacheMisses = 0;
   requests.clear();
   durations.count = 0;
   durations.totalMs = 0;

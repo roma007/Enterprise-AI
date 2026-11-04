@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { getStoredUser } from '../auth';
 import { useDebouncedValue, useLoad } from '../hooks';
@@ -20,6 +20,60 @@ import {
 } from '../ui';
 import { fmtDate, fmtDateTime } from '../utils';
 
+const AUDIT_KEYS = {
+  mode: 'audit_mode',
+  q: 'audit_q',
+  action: 'audit_action',
+  object: 'audit_object',
+  offset: 'audit_offset',
+} as const;
+
+interface AuditUrlState {
+  mode: 'live' | 'archive';
+  q: string;
+  action: string;
+  object: string;
+  offset: number;
+}
+
+function readAuditState(): AuditUrlState {
+  if (typeof window === 'undefined') {
+    return { mode: 'live', q: '', action: '', object: '', offset: 0 };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const rawOffset = Number(params.get(AUDIT_KEYS.offset) ?? '0');
+  return {
+    mode: params.get(AUDIT_KEYS.mode) === 'archive' ? 'archive' : 'live',
+    q: params.get(AUDIT_KEYS.q) ?? '',
+    action: params.get(AUDIT_KEYS.action) ?? '',
+    object: params.get(AUDIT_KEYS.object) ?? '',
+    offset:
+      Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0,
+  };
+}
+
+function writeAuditState(state: AuditUrlState) {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  const entries: Array<[string, string]> = [
+    [AUDIT_KEYS.mode, state.mode === 'archive' ? 'archive' : ''],
+    [AUDIT_KEYS.q, state.q],
+    [AUDIT_KEYS.action, state.action],
+    [AUDIT_KEYS.object, state.object],
+    [AUDIT_KEYS.offset, state.offset > 0 ? String(state.offset) : ''],
+  ];
+  for (const [key, value] of entries) {
+    if (value) params.set(key, value);
+    else params.delete(key);
+  }
+  const qs = params.toString();
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+  );
+}
+
 function statusTone(code: number | null) {
   if (code == null) return 'gray' as const;
   if (code >= 500) return 'red' as const;
@@ -34,11 +88,12 @@ const defaultBefore = () =>
 export function AuditPage() {
   const role = getStoredUser()?.role;
   const canArchive = !role || ['admin', 'director'].includes(role);
-  const [mode, setMode] = useState<'live' | 'archive'>('live');
-  const [offset, setOffset] = useState(0);
-  const [search, setSearch] = useState('');
-  const [actionFilter, setActionFilter] = useState('');
-  const [objectTypeFilter, setObjectTypeFilter] = useState('');
+  const initial = useMemo(() => readAuditState(), []);
+  const [mode, setMode] = useState<'live' | 'archive'>(initial.mode);
+  const [offset, setOffset] = useState(initial.offset);
+  const [search, setSearch] = useState(initial.q);
+  const [actionFilter, setActionFilter] = useState(initial.action);
+  const [objectTypeFilter, setObjectTypeFilter] = useState(initial.object);
   const dq = useDebouncedValue(search, 300);
   const facets = useLoad(() => api.listAuditFacets(mode), [mode]);
 
@@ -62,9 +117,24 @@ export function AuditPage() {
     [mode, offset, dq, actionFilter, objectTypeFilter],
   );
 
+  const filtersInitialized = useRef(false);
   useEffect(() => {
+    if (!filtersInitialized.current) {
+      filtersInitialized.current = true;
+      return;
+    }
     setOffset(0);
   }, [dq, actionFilter, objectTypeFilter]);
+
+  useEffect(() => {
+    writeAuditState({
+      mode,
+      q: search,
+      action: actionFilter,
+      object: objectTypeFilter,
+      offset,
+    });
+  }, [mode, search, actionFilter, objectTypeFilter, offset]);
 
   const [before, setBefore] = useState(defaultBefore);
   const [archiving, setArchiving] = useState(false);

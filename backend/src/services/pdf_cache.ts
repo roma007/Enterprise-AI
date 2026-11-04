@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { objectStorage, type StorageDriver } from './object_storage';
+import { observePdfCache } from './metrics';
 
 export type PdfCacheStatus = 'HIT' | 'MISS';
 
@@ -28,12 +29,16 @@ export async function cachedPdf(
   const storage = objectStorage();
   if (!refresh) {
     const hit = await storage.get(objectKey(key));
-    if (hit && hit.length) return { buffer: hit, cache: 'HIT' };
+    if (hit && hit.length) {
+      observePdfCache('HIT');
+      return { buffer: hit, cache: 'HIT' };
+    }
   }
 
   const buffer = await build();
   await storage.put(objectKey(key), buffer, 'application/pdf');
   void storage.prune(ttlDays());
+  observePdfCache('MISS');
   return { buffer, cache: 'MISS' };
 }
 

@@ -5540,6 +5540,8 @@ async function main() {
     assert.match(metrics.body, /redis_configured [01]/);
     assert.match(metrics.body, /pdf_jobs_pending \d+/);
     assert.match(metrics.body, /pdf_jobs_oldest_pending_seconds \d+/);
+    assert.match(metrics.body, /pdf_cache_hits_total \d+/);
+    assert.match(metrics.body, /pdf_cache_misses_total \d+/);
 
     process.env.METRICS_TOKEN = 'test-metrics-token';
     try {

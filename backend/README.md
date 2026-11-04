@@ -111,6 +111,7 @@ npm run dev          # http://127.0.0.1:8788
   - `http_requests_total{method,route,status}`
   - `http_request_duration_ms` 直方图（50/100/200/500/1000/2000/5000ms）
   - `slow_requests_total`
+  - `pdf_cache_hits_total` / `pdf_cache_misses_total`（进程内 PDF 缓存命中）
   - `process_uptime_seconds`
   - `db_up`（`SELECT 1` 探活）
   - `db_pool_total_connections` / `db_pool_idle_connections` / `db_pool_waiting_requests` / `db_pool_max_connections`

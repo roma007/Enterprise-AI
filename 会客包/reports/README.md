@@ -1,0 +1,39 @@
+# 会客包 / 报告导出
+
+> 由同目录上一级的 Markdown / HTML 源文件导出；源文件可继续编辑后重新导出。
+
+| 文件 | 来源 | 页数 | 用途 |
+| --- | --- | --- | --- |
+| `15_本轮能力说明_管理层版.pdf` | `../15_本轮能力说明_管理层版.md` | 3 | 客户管理层阅读版 |
+| `16_本轮能力一页纸.pdf` | `../16_本轮能力一页纸.html` | 1 | 单页摘要，可直接发送 |
+| `本轮能力说明_合并版.pdf` | 封面 + 15 + 16 | 5 | 对外发送的合并版 |
+
+## 重新导出
+
+用系统中的 Edge 作为无头浏览器（本机无 Playwright Chromium 时）：
+
+```js
+const { chromium } = require('<frontend>/node_modules/playwright');
+const browser = await chromium.launch({ channel: 'msedge' });
+const page = await browser.newPage();
+await page.goto('file:///<绝对路径>/16_本轮能力一页纸.html');
+await page.pdf({ path: '...pdf', printBackground: true, preferCSSPageSize: true });
+await browser.close();
+```
+
+Markdown 先转 HTML：
+
+```bash
+pandoc ../15_本轮能力说明_管理层版.md -f gfm -t html5 -o /tmp/15-body.html
+```
+
+合并 PDF 需要 `pypdf`：
+
+```python
+from pypdf import PdfWriter, PdfReader
+w = PdfWriter()
+for f in ['cover.pdf', '15.pdf', '16.pdf']:
+    for p in PdfReader(f).pages:
+        w.add_page(p)
+w.write('本轮能力说明_合并版.pdf')
+```

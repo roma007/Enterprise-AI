@@ -120,7 +120,8 @@ function readCollabState(): CollabUrlState {
     type:
       rawType === 'notification' ||
       rawType === 'filter_view' ||
-      rawType === 'export'
+      rawType === 'export' ||
+      rawType === 'decision'
         ? rawType
         : 'all',
     action: params.get(COLLAB_KEYS.action) ?? '',

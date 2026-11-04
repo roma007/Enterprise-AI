@@ -4880,7 +4880,12 @@ async function main() {
           LIMIT 1`,
       );
       assert.ok(notice?.body.includes('最近 7 天协作审计'), '周报正文应含统计');
-      assert.equal(notice?.link, '#/collab-audits');
+      assert.ok(
+        notice?.link.startsWith('?collab_from=') &&
+          notice?.link.includes('&collab_to=') &&
+          notice?.link.endsWith('#/collab-audits'),
+        '周报链接应带日期范围',
+      );
 
       const second = await sendCollabAuditDigest();
       assert.equal(second, 0, '6 天内不应重复发送');

@@ -1,5 +1,9 @@
 import { query } from '../db';
-import { collabAuditFilterSql } from './collab_audit_snapshot';
+import {
+  collabAuditFilterSql,
+  isValidTimezone,
+  localDateInTimezone,
+} from './collab_audit_snapshot';
 
 /** 周报检查间隔（秒），默认 3600，0 关闭。 */
 export function collabDigestIntervalSeconds(): number {
@@ -59,8 +63,10 @@ async function orgDigestCounts(orgId: string): Promise<DigestCounts> {
  * 同一用户 6 天内只发一次，避免每次巡检重复提醒。
  */
 export async function sendCollabAuditDigest(): Promise<number> {
-  const orgs = await query<{ id: string; name: string }>(
-    `SELECT id, name FROM organizations WHERE status = 'active'`,
+  const orgs = await query<{ id: string; name: string; timezone: string }>(
+    `SELECT id, name,
+            COALESCE(NULLIF(settings->>'timezone', ''), 'Asia/Shanghai') AS timezone
+       FROM organizations WHERE status = 'active'`,
   );
   let sent = 0;
   for (const org of orgs) {
@@ -85,12 +91,20 @@ export async function sendCollabAuditDigest(): Promise<number> {
     const body = `最近 7 天协作审计 ${counts.total} 条（通知 ${counts.notification} / 筛选视图 ${counts.filter_view} / 导出 ${counts.export} / 决策 ${counts.decision}），较前 7 天 ${
       change >= 0 ? '+' : ''
     }${change}`;
+    const timezone = isValidTimezone(org.timezone)
+      ? org.timezone
+      : 'Asia/Shanghai';
+    const to = localDateInTimezone(timezone);
+    const start = new Date(`${to}T00:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - 6);
+    const from = start.toISOString().slice(0, 10);
+    const link = `?collab_from=${from}&collab_to=${to}#/collab-audits`;
     for (const recipient of recipients) {
       await query(
         `INSERT INTO user_notifications
            (org_id, user_id, actor_id, kind, title, body, link, ref_type)
-         VALUES ($1,$2,NULL,'copilot_collab_audit_digest','协作审计周报',$3,'#/collab-audits','collab_audit_digest')`,
-        [org.id, recipient.id, body],
+         VALUES ($1,$2,NULL,'copilot_collab_audit_digest','协作审计周报',$3,$4,'collab_audit_digest')`,
+        [org.id, recipient.id, body, link],
       );
       sent += 1;
     }

@@ -180,6 +180,7 @@ export function CollabAuditPage() {
   const [exporting, setExporting] = useState(false);
   const [exportingSnapshots, setExportingSnapshots] = useState(false);
   const [exportingCompare, setExportingCompare] = useState(false);
+  const [exportingFacet, setExportingFacet] = useState(false);
   const [snapshotDays, setSnapshotDays] = useState(30);
   const [snapshotBucket, setSnapshotBucket] = useState<'day' | 'week' | 'month'>(
     'day',
@@ -335,6 +336,31 @@ export function CollabAuditPage() {
       setOpError(err);
     } finally {
       setExportingSnapshots(false);
+    }
+  };
+
+  const exportFacets = async () => {
+    setExportingFacet(true);
+    setOpError(null);
+    setNotice(null);
+    try {
+      const blob = await api.exportCollabSnapshotFacetCsv(
+        snapshotDays,
+        snapshotBucket,
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'collab-snapshot-facets.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice('快照分面已导出 CSV。');
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setExportingFacet(false);
     }
   };
 
@@ -859,6 +885,13 @@ export function CollabAuditPage() {
             onClick={() => void exportComparison()}
           >
             {exportingCompare ? '导出中…' : '导出环比 CSV'}
+          </Button>
+          <Button
+            size="sm"
+            disabled={exportingFacet}
+            onClick={() => void exportFacets()}
+          >
+            {exportingFacet ? '导出中…' : '导出分面 CSV'}
           </Button>
         </div>
         <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>

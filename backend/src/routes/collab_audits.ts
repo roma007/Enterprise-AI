@@ -862,6 +862,76 @@ export async function collabAuditRoutes(app: FastifyInstance) {
       .send(`\uFEFF${lines.join('\r\n')}`);
   });
 
+  app.get('/api/collab-audits/snapshots/export-long.csv', async (req, reply) => {
+    assertAuditViewer(req);
+    const auth = (req as any).authUser;
+    const { days, bucket } = z
+      .object({
+        days: z.coerce.number().int().min(1).max(365).default(30),
+        bucket: z.enum(['day', 'week', 'month']).default('day'),
+      })
+      .parse(req.query ?? {});
+    const endDate = localDateInTimezone(await resolveOrgTimezone(auth.org_id));
+    const rows = aggregateSnapshotRows(
+      await loadSnapshotSeries(auth.org_id, days, endDate),
+      bucket,
+    );
+    const facets: Array<[string, string, string]> = [
+      ['总数', 'total', 'delta_total'],
+      ['通知', 'notification_count', 'delta_notification'],
+      ['筛选视图', 'filter_view_count', 'delta_filter_view'],
+      ['导出', 'export_count', 'delta_export'],
+      ['决策', 'decision_count', 'delta_decision'],
+    ];
+    const lines = [['周期', '类型', '累计', '新增'].join(',')];
+    for (const row of rows) {
+      for (const [label, countKey, deltaKey] of facets) {
+        lines.push(
+          [
+            `${row.period_start} ~ ${row.period_end}`,
+            label,
+            (row as any)[countKey] ?? 0,
+            (row as any)[deltaKey] ?? 0,
+          ]
+            .map(csvCell)
+            .join(','),
+        );
+      }
+    }
+
+    try {
+      await query(
+        `INSERT INTO audit_logs
+           (org_id, user_id, action, object_type, status_code,
+            ip, user_agent, request_id, detail)
+         VALUES ($1,$2,'EXPORT copilot-collab-snapshots','collab_audit_snapshot',200,$3,$4,$5,$6::jsonb)`,
+        [
+          auth?.org_id ?? null,
+          auth?.sub ?? null,
+          req.ip,
+          String(req.headers['user-agent'] ?? '').slice(0, 500),
+          req.id,
+          JSON.stringify({
+            kind: 'facet',
+            days,
+            bucket,
+            rows: rows.length * facets.length,
+          }),
+        ],
+      );
+    } catch (err) {
+      req.log?.warn?.({ err }, 'snapshot facet export audit failed');
+    }
+
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header(
+        'content-disposition',
+        'attachment; filename="collab-snapshot-facets.csv"',
+      )
+      .send(`\uFEFF${lines.join('\r\n')}`);
+  });
+
   app.get('/api/collab-audits/snapshots/comparison/export.csv', async (req, reply) => {
     assertAuditViewer(req);
     const auth = (req as any).authUser;

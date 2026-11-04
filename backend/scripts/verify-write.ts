@@ -4624,6 +4624,8 @@ async function main() {
       });
       assert.equal(md.statusCode, 200, `Markdown 生成失败：${md.body}`);
       assert.ok(md.body.includes('差异依据'), 'Markdown 应包含差异依据章节');
+      assert.ok(md.body.includes('差异分布'), 'Markdown 应包含差异分布章节');
+      assert.ok(md.body.includes('置信度'), 'Markdown 应包含置信度分布');
       assert.ok(md.body.includes('模型 + 规则'), 'Markdown 应标注解释来源');
       assert.ok(md.body.includes('对账单第 1 行'), 'Markdown 应包含证据');
 

@@ -110,7 +110,67 @@ export function renderReconcileDoc(bundle: ReconcileBundle): {
   lines.push(`| 收到时间 | ${cell(fmtTime(review.received_at))} |`);
   lines.push('');
 
-  lines.push('## 二、差异汇总');
+  const typeCounts = new Map<string, number>();
+  const sourceCounts = new Map<string, number>();
+  const confidenceCounts = { high: 0, medium: 0, low: 0, unknown: 0 };
+  const decisionCounts = new Map<string, number>();
+  for (const diff of differences) {
+    const type = String(diff?.type ?? 'unknown');
+    typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+    const source = String(diff?.source ?? '未知');
+    sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1);
+    const value = Number(diff?.confidence);
+    if (!Number.isFinite(value)) confidenceCounts.unknown += 1;
+    else if (value >= 0.8) confidenceCounts.high += 1;
+    else if (value >= 0.6) confidenceCounts.medium += 1;
+    else confidenceCounts.low += 1;
+    const decision = diff?.difference_id
+      ? decisions.get(String(diff.difference_id))?.decision
+      : undefined;
+    const key =
+      decision === '采纳' || decision === '忽略' || decision === '待确认'
+        ? decision
+        : '未决';
+    decisionCounts.set(key, (decisionCounts.get(key) ?? 0) + 1);
+  }
+
+  lines.push('## 二、差异分布');
+  lines.push('');
+  if (differences.length === 0) {
+    lines.push('无。');
+  } else {
+    lines.push('| 维度 | 取值 | 数量 |');
+    lines.push('| --- | --- | --- |');
+    for (const [type, count] of [...typeCounts.entries()].sort(
+      (a, b) => b[1] - a[1],
+    )) {
+      lines.push(`| 类型 | ${cell(DIFF_LABEL[type] ?? type)} | ${count} |`);
+    }
+    for (const [source, count] of [...sourceCounts.entries()].sort(
+      (a, b) => b[1] - a[1],
+    )) {
+      lines.push(
+        `| 来源 | ${cell(DIFF_SOURCE_LABEL[source] ?? source)} | ${count} |`,
+      );
+    }
+    const buckets: Array<[string, number]> = [
+      ['高 (≥0.8)', confidenceCounts.high],
+      ['中 (0.6–0.8)', confidenceCounts.medium],
+      ['低 (<0.6)', confidenceCounts.low],
+      ['未知', confidenceCounts.unknown],
+    ];
+    for (const [label, count] of buckets) {
+      lines.push(`| 置信度 | ${label} | ${count} |`);
+    }
+    for (const [decision, count] of [...decisionCounts.entries()].sort(
+      (a, b) => b[1] - a[1],
+    )) {
+      lines.push(`| 决策 | ${cell(decision)} | ${count} |`);
+    }
+  }
+  lines.push('');
+
+  lines.push('## 三、差异汇总');
   lines.push('');
   if (differences.length === 0) {
     lines.push('本次复核未发现差异。');
@@ -138,7 +198,7 @@ export function renderReconcileDoc(bundle: ReconcileBundle): {
   }
   lines.push('');
 
-  lines.push('## 三、差异依据');
+  lines.push('## 四、差异依据');
   lines.push('');
   if (differences.length === 0) {
     lines.push('无。');
@@ -182,7 +242,7 @@ export function renderReconcileDoc(bundle: ReconcileBundle): {
     });
   }
 
-  lines.push('## 四、已生成的风险与待办');
+  lines.push('## 五、已生成的风险与待办');
   lines.push('');
   if (!actions.length) {
     lines.push('暂无。');
@@ -201,7 +261,7 @@ export function renderReconcileDoc(bundle: ReconcileBundle): {
   }
   lines.push('');
 
-  lines.push('## 五、说明');
+  lines.push('## 六、说明');
   lines.push('');
   lines.push(
     '- 金额、差异类型与证据由规则计算；大模型仅生成可能原因与建议动作，失败时回退规则模板。',

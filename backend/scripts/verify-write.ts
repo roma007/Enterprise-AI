@@ -4531,8 +4531,11 @@ async function main() {
       await query(
         `DELETE FROM user_notifications
           WHERE kind = 'copilot_notification_view_shared'
-            AND ref_id IN (
-              SELECT id FROM notification_filter_views WHERE name LIKE $1
+            AND (
+              title LIKE '%' || $1 || '%'
+              OR ref_id IN (
+                SELECT id FROM notification_filter_views WHERE name LIKE $1
+              )
             )`,
         [`${name}%`],
       );

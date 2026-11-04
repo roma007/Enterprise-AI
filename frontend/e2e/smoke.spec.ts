@@ -269,6 +269,13 @@ test.describe('关键路径冒烟', () => {
     await page.getByRole('button', { name: '刷新' }).click();
     await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: '请求 ID' })).toBeVisible();
+    await page.getByRole('button', { name: '查看' }).first().click();
+    const modal = page.locator('.modal');
+    await expect(modal.getByRole('heading', { name: '审计详情' })).toBeVisible();
+    await expect(modal.getByText('请求 ID')).toBeVisible();
+    await expect(
+      modal.locator('footer').getByRole('button', { name: '关闭' }),
+    ).toBeVisible();
   });
   test('协作审计页展示看板与快照', async ({ page, request }) => {
     const login = await request.post('/api/auth/login', {
@@ -285,7 +292,9 @@ test.describe('关键路径冒烟', () => {
     );
 
     await page.goto('/#/collab-audits');
-    await expect(page.getByRole('heading', { name: '协作审计' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: '协作审计' }).first(),
+    ).toBeVisible();
     await expect(page.getByText('对比看板')).toBeVisible();
     await expect(page.getByText('审计快照')).toBeVisible();
     await expect(page.getByRole('button', { name: '导出审计报告 Word' })).toBeVisible();

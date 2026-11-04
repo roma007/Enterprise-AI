@@ -4661,11 +4661,21 @@ async function main() {
           '%PDF',
           'PDF 文件头应正确',
         );
+        const pdfAudit = await one<{ count: string }>(
+          `SELECT count(*)::text AS count FROM audit_logs
+            WHERE action = 'EXPORT copilot-reconcile-document'
+              AND object_id = $1
+              AND detail->>'format' = 'pdf'`,
+          [reviewId],
+        );
+        assert.equal(Number(pdfAudit!.count), 1, '应写一条 PDF 导出审计');
       }
 
       const audit = await one<{ count: string }>(
         `SELECT count(*)::text AS count FROM audit_logs
-          WHERE action = 'EXPORT copilot-reconcile-document' AND object_id = $1`,
+          WHERE action = 'EXPORT copilot-reconcile-document'
+            AND object_id = $1
+            AND detail->>'format' = 'docx'`,
         [reviewId],
       );
       assert.equal(Number(audit!.count), 1, '应写一条 Word 导出审计');

@@ -103,4 +103,4 @@ src/
 - 报告 §8.1 的 Mermaid 按需加载渲染（首次约 1MB，之后会话内缓存）；工作台另有 SVG 依赖图。
 - 登录态已有；后端默认 `AUTH_REQUIRED=false`，生产设为 `true` 后前端会强制登录。供应商租户以 `organizations.slug` 区分；数据隔离目前为应用层 `org_id`，RLS 待补。
 - 有 Playwright 冒烟 16 条（含协作审计、通知视图、POC 复核）；没有组件级单测与视觉回归。
-- 本机无 Chromium 时：`PW_CHANNEL=msedge npm run e2e`；若需 PDF 用例通过，后端启动加 `PDF_CHROME_PATH="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"`。
+- 本机无 Chromium 时：`PW_CHANNEL=msedge npm run e2e`。PDF 用例会自动使用系统已安装的 Chrome / Edge / Brave，无需额外配置。

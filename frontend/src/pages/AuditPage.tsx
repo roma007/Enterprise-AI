@@ -11,6 +11,7 @@ import {
   ErrorBox,
   Field,
   Input,
+  Modal,
   Notice,
   PageHeader,
   Spinner,
@@ -51,6 +52,7 @@ export function AuditPage() {
 
   const [before, setBefore] = useState(defaultBefore);
   const [archiving, setArchiving] = useState(false);
+  const [detailLog, setDetailLog] = useState<AuditLog | null>(null);
   const [archiveNotice, setArchiveNotice] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<unknown>(null);
 
@@ -192,6 +194,7 @@ export function AuditPage() {
                       <th>请求 ID</th>
                       {mode === 'archive' ? <th>归档时间</th> : null}
                       <th>IP</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -224,6 +227,15 @@ export function AuditPage() {
                           </td>
                         ) : null}
                         <td className="mono muted">{a.ip ?? '—'}</td>
+                        <td className="actions-cell">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDetailLog(a)}
+                          >
+                            查看
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -287,6 +299,85 @@ export function AuditPage() {
           ) : null}
         </>
       ) : null}
+
+      <Modal
+        open={Boolean(detailLog)}
+        onClose={() => setDetailLog(null)}
+        title="审计详情"
+        subtitle={detailLog?.action}
+        wide
+        footer={<Button onClick={() => setDetailLog(null)}>关闭</Button>}
+      >
+        {detailLog ? (
+          <div className="form-grid">
+            <div>
+              <div className="muted small">操作</div>
+              <div className="mono">{detailLog.action}</div>
+            </div>
+            <div>
+              <div className="muted small">状态码</div>
+              <div>{detailLog.status_code ?? '—'}</div>
+            </div>
+            <div>
+              <div className="muted small">对象类型</div>
+              <div>{detailLog.object_type ?? '—'}</div>
+            </div>
+            <div>
+              <div className="muted small">对象 ID</div>
+              <div className="mono small">{detailLog.object_id ?? '—'}</div>
+            </div>
+            <div>
+              <div className="muted small">操作人</div>
+              <div>
+                {detailLog.user_name ??
+                  (detailLog.user_id
+                    ? detailLog.user_id.slice(0, 8)
+                    : '匿名/开发模式')}
+              </div>
+            </div>
+            <div>
+              <div className="muted small">时间</div>
+              <div>{fmtDateTime(detailLog.created_at)}</div>
+            </div>
+            <div>
+              <div className="muted small">请求 ID</div>
+              <div className="mono small">{detailLog.request_id ?? '—'}</div>
+            </div>
+            <div>
+              <div className="muted small">IP</div>
+              <div className="mono small">{detailLog.ip ?? '—'}</div>
+            </div>
+            {detailLog.archived_at ? (
+              <div>
+                <div className="muted small">归档时间</div>
+                <div>{fmtDateTime(detailLog.archived_at)}</div>
+              </div>
+            ) : null}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div className="muted small">User-Agent</div>
+              <div className="mono small" style={{ wordBreak: 'break-all' }}>
+                {detailLog.user_agent ?? '—'}
+              </div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div className="muted small">详情</div>
+              <pre
+                className="mono small"
+                style={{
+                  margin: 0,
+                  padding: 8,
+                  background: 'var(--surface-2)',
+                  borderRadius: 6,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {JSON.stringify(detailLog.detail ?? {}, null, 2)}
+              </pre>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -192,7 +192,7 @@ Body:   { idempotency_key, engagement_id | experiment_id, kind,
 - 继续：`POST /api/copilot-reconcile-batches/:id/resume/stream` 仅对 `cancelled` 批次生效，body 可覆盖 `{ owner?, severity?, due_date? }`。剩余差异按**递归后代汇总**：`difference_ids` 减去该批次及所有子批次已出现的明细；创建带 `parent_batch_id` 的子批次并流式执行，没有剩余返回 `422 NO_REMAINING_ITEMS`。历史列表与详情返回的 `remaining_difference_ids` 使用同一递归口径。
 
 
-**服务端 PDF**：`GET /api/deliverables/:id/export.pdf` 用无头 Chromium 把打印版 HTML 渲染成 PDF。按顺序查找：`PDF_CHROME_PATH` → 系统 Chrome/Chromium → Playwright 浏览器缓存。找不到浏览器时返回 503 `PDF_ENGINE_UNAVAILABLE`，不影响 Word/HTML 导出。Docker 镜像已安装 Debian `chromium` 与 `fonts-noto-cjk`。
+**服务端 PDF**：`GET /api/deliverables/:id/export.pdf` 用无头 Chromium 把打印版 HTML 渲染成 PDF。按顺序查找：`PDF_CHROME_PATH` → 系统 Chrome / Edge / Brave / Chromium → Playwright 浏览器缓存；每次渲染使用独立用户数据目录，兼容写出 PDF 后不主动退出的浏览器。找不到浏览器时返回 503 `PDF_ENGINE_UNAVAILABLE`，不影响 Word/HTML 导出。Docker 镜像已安装 Debian `chromium` 与 `fonts-noto-cjk`。
 
 PDF 缓存：按交付物 id / 版本 / 标题 / 客户 / 内容生成 SHA-256 key，命中时返回 `x-pdf-cache: HIT`，`?refresh=1` 强制重渲染并覆盖。底层对象存储支持 `local` / `s3`：`STORAGE_DRIVER=local`（默认，写 `PDF_CACHE_DIR`，30 天 TTL）或 `s3`（MinIO/S3，配置 `S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY/PREFIX`，生命周期规则负责过期）。`GET /api/system/storage`（平台管理员）可查看当前驱动。本地可用 `npm run drill:s3` 启动 `s3rver` 做真实 PUT/GET/DELETE 与 API/worker 跨进程缓存验证。
 

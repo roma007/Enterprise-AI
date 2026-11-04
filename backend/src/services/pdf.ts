@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,12 +42,16 @@ export function findPdfBrowser(): string | null {
     process.platform === 'darwin'
       ? [
           '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+          '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+          '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
           '/Applications/Chromium.app/Contents/MacOS/Chromium',
         ]
       : process.platform === 'win32'
         ? [
             'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
             'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
           ]
         : [
             '/usr/bin/google-chrome',
@@ -64,6 +68,7 @@ function renderWithBrowser(
   htmlPath: string,
   pdfPath: string,
   timeoutMs: number,
+  profileDir: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(
@@ -73,6 +78,7 @@ function renderWithBrowser(
         '--disable-gpu',
         '--no-sandbox',
         '--disable-dev-shm-usage',
+        `--user-data-dir=${profileDir}`,
         '--no-pdf-header-footer',
         '--virtual-time-budget=3000',
         `--print-to-pdf=${pdfPath}`,
@@ -86,23 +92,53 @@ function renderWithBrowser(
       stderr += String(chunk).slice(0, 2000);
     });
 
+    let settled = false;
+    let lastSize = -1;
+    let watcher: NodeJS.Timeout | null = null;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (watcher) clearInterval(watcher);
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+      if (error) reject(error);
+      else resolve();
+    };
+
+    // 部分 Chromium/Edge 在写出 PDF 后不会主动退出；
+    // 监听文件大小稳定后提前完成，并结束子进程。
+    watcher = setInterval(() => {
+      if (!existsSync(pdfPath)) return;
+      const size = statSync(pdfPath).size;
+      if (size > 0 && size === lastSize) {
+        finish();
+        return;
+      }
+      lastSize = size;
+    }, 300);
+
     const timer = setTimeout(() => {
-      child.kill('SIGKILL');
-      reject(new Error(`PDF 渲染超时（${timeoutMs}ms）`));
+      if (existsSync(pdfPath) && lastSize > 0) {
+        finish();
+        return;
+      }
+      finish(new Error(`PDF 渲染超时（${timeoutMs}ms）`));
     }, timeoutMs);
 
     child.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
+      finish(err instanceof Error ? err : new Error(String(err)));
     });
 
     child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0 && existsSync(pdfPath)) {
-        resolve();
+      if (existsSync(pdfPath) && statSync(pdfPath).size > 0) {
+        finish();
         return;
       }
-      reject(new Error(`Chromium 退出码 ${code}：${stderr.slice(0, 500)}`));
+      finish(new Error(`Chromium 退出码 ${code}：${stderr.slice(0, 500)}`));
     });
   });
 }
@@ -121,9 +157,11 @@ export async function htmlToPdf(html: string, timeoutMs = 30_000): Promise<Buffe
   const dir = await mkdtemp(join(tmpdir(), 'ai-delivery-pdf-'));
   const htmlPath = join(dir, 'document.html');
   const pdfPath = join(dir, 'document.pdf');
+  // 独立的用户数据目录，避免与正在运行的 Edge/Chrome 共用进程而挂起
+  const profileDir = join(dir, 'profile');
   try {
     await writeFile(htmlPath, html, 'utf8');
-    await renderWithBrowser(browser, htmlPath, pdfPath, timeoutMs);
+    await renderWithBrowser(browser, htmlPath, pdfPath, timeoutMs, profileDir);
     return await readFile(pdfPath);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);

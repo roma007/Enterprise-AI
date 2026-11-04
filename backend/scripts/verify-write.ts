@@ -4100,6 +4100,160 @@ async function main() {
     }
   });
 
+  await check('通知：只看自己的、回收站流程与审计权限', async () => {
+    const login = async (email: string) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { email, password: 'demo1234' },
+      });
+      assert.equal(res.statusCode, 200, `登录失败：${email}`);
+      return res.json().token as string;
+    };
+    const adminToken = await login('admin@hengzhi.ai');
+    const zhangToken = await login('zhang@hengzhi.ai');
+    const wangToken = await login('wang@hengzhi.ai');
+
+    const users = await query<{ id: string; email: string }>(
+      `SELECT id, email FROM users WHERE email = ANY($1::text[])`,
+      [['zhang@hengzhi.ai', 'wang@hengzhi.ai']],
+    );
+    const zhangId = users.find((u) => u.email === 'zhang@hengzhi.ai')!.id;
+    const wangId = users.find((u) => u.email === 'wang@hengzhi.ai')!.id;
+    const eng = await one<{ org_id: string }>(
+      `SELECT org_id FROM engagements WHERE id = $1`,
+      [engagementId],
+    );
+    const orgId = eng!.org_id;
+
+    const createNotification = async (
+      userId: string,
+      kind: string,
+      title: string,
+      opts: { read?: boolean; deleted?: boolean } = {},
+    ) =>
+      (
+        await one<{ id: string }>(
+          `INSERT INTO user_notifications
+             (org_id, user_id, kind, title, body, read_at, deleted_at)
+           VALUES ($1,$2,$3,$4,$5,
+                   CASE WHEN $6::boolean THEN now() ELSE NULL END,
+                   CASE WHEN $7::boolean THEN now() ELSE NULL END)
+           RETURNING id`,
+          [orgId, userId, kind, title, '回归测试通知', opts.read ?? false, opts.deleted ?? false],
+        )
+      )!.id;
+
+    const n1 = await createNotification(zhangId, 'verify_notice', '通知一');
+    const n2 = await createNotification(zhangId, 'verify_notice', '通知二', { read: true });
+    const n3 = await createNotification(zhangId, 'verify_other', '通知三');
+    const w1 = await createNotification(wangId, 'verify_notice', '王通知');
+    const createdIds = [n1, n2, n3, w1];
+
+    const call = (token: string, method: any, url: string, payload?: any) =>
+      app.inject({
+        method,
+        url,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        payload: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+
+    const list = async (token: string, qs = '') => {
+      const res = await call(token, 'GET', `/api/notifications${qs}`);
+      assert.equal(res.statusCode, 200, `查询通知失败：${res.body}`);
+      return res.json();
+    };
+    const unread = async (token: string) => {
+      const res = await call(token, 'GET', '/api/notifications/unread-count');
+      assert.equal(res.statusCode, 200);
+      return res.json().count as number;
+    };
+
+    try {
+      assert.equal(await unread(zhangToken), 2, '张应只有自己的 2 条未读');
+      assert.equal(await unread(wangToken), 1, '王应只有自己的 1 条未读');
+
+      const zhangList = await list(zhangToken, '?limit=100');
+      assert.equal(zhangList.total, 3, '张应只看到自己的 3 条');
+      assert.ok(
+        !zhangList.items.some((n: any) => n.id === w1),
+        '不应看到他人的通知',
+      );
+
+      const unreadOnly = await list(zhangToken, '?unread=1');
+      assert.equal(unreadOnly.total, 2, '未读筛选应只返回 2 条');
+
+      const kindFiltered = await list(zhangToken, '?kind=verify_notice');
+      assert.equal(kindFiltered.total, 2, '类型筛选应只返回 2 条');
+
+      const badRange = await call(zhangToken, 'GET', '/api/notifications?from=2026-12-31&to=2026-01-01');
+      assert.equal(badRange.statusCode, 400);
+      assert.equal(badRange.json().error, 'INVALID_DATE_RANGE');
+
+      const readOther = await call(zhangToken, 'POST', `/api/notifications/${w1}/read`);
+      assert.equal(readOther.statusCode, 404, '不能标记他人通知已读');
+
+      const deleteOther = await call(zhangToken, 'POST', '/api/notifications/delete', { ids: [w1] });
+      assert.equal(deleteOther.statusCode, 200);
+      assert.equal(deleteOther.json().deleted, 0, '不能删除他人通知');
+      assert.equal(await unread(wangToken), 1, '他人未读数不应变化');
+
+      const trashFlow = await call(wangToken, 'POST', '/api/notifications/delete', { ids: [w1] });
+      assert.equal(trashFlow.json().deleted, 1);
+      const wangTrash = await list(wangToken, '?trash=1');
+      assert.ok(
+        wangTrash.items.some((n: any) => n.id === w1),
+        '软删除后应出现在回收站',
+      );
+      const wangMain = await list(wangToken);
+      assert.ok(!wangMain.items.some((n: any) => n.id === w1), '回收站中的通知不应出现在主列表');
+
+      const restored = await call(wangToken, 'POST', '/api/notifications/restore', { ids: [w1] });
+      assert.equal(restored.json().restored, 1);
+      assert.equal(await unread(wangToken), 1, '恢复后未读数应回到 1');
+
+      await call(wangToken, 'POST', '/api/notifications/delete', { ids: [w1] });
+      const purged = await call(wangToken, 'POST', '/api/notifications/purge', { ids: [w1] });
+      assert.equal(purged.json().deleted, 1, '回收站通知应能彻底删除');
+      const wangAfterPurge = await list(wangToken);
+      assert.equal(wangAfterPurge.total, 0, '彻底删除后列表应为空');
+
+      const readAll = await call(zhangToken, 'POST', '/api/notifications/read-all');
+      assert.equal(readAll.json().updated, 2, '一键已读只影响自己的未读');
+      assert.equal(await unread(zhangToken), 0);
+
+      const deleteUnread = await call(zhangToken, 'POST', '/api/notifications/delete', {
+        all: true,
+        unread: true,
+      });
+      assert.equal(deleteUnread.json().deleted, 0, '没有未读时按筛选删除应为 0');
+      const zhangAfter = await list(zhangToken);
+      assert.equal(zhangAfter.total, 3, '已读通知不应被未读筛选删除');
+
+      const auditForbidden = await call(zhangToken, 'GET', '/api/notification-audits');
+      assert.equal(auditForbidden.statusCode, 403, '顾问不应查看通知审计');
+      const auditForAdmin = await call(adminToken, 'GET', '/api/notification-audits?limit=5');
+      assert.equal(auditForAdmin.statusCode, 200, '管理员应能查看通知审计');
+    } finally {
+      await query(`DELETE FROM user_notifications WHERE id = ANY($1::uuid[])`, [
+        createdIds,
+      ]);
+      await query(
+        `DELETE FROM audit_logs
+          WHERE object_type = 'user_notification'
+            AND (object_id = ANY($1::uuid[])
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(detail->'ids') x
+                 WHERE x = ANY($1::text[])
+              ))`,
+        [createdIds],
+      );
+    }
+  });
+
   await check('指标：Prometheus 输出、数据库状态与访问令牌', async () => {
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     assert.equal(health.statusCode, 200);

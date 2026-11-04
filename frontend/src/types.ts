@@ -1284,6 +1284,19 @@ export interface AuditFilterView {
   updated_at: string;
 }
 
+export interface AuditExportJob {
+  id: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  scope: 'live' | 'archive';
+  filters: Record<string, string | null | undefined>;
+  columns: string[];
+  row_count: number | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export interface UserNotification {
   id: string;
   kind: string;

@@ -21,6 +21,7 @@ import {
   collabDigestIntervalSeconds,
   sendCollabAuditDigest,
 } from './services/collab_audit_digest';
+import { resumePendingAuditExportJobs } from './services/audit_exports';
 
 const app = buildApp();
 
@@ -65,6 +66,9 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 try {
   await app.listen({ port, host });
   app.log.info(`API ready at http://${host}:${port}/api/health`);
+  void resumePendingAuditExportJobs().catch((err) => {
+    app.log.warn({ err }, 'resume audit export jobs failed');
+  });
 
   const reapInterval = batchReapIntervalSeconds();
   if (reapInterval > 0) {

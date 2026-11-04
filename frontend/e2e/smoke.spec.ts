@@ -319,6 +319,43 @@ test.describe('关键路径冒烟', () => {
     expect(download.suggestedFilename()).toContain('.csv');
   });
 
+  test('审计异步导出任务可创建并下载', async ({ page, request }) => {
+    const login = await request.post('/api/auth/login', {
+      data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+    });
+    const { token, user } = await login.json();
+    await page.addInitScript(
+      ({ token, user }) => {
+        localStorage.setItem('ai-delivery-token', token);
+        localStorage.setItem('ai-delivery-user', user);
+      },
+      { token, user: JSON.stringify(user) },
+    );
+    page.on('dialog', (dialog) => dialog.accept());
+
+    await page.goto('/#/audit');
+    await expect(
+      page.getByRole('heading', { name: '审计日志', level: 1 }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '异步导出' }).click();
+    const modal = page.locator('.modal');
+    await expect(
+      modal.getByRole('heading', { name: '导出任务' }),
+    ).toBeVisible();
+    await modal.getByRole('button', { name: '新建当前筛选任务' }).click();
+
+    const doneRow = modal.locator('tr').filter({ hasText: '可下载' }).first();
+    await expect(doneRow).toBeVisible({ timeout: 20_000 });
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      doneRow.getByRole('button', { name: '下载' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toContain('.csv');
+
+    await doneRow.getByRole('button', { name: '删除' }).click();
+    await expect(doneRow).toHaveCount(0, { timeout: 15_000 });
+  });
+
   test('审计视图可导入 JSON 并查看结果', async ({ page, request }) => {
     const login = await request.post('/api/auth/login', {
       data: { email: 'admin@hengzhi.ai', password: 'demo1234' },

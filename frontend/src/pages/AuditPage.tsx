@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { getStoredUser } from '../auth';
 import { useDebouncedValue, useLoad } from '../hooks';
-import type { AuditLog } from '../types';
+import type { AuditExportJob, AuditLog } from '../types';
 import {
   Badge,
   Button,
@@ -144,6 +144,13 @@ function readExportColumns(): string[] {
   }
 }
 
+const EXPORT_JOB_LABEL: Record<string, string> = {
+  pending: '排队中',
+  running: '生成中',
+  done: '可下载',
+  failed: '失败',
+};
+
 const PAGE_SIZE = 50;
 const defaultBefore = () =>
   new Date(Date.now() - 180 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -179,6 +186,10 @@ export function AuditPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [savingView, setSavingView] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportJobsOpen, setExportJobsOpen] = useState(false);
+  const [exportJobs, setExportJobs] = useState<AuditExportJob[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobError, setJobError] = useState<unknown>(null);
   const [columnPicker, setColumnPicker] = useState(false);
   const [exportColumns, setExportColumns] = useState<string[]>(readExportColumns);
   const [viewError, setViewError] = useState<unknown>(null);
@@ -477,6 +488,85 @@ export function AuditPage() {
     }
   };
 
+  const loadExportJobs = async () => {
+    setJobsLoading(true);
+    setJobError(null);
+    try {
+      const res = await api.listAuditExportJobs();
+      setExportJobs(res.items);
+    } catch (err) {
+      setJobError(err);
+    } finally {
+      setJobsLoading(false);
+    }
+  };
+
+  const openExportJobs = () => {
+    setExportJobsOpen(true);
+    void loadExportJobs();
+  };
+
+  const createExportJob = async () => {
+    setJobError(null);
+    try {
+      await api.createAuditExportJob({
+        scope: mode,
+        q: search || undefined,
+        action: actionFilter || undefined,
+        object_type: objectTypeFilter || undefined,
+        status: statusFilter || undefined,
+        from: fromFilter || undefined,
+        to: toFilter || undefined,
+        columns: visibleExportColumns,
+      });
+      await loadExportJobs();
+    } catch (err) {
+      setJobError(err);
+    }
+  };
+
+  const downloadExportJob = async (job: AuditExportJob) => {
+    setJobError(null);
+    try {
+      const blob = await api.downloadAuditExportJob(job.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `审计日志-${job.scope === 'archive' ? '归档' : '热表'}-${new Date(
+        job.created_at,
+      )
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+      setJobError(err);
+    }
+  };
+
+  const removeExportJob = async (job: AuditExportJob) => {
+    if (!window.confirm('确认删除该导出任务与文件？')) return;
+    setJobError(null);
+    try {
+      await api.deleteAuditExportJob(job.id);
+      await loadExportJobs();
+    } catch (err) {
+      setJobError(err);
+    }
+  };
+
+  useEffect(() => {
+    if (!exportJobsOpen) return;
+    const active = exportJobs.some(
+      (job) => job.status === 'pending' || job.status === 'running',
+    );
+    if (!active) return;
+    const timer = window.setInterval(() => void loadExportJobs(), 2000);
+    return () => window.clearInterval(timer);
+  }, [exportJobsOpen, exportJobs]);
+
   const exportCsv = async () => {
     setExporting(true);
     setViewError(null);
@@ -697,6 +787,13 @@ export function AuditPage() {
                   onClick={() => void exportCsv()}
                 >
                   {exporting ? '导出中…' : '导出 CSV'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={openExportJobs}
+                >
+                  异步导出
                 </Button>
                 <Select
                   value={selectedViewId}
@@ -1072,6 +1169,98 @@ export function AuditPage() {
             </tbody>
           </table>
         </div>
+      </Modal>
+
+      <Modal
+        open={exportJobsOpen}
+        title="导出任务"
+        subtitle="适合大批量导出；任务在后台生成，完成后可下载。"
+        onClose={() => setExportJobsOpen(false)}
+        wide
+        footer={
+          <>
+            <Button size="sm" variant="ghost" onClick={() => void loadExportJobs()}>
+              刷新
+            </Button>
+            <Button
+              size="sm"
+              disabled={visibleExportColumns.length === 0}
+              onClick={() => void createExportJob()}
+            >
+              新建当前筛选任务
+            </Button>
+            <Button size="sm" onClick={() => setExportJobsOpen(false)}>
+              关闭
+            </Button>
+          </>
+        }
+      >
+        {jobError ? <ErrorBox error={jobError} /> : null}
+        {jobsLoading && exportJobs.length === 0 ? <Spinner /> : null}
+        {!jobsLoading && exportJobs.length === 0 ? (
+          <Empty title="还没有导出任务" hint="点击下方按钮创建。" />
+        ) : null}
+        {exportJobs.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>创建时间</th>
+                  <th>范围</th>
+                  <th>状态</th>
+                  <th>行数</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exportJobs.map((job) => (
+                  <tr key={job.id}>
+                    <td className="muted nowrap">{fmtDateTime(job.created_at)}</td>
+                    <td>{job.scope === 'archive' ? '归档' : '热表'}</td>
+                    <td>
+                      <Badge
+                        tone={
+                          job.status === 'done'
+                            ? 'green'
+                            : job.status === 'failed'
+                              ? 'red'
+                              : 'amber'
+                        }
+                      >
+                        {EXPORT_JOB_LABEL[job.status] ?? job.status}
+                      </Badge>
+                      {job.status === 'failed' && job.error ? (
+                        <span className="muted small"> {job.error}</span>
+                      ) : null}
+                    </td>
+                    <td>{job.row_count ?? '—'}</td>
+                    <td className="actions-cell">
+                      {job.status === 'done' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void downloadExportJob(job)}
+                        >
+                          下载
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void removeExportJob(job)}
+                      >
+                        删除
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+        <p className="hint">
+          单次最多导出 10 万行；文件存放在本地缓存或对象存储。
+        </p>
       </Modal>
 
       <Modal

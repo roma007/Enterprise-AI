@@ -16,79 +16,19 @@ interface TrashBatch {
   items: TrashItem[];
 }
 
-type AuditStatus = '2xx' | '3xx' | '4xx' | '5xx';
-
-const AUDIT_EXPORT_COLUMNS: Record<string, string> = {
-  time: '时间',
-  action: '操作',
-  object_type: '对象类型',
-  object_id: '对象 ID',
-  status: '状态码',
-  user: '操作人',
-  request_id: '请求 ID',
-  ip: 'IP',
-  user_agent: 'User-Agent',
-  detail: '详情',
-  archived_at: '归档时间',
-};
-
-function normalizeAuditExportColumns(input?: string[]): string[] {
-  const columns = Array.from(new Set(input ?? []));
-  const bad = columns.filter(
-    (key) => !Object.keys(AUDIT_EXPORT_COLUMNS).includes(key),
-  );
-  if (bad.length) {
-    throw httpError(
-      400,
-      'INVALID_EXPORT_COLUMNS',
-      `导出列不合法：${bad.join(', ')}`,
-    );
-  }
-  return columns;
-}
-
-interface AuditQuery {
-  q?: string;
-  action?: string;
-  object_type?: string;
-  status?: AuditStatus;
-  from?: string;
-  to?: string;
-}
-
-/** 列表、统计、归档查询共用同一组筛选条件。 */
-function auditFilter(org: string, q: AuditQuery) {
-  const where = `a.org_id = $1
-        AND ($2::text IS NULL OR a.action ILIKE '%' || $2 || '%')
-        AND ($3::text IS NULL OR a.object_type = $3)
-        AND ($4::text IS NULL OR a.action ILIKE '%' || $4 || '%'
-             OR a.object_type ILIKE '%' || $4 || '%'
-             OR a.ip ILIKE '%' || $4 || '%'
-             OR u.name ILIKE '%' || $4 || '%')
-        AND ($5::text IS NULL
-             OR ($5::text = '2xx' AND a.status_code >= 200 AND a.status_code < 300)
-             OR ($5::text = '3xx' AND a.status_code >= 300 AND a.status_code < 400)
-             OR ($5::text = '4xx' AND a.status_code >= 400 AND a.status_code < 500)
-             OR ($5::text = '5xx' AND a.status_code >= 500 AND a.status_code < 600))
-        AND ($6::date IS NULL OR a.created_at >= $6::date)
-        AND ($7::date IS NULL OR a.created_at < ($7::date + interval '1 day'))`;
-  return {
-    where,
-    params: [
-      org,
-      q.action ?? null,
-      q.object_type ?? null,
-      q.q ?? null,
-      q.status ?? null,
-      q.from ?? null,
-      q.to ?? null,
-    ],
-  };
-}
-
-const AUDIT_STATS_SQL = `SELECT count(*)::int AS total,
-       count(*) FILTER (WHERE a.action LIKE 'DELETE%')::int AS deletes,
-       count(*) FILTER (WHERE COALESCE(a.status_code, 0) >= 400)::int AS failures`;
+import {
+  AUDIT_EXPORT_COLUMNS,
+  AUDIT_STATS_SQL,
+  auditFilter,
+  buildAuditCsv,
+  normalizeAuditExportColumns,
+} from '../services/audit_query';
+import {
+  createAuditExportJob,
+  deleteAuditExportJob,
+  getAuditExportDownload,
+  listAuditExportJobs,
+} from '../services/audit_exports';
 
 async function auditViewRecipients(
   client: any,
@@ -370,53 +310,7 @@ export async function systemRoutes(app: FastifyInstance) {
       params,
     );
 
-    const cell = (value: unknown) => {
-      let text =
-        value == null
-          ? ''
-          : typeof value === 'string'
-            ? value
-            : JSON.stringify(value);
-      // 防止 Excel/Sheets 把单元格当公式执行
-      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-      return `"${text.replace(/"/g, '""')}"`;
-    };
-    const valueFor = (row: any, key: string) => {
-      switch (key) {
-        case 'time':
-          return row.created_at ? new Date(row.created_at).toISOString() : '';
-        case 'action':
-          return row.action;
-        case 'object_type':
-          return row.object_type;
-        case 'object_id':
-          return row.object_id;
-        case 'status':
-          return row.status_code;
-        case 'user':
-          return row.user_name ?? row.user_id;
-        case 'request_id':
-          return row.request_id;
-        case 'ip':
-          return row.ip;
-        case 'user_agent':
-          return row.user_agent;
-        case 'detail':
-          return row.detail;
-        case 'archived_at':
-          return row.archived_at
-            ? new Date(row.archived_at).toISOString()
-            : '';
-        default:
-          return '';
-      }
-    };
-    const header = columns.map((key) => AUDIT_EXPORT_COLUMNS[key]);
-    const lines = [header.map(cell).join(',')];
-    for (const row of rows) {
-      lines.push(columns.map((key) => cell(valueFor(row, key))).join(','));
-    }
-
+    const csv = buildAuditCsv(rows, columns);
     if (auth?.sub && auth.org_id) {
       try {
         await query(
@@ -452,7 +346,109 @@ export async function systemRoutes(app: FastifyInstance) {
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="${filename}"`)
-      .send(`\uFEFF${lines.join('\r\n')}`);
+      .send(csv);
+  });
+
+  const auditExportBody = z.object({
+    scope: z.enum(['live', 'archive']).default('live'),
+    q: z.string().trim().optional(),
+    action: z.string().trim().optional(),
+    object_type: z.string().trim().optional(),
+    status: z.enum(['2xx', '3xx', '4xx', '5xx']).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    columns: z.array(z.string()).optional(),
+  });
+
+  /** 创建异步导出任务，立即返回 202。 */
+  app.post('/api/audit-exports', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const body = auditExportBody.parse(req.body ?? {});
+    if (body.from && body.to && body.from > body.to) {
+      throw httpError(400, 'INVALID_DATE_RANGE', '开始日期不能晚于结束日期');
+    }
+    const allowed = Object.keys(AUDIT_EXPORT_COLUMNS).filter(
+      (key) => key !== 'archived_at' || body.scope === 'archive',
+    );
+    const columns = normalizeAuditExportColumns(
+      body.columns?.length ? body.columns : allowed,
+    );
+    const invalid = columns.filter((key) => !allowed.includes(key));
+    if (invalid.length) {
+      throw httpError(400, 'INVALID_EXPORT_COLUMNS', '当前范围不支持所选列');
+    }
+    const job = await createAuditExportJob({
+      orgId: auth.org_id,
+      userId: auth.sub,
+      scope: body.scope,
+      filters: {
+        q: body.q,
+        action: body.action,
+        object_type: body.object_type,
+        status: body.status,
+        from: body.from,
+        to: body.to,
+      },
+      columns,
+    });
+    return reply.code(202).send({ item: job });
+  });
+
+  app.get('/api/audit-exports', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const { limit } = z
+      .object({ limit: z.coerce.number().int().min(1).max(50).default(20) })
+      .parse(req.query);
+    const items = await listAuditExportJobs(auth.org_id, auth.sub, limit);
+    return { items };
+  });
+
+  app.get('/api/audit-exports/:id/download', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    try {
+      const { buffer, filename } = await getAuditExportDownload(
+        auth.org_id,
+        auth.sub,
+        id,
+      );
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header('content-disposition', `attachment; filename="${filename}"`)
+        .send(buffer);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : '';
+      if (code === 'NOT_FOUND') {
+        throw httpError(404, 'NOT_FOUND', '导出任务不存在');
+      }
+      if (code === 'NOT_READY') {
+        throw httpError(409, 'EXPORT_NOT_READY', '导出任务尚未完成');
+      }
+      if (code === 'FILE_MISSING') {
+        throw httpError(410, 'EXPORT_FILE_MISSING', '导出文件已被清理');
+      }
+      throw err;
+    }
+  });
+
+  app.delete('/api/audit-exports/:id', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const ok = await deleteAuditExportJob(auth.org_id, auth.sub, id);
+    if (!ok) throw httpError(404, 'NOT_FOUND', '导出任务不存在');
+    return { ok: true };
   });
 
   const auditViewBody = z.object({

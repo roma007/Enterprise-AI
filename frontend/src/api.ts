@@ -1,6 +1,7 @@
 import { authHeaders, type StoredUser } from './auth';
 import type {
   ApiErrorBody,
+  AuditExportJob,
   AuditFilterView,
   AuditLog,
   Baseline,
@@ -983,6 +984,29 @@ export const api = {
     const qs = search.toString();
     return requestBlob(`/api/audit-logs/export.csv${qs ? `?${qs}` : ''}`);
   },
+
+  createAuditExportJob: (payload: {
+    scope: 'live' | 'archive';
+    q?: string;
+    action?: string;
+    object_type?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    columns?: string[];
+  }) =>
+    request<{ item: AuditExportJob }>(
+      '/api/audit-exports',
+      json('POST', payload),
+    ),
+  listAuditExportJobs: () =>
+    request<{ items: AuditExportJob[] }>('/api/audit-exports'),
+  downloadAuditExportJob: (id: string) =>
+    requestBlob(`/api/audit-exports/${id}/download`),
+  deleteAuditExportJob: (id: string) =>
+    request<{ ok: boolean }>(`/api/audit-exports/${id}`, {
+      method: 'DELETE',
+    }),
 
   listAuditFilterViews: () =>
     request<{ items: AuditFilterView[] }>('/api/audit-filter-views'),

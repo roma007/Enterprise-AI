@@ -5739,6 +5739,65 @@ async function main() {
     assert.equal(archiveColumns.statusCode, 200);
     assert.ok(archiveColumns.body.includes('"归档时间"'));
 
+    const badJobColumns = await auditCall('POST', '/api/audit-exports', {
+      scope: 'live',
+      columns: ['action', 'password'],
+    });
+    assert.equal(badJobColumns.status, 400);
+    assert.equal(badJobColumns.body.error, 'INVALID_EXPORT_COLUMNS');
+
+    const createdJob = ok(
+      await auditCall('POST', '/api/audit-exports', {
+        scope: 'live',
+        status: '4xx',
+        columns: ['action', 'status'],
+      }),
+      202,
+      '创建异步导出任务',
+    );
+    const jobId = (createdJob.item as any).id as string;
+    let job: any = createdJob.item;
+    for (let i = 0; i < 40 && job.status !== 'done'; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const listedJobs = ok(
+        await auditCall('GET', '/api/audit-exports'),
+        200,
+        '导出任务列表',
+      );
+      job = (listedJobs.items as any[]).find((item) => item.id === jobId);
+      if (job?.status === 'failed') break;
+    }
+    assert.equal(job.status, 'done', `异步导出任务应收尾：${job?.error ?? ''}`);
+    assert.ok((job.row_count ?? 0) > 0, '异步导出应统计行数');
+
+    const jobDownload = await app.inject({
+      method: 'GET',
+      url: `/api/audit-exports/${jobId}/download`,
+      headers: { authorization: `Bearer ${auditLogin.token}` },
+    });
+    assert.equal(jobDownload.statusCode, 200, '异步导出下载应成功');
+    assert.match(jobDownload.headers['content-type'] as string, /text\/csv/);
+    assert.equal(
+      jobDownload.body.split('\r\n')[0].replace(/^\uFEFF/, ''),
+      '"操作","状态码"',
+      '异步导出应遵循列设置',
+    );
+
+    ok(
+      await auditCall('DELETE', `/api/audit-exports/${jobId}`),
+      200,
+      '删除异步导出任务',
+    );
+    const jobsAfterDelete = ok(
+      await auditCall('GET', '/api/audit-exports'),
+      200,
+      '删除后任务列表',
+    );
+    assert.ok(
+      !(jobsAfterDelete.items as any[]).some((item) => item.id === jobId),
+      '删除后任务不应再出现',
+    );
+
     const viewName = `审计视图-${Date.now()}`;
     const savedView = ok(
       await auditCall('POST', '/api/audit-filter-views', {

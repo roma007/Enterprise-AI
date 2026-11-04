@@ -751,6 +751,7 @@ app.get('/api/engagements/:id/deliverables', async (req, reply) => {
     const storedHash = generated_from?.content_hash as string | undefined;
     return {
       ...rest,
+      review_id: reviewId ?? null,
       is_stale: Boolean(
         reviewId && storedHash
           ? staleByKey.get(`${reviewId}|${storedHash}`)

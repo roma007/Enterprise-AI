@@ -64,6 +64,7 @@ export function ReportsTab({
   const [pdfNotice, setPdfNotice] = useState<string | null>(null);
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [modal, setModal] = useState<{ title: string; text: string } | null>(null);
   const [sourceMode, setSourceMode] = useState(false);
 
@@ -141,6 +142,22 @@ export function ReportsTab({
       onChanged();
     } catch (err) {
       setError(err);
+    }
+  };
+
+  const regenerateStale = async (d: Deliverable) => {
+    if (!d.review_id) return;
+    setRegeneratingId(d.id);
+    setError(null);
+    try {
+      await api.generateReconcileDocument(d.review_id);
+      await deliverables.reload();
+      await checks.reload();
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setRegeneratingId(null);
     }
   };
 
@@ -474,6 +491,16 @@ export function ReportsTab({
                       <Button size="sm" variant="ghost" onClick={() => void viewDeliverable(d)}>
                         查看
                       </Button>
+                      {d.is_stale && d.review_id ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={regeneratingId === d.id}
+                          onClick={() => void regenerateStale(d)}
+                        >
+                          {regeneratingId === d.id ? '生成中…' : '重新生成'}
+                        </Button>
+                      ) : null}
                       <Button size="sm" variant="ghost" onClick={() => void downloadDocx(d)}>
                         Word
                       </Button>

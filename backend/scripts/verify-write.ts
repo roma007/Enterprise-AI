@@ -4436,6 +4436,19 @@ async function main() {
       const staleDocs = await listDocuments();
       assert.equal(staleDocs[0].is_stale, true, '复核变更后交付物应标记过期');
 
+      const listedDeliverables = await app.inject({
+        method: 'GET',
+        url: `/api/engagements/${engagementId}/deliverables?limit=50`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      assert.equal(listedDeliverables.statusCode, 200);
+      const listedReport = (
+        listedDeliverables.json().items as any[]
+      ).find((d) => d.id === firstItem.id);
+      assert.ok(listedReport, '交付物列表应包含复核报告');
+      assert.equal(listedReport.review_id, reviewId, '列表应返回复核 ID');
+      assert.equal(listedReport.is_stale, true, '列表应标记过期');
+
       const approveStale = await app.inject({
         method: 'PATCH',
         url: `/api/deliverables/${firstItem.id}/status`,

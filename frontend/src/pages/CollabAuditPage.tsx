@@ -45,6 +45,17 @@ const TYPE_TONE: Record<string, 'blue' | 'gray' | 'amber' | 'green'> = {
   decision: 'green',
 };
 
+const BOARD_TYPE: Record<
+  string,
+  'all' | 'notification' | 'filter_view' | 'export' | 'decision'
+> = {
+  delta_total: 'all',
+  delta_notification: 'notification',
+  delta_filter_view: 'filter_view',
+  delta_export: 'export',
+  delta_decision: 'decision',
+};
+
 const ACTION_OPTIONS: Record<
   'all' | 'notification' | 'filter_view' | 'export' | 'decision',
   Array<[string, string]>
@@ -561,6 +572,14 @@ export function CollabAuditPage() {
                   value={current}
                   hint={`环比 ${change > 0 ? `+${change}` : change}`}
                   tone={change > 0 ? 'brand' : change < 0 ? 'red' : 'gray'}
+                  title="查看该类型明细"
+                  onClick={() => {
+                    setType(BOARD_TYPE[key] ?? 'all');
+                    setAction('');
+                    setFrom(boardComparison.current.start);
+                    setTo(boardComparison.current.end);
+                    setOffset(0);
+                  }}
                 />
               );
             })}

@@ -198,14 +198,35 @@ export function Stat({
   value,
   hint,
   tone,
+  onClick,
+  title,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   tone?: Tone;
+  onClick?: () => void;
+  title?: string;
 }) {
   return (
-    <div className={cn('stat', tone && `stat-${tone}`)}>
+    <div
+      className={cn('stat', tone && `stat-${tone}`)}
+      onClick={onClick}
+      title={title}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+    >
       <span className="stat-label">{label}</span>
       <strong className="stat-value">{value}</strong>
       {hint && <span className="stat-hint">{hint}</span>}

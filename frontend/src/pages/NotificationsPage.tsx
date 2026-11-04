@@ -254,6 +254,9 @@ export function NotificationsPage() {
     [],
   );
   const appliedInitialView = useRef<string | null>(null);
+  const selectedSavedView = (savedViews.data?.items ?? []).find(
+    (v) => v.id === selectedViewId,
+  );
 
   const applySavedView = (id: string) => {
     setSelectedViewId(id);
@@ -321,6 +324,22 @@ export function NotificationsPage() {
         shared_user_ids: shareMode === 'users' ? shareUsers : [],
       });
       setSelectedViewId(res.item.id);
+      await savedViews.reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const renameCurrentView = async () => {
+    if (!selectedSavedView) return;
+    const name = window.prompt('新的视图名称', selectedSavedView.name)?.trim();
+    if (!name || name === selectedSavedView.name) return;
+    setSavingView(true);
+    setOpError(null);
+    try {
+      await api.renameNotificationFilterView(selectedSavedView.id, name);
       await savedViews.reload();
     } catch (err) {
       setOpError(err);
@@ -565,9 +584,17 @@ export function NotificationsPage() {
           >
             {savingView ? '保存中…' : '保存当前筛选'}
           </Button>
-          {selectedViewId &&
-          (savedViews.data?.items ?? []).find((v) => v.id === selectedViewId)
-            ?.is_owner ? (
+          {selectedSavedView?.is_owner ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={savingView}
+              onClick={() => void renameCurrentView()}
+            >
+              重命名
+            </Button>
+          ) : null}
+          {selectedSavedView?.is_owner ? (
             <Button
               size="sm"
               variant="ghost"

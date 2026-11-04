@@ -1549,6 +1549,26 @@ export async function collabAuditRoutes(app: FastifyInstance) {
     return reply.code(201).send({ item });
   });
 
+  app.patch('/api/collab-audit-filter-views/:id', async (req) => {
+    assertAuditViewer(req);
+    const auth = (req as any).authUser;
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({ name: z.string().trim().min(1).max(80) })
+      .parse(req.body ?? {});
+    const item = await one(
+      `UPDATE collab_audit_filter_views
+          SET name = $2, updated_at = now()
+        WHERE id = $1 AND user_id = $3
+        RETURNING id, name, audit_type AS type, action,
+                  from_date::text AS "from", to_date::text AS "to",
+                  actor_id, scope, created_at, updated_at`,
+      [id, body.name, auth.sub],
+    );
+    if (!item) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');
+    return { item };
+  });
+
   app.delete('/api/collab-audit-filter-views/:id', async (req) => {
     assertAuditViewer(req);
     const auth = (req as any).authUser;

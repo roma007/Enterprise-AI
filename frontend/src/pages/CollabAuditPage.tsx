@@ -209,6 +209,9 @@ export function CollabAuditPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const users = useLoad(() => api.listUsers(), []);
   const auditViews = useLoad(() => api.listCollabAuditFilterViews(), []);
+  const selectedAuditView = (auditViews.data?.items ?? []).find(
+    (view) => view.id === selectedViewId,
+  );
   const [boardDays, setBoardDays] = useState(7);
   const board = useLoad(
     () => api.listCollabSnapshots({ days: boardDays, bucket: 'day' }),
@@ -245,6 +248,22 @@ export function CollabAuditPage() {
         scope,
       });
       setSelectedViewId(res.item.id);
+      await auditViews.reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const renameAuditView = async () => {
+    if (!selectedAuditView) return;
+    const name = window.prompt('新的视图名称', selectedAuditView.name)?.trim();
+    if (!name || name === selectedAuditView.name) return;
+    setSavingView(true);
+    setOpError(null);
+    try {
+      await api.renameCollabAuditFilterView(selectedAuditView.id, name);
       await auditViews.reload();
     } catch (err) {
       setOpError(err);
@@ -837,6 +856,16 @@ export function CollabAuditPage() {
           >
             {savingView ? '保存中…' : '保存当前筛选'}
           </Button>
+          {selectedViewId ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={savingView}
+              onClick={() => void renameAuditView()}
+            >
+              重命名
+            </Button>
+          ) : null}
           {selectedViewId ? (
             <Button
               size="sm"

@@ -1170,6 +1170,11 @@ export const api = {
       '/api/collab-audit-filter-views',
       json('POST', payload),
     ),
+  renameCollabAuditFilterView: (id: string, name: string) =>
+    request<{ item: CollabAuditFilterView }>(
+      `/api/collab-audit-filter-views/${id}`,
+      json('PATCH', { name }),
+    ),
   deleteCollabAuditFilterView: (id: string) =>
     request<{ ok: boolean }>(`/api/collab-audit-filter-views/${id}`, {
       method: 'DELETE',
@@ -1192,6 +1197,11 @@ export const api = {
     request<{ item: NotificationFilterView }>(
       '/api/notification-filter-views',
       json('POST', payload),
+    ),
+  renameNotificationFilterView: (id: string, name: string) =>
+    request<{ item: NotificationFilterView }>(
+      `/api/notification-filter-views/${id}`,
+      json('PATCH', { name }),
     ),
   deleteNotificationFilterView: (id: string) =>
     request<{ ok: boolean }>(`/api/notification-filter-views/${id}`, {

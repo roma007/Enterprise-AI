@@ -4391,6 +4391,22 @@ async function main() {
       assert.equal(updated.json().item.scope, 'trash');
       assert.equal(updated.json().item.shared, true);
 
+      const renamed = await call(
+        zhangToken,
+        'PATCH',
+        `/api/notification-filter-views/${viewId}`,
+        { name: `${name}-renamed` },
+      );
+      assert.equal(renamed.statusCode, 200, `重命名失败：${renamed.body}`);
+      assert.equal(renamed.json().item.name, `${name}-renamed`);
+      const renameOther = await call(
+        wangToken,
+        'PATCH',
+        `/api/notification-filter-views/${viewId}`,
+        { name: `${name}-hijack` },
+      );
+      assert.equal(renameOther.statusCode, 404, '不能重命名他人视图');
+
       const listed = await call(zhangToken, 'GET', '/api/notification-filter-views');
       assert.equal(listed.statusCode, 200);
       assert.ok(
@@ -5210,6 +5226,22 @@ async function main() {
       assert.equal(updated.statusCode, 201);
       assert.equal(updated.json().item.id, viewId, '同名保存应覆盖');
       assert.equal(updated.json().item.type, 'decision');
+
+      const renamedView = await call(
+        adminToken,
+        'PATCH',
+        `/api/collab-audit-filter-views/${viewId}`,
+        { name: `${name}-renamed` },
+      );
+      assert.equal(renamedView.statusCode, 200, `重命名失败：${renamedView.body}`);
+      assert.equal(renamedView.json().item.name, `${name}-renamed`);
+      const renameByOther = await call(
+        directorToken,
+        'PATCH',
+        `/api/collab-audit-filter-views/${viewId}`,
+        { name: `${name}-hijack` },
+      );
+      assert.equal(renameByOther.statusCode, 404, '不能重命名他人视图');
 
       const adminList = await call(
         adminToken,

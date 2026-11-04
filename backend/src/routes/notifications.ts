@@ -675,6 +675,27 @@ export async function notificationRoutes(app: FastifyInstance) {
     return reply.code(201).send({ item });
   });
 
+  app.patch('/api/notification-filter-views/:id', async (req) => {
+    const auth = currentUser(req);
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({ name: z.string().trim().min(1).max(80) })
+      .parse(req.body ?? {});
+    const row = await one(
+      `UPDATE notification_filter_views
+          SET name = $2, updated_at = now()
+        WHERE id = $1 AND user_id = $3
+        RETURNING id, name, kind, unread,
+                  from_date::text AS "from", to_date::text AS "to",
+                  scope, shared, shared_role, true AS is_owner,
+                  (SELECT name FROM users WHERE id = user_id) AS owner_name,
+                  created_at, updated_at`,
+      [id, body.name, auth.id],
+    );
+    if (!row) throw httpError(404, 'NOT_FOUND', '筛选视图不存在');
+    return { item: row };
+  });
+
   app.delete('/api/notification-filter-views/:id', async (req) => {
     const auth = currentUser(req);
     const { id } = z.object({ id: z.uuid() }).parse(req.params);

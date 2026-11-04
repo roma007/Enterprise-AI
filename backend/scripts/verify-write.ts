@@ -4250,6 +4250,43 @@ async function main() {
       const zhangAfter = await list(zhangToken);
       assert.equal(zhangAfter.total, 3, '已读通知不应被未读筛选删除');
 
+      const bulkIds = [
+        await createNotification(zhangId, 'verify_bulk', '批量通知一'),
+        await createNotification(zhangId, 'verify_bulk', '批量通知二'),
+        await createNotification(zhangId, 'verify_bulk', '批量通知三', {
+          read: true,
+        }),
+      ];
+      createdIds.push(...bulkIds);
+
+      const page1 = await list(zhangToken, '?limit=2&offset=0');
+      assert.equal(page1.total, 6, '分页 total 应包含新增通知');
+      assert.equal(page1.items.length, 2, 'limit 应生效');
+      const page3 = await list(zhangToken, '?limit=2&offset=4');
+      assert.equal(page3.items.length, 2);
+      assert.equal(page3.total, 6, '跨页 total 应一致');
+
+      const bulkDelete = await call(zhangToken, 'POST', '/api/notifications/delete', {
+        all: true,
+        kind: 'verify_bulk',
+        unread: true,
+      });
+      assert.equal(
+        bulkDelete.json().deleted,
+        2,
+        '按类型 + 未读批量删除应只命中 2 条',
+      );
+      const bulkLeft = await list(zhangToken, '?kind=verify_bulk');
+      assert.equal(bulkLeft.total, 1, '同类型已读通知应保留');
+
+      const tooMany = await call(zhangToken, 'POST', '/api/notifications/delete', {
+        ids: Array.from(
+          { length: 101 },
+          (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        ),
+      });
+      assert.equal(tooMany.statusCode, 400, '超过 100 条 ID 应拒绝');
+
       const auditForbidden = await call(zhangToken, 'GET', '/api/notification-audits');
       assert.equal(auditForbidden.statusCode, 403, '顾问不应查看通知审计');
       const auditForAdmin = await call(adminToken, 'GET', '/api/notification-audits?limit=5');

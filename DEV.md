@@ -96,3 +96,22 @@ ps -axo pid,command \
 - 恢复前先看 `autopilot/logs/` 最近一次结果
 - 60 秒看门狗 `com.hengzhi.autopilot.watch` 会在上一轮结束后启动下一项
 - 看门狗与 10 分钟兜底共用同一把锁，不会重复启动
+
+## 7. 多 Agent 并行（OpenCode Ensemble）
+
+本项目通过 `.opencode/opencode.jsonc` 按项目加载 [`@hueyexe/opencode-ensemble`](https://github.com/hueyexe/opencode-ensemble)，不影响其他项目。
+
+适用场景：两个以上**文件不重叠**的实现任务，或“探索/实现/审查”并行。它会让每个 teammate 使用独立 session 和 Git worktree，避免同时改同一目录。
+
+使用方式：
+
+1. 新开一个 OpenCode 会话，直接说“用 ensemble 并行完成：A 做后端 X，B 做前端 Y，最后审查并合并”。
+2. Lead agent 会建立任务板、spawn teammate、收取结果；dashboard 在 `http://localhost:4747`。
+3. 合并由 Lead 显式执行 `team_merge`；本项目设置 `mergeOnCleanup=false`，清理时不会自动合并。
+4. 合并后仍由协调者串行跑 `verify:write` / e2e，不能让多个 teammate 同时跑共享数据库测试。
+
+注意：
+
+- 使用 Ensemble 时先暂停 Autopilot：`touch autopilot/PAUSE`，避免定时器与 teammate 同时改同一工作区。
+- 只给 teammate 分配独立文件；共用文件（如 `verify-write.ts`、`AUTOPILOT_QUEUE.md`）集中到合并阶段处理。
+- 不要把真实客户数据、密钥或生产环境操作交给 teammate。

@@ -124,7 +124,7 @@ def add_header(slide, eyebrow, title, subtitle=None):
     add_line(slide, 0.7, 1.82 if subtitle else 1.52, 1.15, ORANGE, 0.045)
 
 
-def add_footer(slide, total=13):
+def add_footer(slide, total=14):
     page = len(prs.slides)
     add_text(slide, "Enterprise AI · 客户价值说明", 0.7, 7.12, 5.5, 0.22, 9, False, GRAY)
     add_text(slide, f"{page:02d} / {total:02d}", 12.0, 7.12, 0.65, 0.22, 9, False, GRAY, PP_ALIGN.RIGHT)
@@ -334,7 +334,7 @@ add_notes(s, "3 周试点合并了“试点一”：第 1 周拿样本，第 2 �
 
 # ---------------------------------------------------------------- 10 谁参与
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "需要什么", "老板给三样东西，再指定四个人", "不需要客户换系统；老板只参加两次会。")
+add_header(s, "需要什么", "老板给三样东西，owner 负责找齐四类人", "owner 是总协调人；老板只参加 Kickoff 和 Go/No-Go 两次会。")
 asks = [
     ("200 份", "真实托书 / 对账单", "覆盖主要格式与异常"),
     ("1 名", "内部 owner", "能拍板、能协调数据"),
@@ -342,26 +342,25 @@ asks = [
 ]
 for i, (num, title, detail) in enumerate(asks):
     x = 0.7 + i * 4.12
-    add_rect(s, x, 1.9, 3.82, 1.25, LIGHT, LIGHT_2)
-    add_text(s, num, x + 0.28, 2.02, 2.0, 0.4, 22, True, ORANGE)
-    add_text(s, title, x + 1.35, 2.05, 2.25, 0.3, 12, True, NAVY)
-    add_text(s, detail, x + 1.35, 2.38, 2.25, 0.5, 9.5, False, GRAY)
+    add_rect(s, x, 1.85, 3.82, 1.05, LIGHT, LIGHT_2)
+    add_text(s, num, x + 0.25, 1.95, 1.75, 0.38, 20, True, ORANGE)
+    add_text(s, title, x + 1.2, 1.98, 2.4, 0.3, 11, True, NAVY)
+    add_text(s, detail, x + 1.2, 2.28, 2.4, 0.45, 9.3, False, GRAY)
 roles = [
-    ("业务 owner", "单证 / 财务主管", "每周 30 分钟", "拍板范围、验收口径、协调样本"),
-    ("单证 / 财务骨干", "一线操作人员", "首周 2 小时 + 试用", "解释单据、反馈异常、参与验收"),
-    ("IT 接口人", "客户 IT", "首周 2–3 小时", "环境、账号、接口与网络"),
-    ("数据 / 安全", "安全或法务", "1 次评审", "脱敏规则、数据边界确认"),
-    ("老板", "您", "2 次会", "Kickoff 定目标；Go/No-Go 拍板"),
+    ("业务 owner", "单证 / 财务主管", "每周 30 分钟", "拍板范围与验收、协调样本、主持复盘"),
+    ("一线骨干", "单证员 / 财务专员", "首周 2 小时 + 试用", "解释单据、确认差异、反馈误判"),
+    ("IT 接口人", "客户 IT", "首周 2–3 小时", "环境、账号、接口、网络与权限"),
+    ("数据 / 安全", "安全或法务", "1 次评审", "脱敏规则、数据边界与合规确认"),
 ]
-table_shape = s.shapes.add_table(len(roles) + 1, 4, Inches(0.7), Inches(3.35), Inches(11.95), Inches(3.0))
+table_shape = s.shapes.add_table(len(roles) + 1, 4, Inches(0.7), Inches(3.15), Inches(11.95), Inches(3.05))
 table = table_shape.table
-for i, w in enumerate([2.2, 2.5, 2.4, 4.85]):
+for i, w in enumerate([2.3, 2.7, 2.2, 4.75]):
     table.columns[i].width = Inches(w)
-for j, h in enumerate(["角色", "谁", "投入", "负责什么"]):
+for j, h in enumerate(["角色", "找谁", "投入", "负责什么"]):
     cell = table.cell(0, j); cell.text = h
     cell.fill.solid(); cell.fill.fore_color.rgb = NAVY
     for p in cell.text_frame.paragraphs:
-        for r in p.runs: set_font(r, 10.5, True, WHITE)
+        for r in p.runs: set_font(r, 10.3, True, WHITE)
     cell.vertical_anchor = MSO_ANCHOR.MIDDLE
 for i, row in enumerate(roles, start=1):
     for j, val in enumerate(row):
@@ -370,9 +369,49 @@ for i, row in enumerate(roles, start=1):
         for p in cell.text_frame.paragraphs:
             for r in p.runs: set_font(r, 9.8, j == 0, NAVY if j == 0 else BLACK)
         cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-add_text(s, "不替换 TMS / 财务系统；客户只装 ai-copilot。", 0.7, 6.55, 9.0, 0.3, 11, True, NAVY)
+add_text(s, "owner 不需要老板每天盯：每周 30 分钟复盘，关键节点再拉老板拍板。采购/商务暂不参与，试点后再进场。", 0.7, 6.4, 11.95, 0.3, 10.5, True, NAVY)
 add_footer(s)
-add_notes(s, "老板只需要给三样东西：样本、owner、验收口径；再指定四个人：业务 owner、单证/财务骨干、IT 接口人、数据/安全。老板本人只参加 kickoff 和 Go/No-Go 两次会。")
+add_notes(s, "老板给三样东西：样本、owner、验收口径。owner 去找四类人：业务 owner、一线骨干、IT 接口人、数据/安全。老板本人只参加 kickoff 和 Go/No-Go 两次会。")
+
+
+# ---------------------------------------------------------------- 11 分阶段配合
+s = prs.slides.add_slide(prs.slide_layouts[6])
+add_header(s, "怎么配合", "配合分三个阶段：每个阶段谁出现、做什么、交什么", "不是所有人都全程参与；按阶段拉人，减少对日常业务的打扰。")
+rows = [
+    ("第 1 周\n样本与基线", "业务 owner、单证/财务骨干、IT、数据/安全",
+     "提供 200 份脱敏样本；解释字段与口径；开通环境/账号；确认数据边界",
+     "样本清单、基线、验收口径"),
+    ("第 2 周\n跑对账 + 复核", "一线单证/财务、业务 owner",
+     "抽检差异；确认解释；反馈误判；参加 1 次复核会",
+     "差异分类、准确率、问题清单"),
+    ("第 3 周\n报告与决策", "老板、业务 owner、财务、IT",
+     "参加 Go/No-Go；确认下一期范围/预算；确认上线条件",
+     "评测报告、决策纪要"),
+    ("试点后（可选）", "采购/商务、IT、安全",
+     "商务条款、部署方案、安全评审",
+     "合同/上线计划"),
+]
+table_shape = s.shapes.add_table(len(rows) + 1, 4, Inches(0.7), Inches(1.95), Inches(11.95), Inches(4.05))
+table = table_shape.table
+for i, w in enumerate([2.1, 3.6, 4.5, 1.75]):
+    table.columns[i].width = Inches(w)
+for j, h in enumerate(["阶段", "谁参与", "需要配合什么", "产出"]):
+    cell = table.cell(0, j); cell.text = h
+    cell.fill.solid(); cell.fill.fore_color.rgb = NAVY
+    for p in cell.text_frame.paragraphs:
+        for r in p.runs: set_font(r, 10, True, WHITE)
+    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+for i, row in enumerate(rows, start=1):
+    for j, val in enumerate(row):
+        cell = table.cell(i, j); cell.text = val
+        cell.fill.solid(); cell.fill.fore_color.rgb = WHITE if i % 2 else LIGHT
+        for p in cell.text_frame.paragraphs:
+            for r in p.runs: set_font(r, 9.3, j == 0, NAVY if j == 0 else BLACK)
+            p.line_spacing = 1.1
+        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+add_text(s, "第 1 周最关键：样本和验收口径定不下来，后面都白跑；采购/商务不用现在进场。", 0.7, 6.35, 11.95, 0.3, 11, True, NAVY)
+add_footer(s)
+add_notes(s, "配合分三个阶段：第 1 周拿样本、定口径、开环境；第 2 周抽检差异、确认解释；第 3 周老板参加 Go/No-Go。采购/商务试点后再进场。")
 
 
 # ---------------------------------------------------------------- 12 价值测算

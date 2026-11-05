@@ -1545,6 +1545,38 @@ async function main() {
     assert.equal(quoted.quote_one_time, 50, '方案应汇总一次性报价');
     assert.equal(quoted.quote_annual_ops, 0, '未关联的年运维不计入方案');
 
+    const compareMdInternal = await app.inject({
+      method: 'GET',
+      url: `/api/solutions/${solution.id}/compare/${solutionV2.id}/document`,
+    });
+    assert.equal(compareMdInternal.statusCode, 200, '内部版对比 Markdown 应成功');
+    assert.ok(
+      compareMdInternal.body.includes('工作量成本'),
+      '内部版对比应包含工作量成本',
+    );
+    assert.ok(
+      compareMdInternal.body.includes('报价（一次性 / 年运维）：50 / 0'),
+      '内部版对比应汇总报价',
+    );
+
+    const compareMdCustomer = await app.inject({
+      method: 'GET',
+      url: `/api/solutions/${solution.id}/compare/${solutionV2.id}/document?audience=customer`,
+    });
+    assert.equal(compareMdCustomer.statusCode, 200, '客户版对比 Markdown 应成功');
+    assert.ok(
+      !compareMdCustomer.body.includes('工作量成本'),
+      '客户版对比不应包含内部工作量成本',
+    );
+    assert.ok(
+      compareMdCustomer.body.includes('报价（一次性 / 年运维）：50 / 0'),
+      '客户版对比应保留报价',
+    );
+    assert.ok(
+      compareMdCustomer.body.includes('（客户版）'),
+      '客户版对比标题应带标识',
+    );
+
     const quotes = ok(
       await req('GET', `/api/engagements/${engagementId}/quotes`),
       200,

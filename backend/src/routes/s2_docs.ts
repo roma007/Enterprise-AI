@@ -84,22 +84,24 @@ export async function s2DocRoutes(app: FastifyInstance) {
       .send(rendered.markdown);
   });
 
-  app.get('/api/solutions/:id/compare/:otherId/document.docx', async (req, reply) => {
-    const params = z
-      .object({ id: z.uuid(), otherId: z.uuid() })
-      .parse(req.params);
-    const org = await requestOrg(req);
+  const compareParams = z.object({ id: z.uuid(), otherId: z.uuid() });
+  const compareQuery = z.object({
+    audience: z.enum(['internal', 'customer']).default('internal'),
+  });
+
+  async function loadCompare(
+    id: string,
+    otherId: string,
+    org: string,
+    audience: 'internal' | 'customer',
+  ) {
     const [before, after] = await Promise.all([
-      loadSolutionBundle(params.id, org),
-      loadSolutionBundle(params.otherId, org),
+      loadSolutionBundle(id, org),
+      loadSolutionBundle(otherId, org),
     ]);
-    if (!before || !after) {
-      return reply.code(404).send({ error: 'NOT_FOUND', message: '方案不存在' });
-    }
+    if (!before || !after) return null;
     if (before.solution.opportunity_id !== after.solution.opportunity_id) {
-      return reply
-        .code(422)
-        .send({ error: 'SOLUTION_MISMATCH', message: '只能对比同一机会点的方案版本' });
+      return 'mismatch' as const;
     }
     const quoteSql = `SELECT
         COALESCE(sum(qi.amount) FILTER (WHERE qi.kind = 'one_time'), 0)::float8 AS one_time,
@@ -113,20 +115,20 @@ export async function s2DocRoutes(app: FastifyInstance) {
         one<{ total: number }>(
           `SELECT COALESCE(sum(cost), 0)::float8 AS total
              FROM workload_estimates WHERE solution_id = $1`,
-          [params.id],
+          [id],
         ),
         one<{ total: number }>(
           `SELECT COALESCE(sum(cost), 0)::float8 AS total
              FROM workload_estimates WHERE solution_id = $1`,
-          [params.otherId],
+          [otherId],
         ),
       ]),
       Promise.all([
-        one<{ one_time: number; annual_ops: number }>(quoteSql, [params.id]),
-        one<{ one_time: number; annual_ops: number }>(quoteSql, [params.otherId]),
+        one<{ one_time: number; annual_ops: number }>(quoteSql, [id]),
+        one<{ one_time: number; annual_ops: number }>(quoteSql, [otherId]),
       ]),
     ]);
-    const rendered = renderSolutionCompare(
+    return renderSolutionCompare(
       before,
       after,
       Number(costs[0]?.total ?? 0),
@@ -139,7 +141,36 @@ export async function s2DocRoutes(app: FastifyInstance) {
         oneTime: Number(quotes[1]?.one_time ?? 0),
         annualOps: Number(quotes[1]?.annual_ops ?? 0),
       },
+      audience,
     );
+  }
+
+  function compareFailure(rendered: Awaited<ReturnType<typeof loadCompare>>, reply: any) {
+    if (rendered === 'mismatch') {
+      return reply
+        .code(422)
+        .send({ error: 'SOLUTION_MISMATCH', message: '只能对比同一机会点的方案版本' });
+    }
+    return reply.code(404).send({ error: 'NOT_FOUND', message: '方案不存在' });
+  }
+
+  app.get('/api/solutions/:id/compare/:otherId/document', async (req, reply) => {
+    const params = compareParams.parse(req.params);
+    const { audience } = compareQuery.parse(req.query);
+    const org = await requestOrg(req);
+    const rendered = await loadCompare(params.id, params.otherId, org, audience);
+    if (!rendered || rendered === 'mismatch') return compareFailure(rendered, reply);
+    return reply
+      .header('content-type', 'text/markdown; charset=utf-8')
+      .send(rendered.markdown);
+  });
+
+  app.get('/api/solutions/:id/compare/:otherId/document.docx', async (req, reply) => {
+    const params = compareParams.parse(req.params);
+    const { audience } = compareQuery.parse(req.query);
+    const org = await requestOrg(req);
+    const rendered = await loadCompare(params.id, params.otherId, org, audience);
+    if (!rendered || rendered === 'mismatch') return compareFailure(rendered, reply);
     const buffer = await buildDocx(rendered.markdown, {
       title: rendered.title,
       client: rendered.meta.client,

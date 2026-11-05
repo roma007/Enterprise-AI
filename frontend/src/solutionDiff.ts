@@ -121,19 +121,22 @@ const STATUS_LABEL: Record<NamedDiff['status'], string> = {
   same: '未变',
 };
 
-/** 版本对比 Markdown，便于贴到评审纪要/邮件。 */
-export function solutionDiffMarkdown(diff: SolutionDiff): string {
+/** 版本对比 Markdown，便于贴到评审纪要/邮件；客户版隐藏内部成本。 */
+export function solutionDiffMarkdown(
+  diff: SolutionDiff,
+  audience: 'internal' | 'customer' = 'internal',
+): string {
   const lines: string[] = [
     `# 方案版本对比：v${diff.versionBefore} → v${diff.versionAfter}`,
     '',
     `- 变化点：${diff.changedCount}`,
-    `- 工作量成本：${diff.workloadBefore} → ${diff.workloadAfter} 万元（内部口径）`,
-    '',
-    '## 概要字段',
-    '',
-    '| 字段 | 基准 | 对比 |',
-    '|---|---|---|',
   ];
+  if (audience === 'internal') {
+    lines.push(
+      `- 工作量成本：${diff.workloadBefore} → ${diff.workloadAfter} 万元（内部口径）`,
+    );
+  }
+  lines.push('', '## 概要字段', '', '| 字段 | 基准 | 对比 |', '|---|---|---|');
   const changedFields = diff.fields.filter((field) => field.changed);
   if (!changedFields.length) lines.push('| — | 无变化 | — |');
   for (const field of changedFields) {
@@ -160,8 +163,11 @@ export function solutionDiffMarkdown(diff: SolutionDiff): string {
   return `${lines.join('\n')}\n`;
 }
 
-/** 版本对比 CSV（含概要字段与三类明细）。 */
-export function solutionDiffCsv(diff: SolutionDiff): string {
+/** 版本对比 CSV（含概要字段与三类明细）；客户版隐藏内部成本。 */
+export function solutionDiffCsv(
+  diff: SolutionDiff,
+  audience: 'internal' | 'customer' = 'internal',
+): string {
   const cell = (value: unknown) => {
     let text = value == null ? '' : String(value);
     if (/^[=+\-@]/.test(text)) text = `'${text}`;
@@ -184,7 +190,7 @@ export function solutionDiffCsv(diff: SolutionDiff): string {
   for (const item of diff.acceptance.filter((item) => item.status !== 'same')) {
     lines.push([cell('验收标准'), cell(item.name), cell(STATUS_LABEL[item.status]), cell(''), cell(item.detail)].join(','));
   }
-  if (diff.workloadBefore !== diff.workloadAfter) {
+  if (audience === 'internal' && diff.workloadBefore !== diff.workloadAfter) {
     lines.push([
       cell('工作量成本'),
       cell('合计人天'),

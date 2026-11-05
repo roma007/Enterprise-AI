@@ -110,6 +110,7 @@ export function SolutionsTab({
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareWith, setCompareWith] = useState('');
   const [compareDiff, setCompareDiff] = useState<SolutionDiff | null>(null);
+  const [compareCustomer, setCompareCustomer] = useState(false);
   const [compareError, setCompareError] = useState<unknown>(null);
   const [compareLoading, setCompareLoading] = useState(false);
   const users = data?.users ?? [];
@@ -279,6 +280,7 @@ export function SolutionsTab({
                           const other = oppSolutions.find((s) => s.id !== current);
                           setCompareWith(other?.id ?? '');
                           setCompareDiff(null);
+                          setCompareCustomer(false);
                           setCompareOpen(true);
                         }}
                       >
@@ -327,11 +329,12 @@ export function SolutionsTab({
                     const blob = await api.exportSolutionCompareDocx(
                       activeSolutionId,
                       compareWith,
+                      compareCustomer ? 'customer' : 'internal',
                     );
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `方案对比-v${compareDiff?.versionBefore}-v${compareDiff?.versionAfter}.docx`;
+                    a.download = `方案对比-v${compareDiff?.versionBefore}-v${compareDiff?.versionAfter}${compareCustomer ? '-客户版' : ''}.docx`;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -350,13 +353,19 @@ export function SolutionsTab({
               disabled={!compareDiff}
               onClick={() => {
                 if (!compareDiff) return;
-                const blob = new Blob([solutionDiffMarkdown(compareDiff)], {
-                  type: 'text/markdown;charset=utf-8',
-                });
+                const blob = new Blob(
+                  [
+                    solutionDiffMarkdown(
+                      compareDiff,
+                      compareCustomer ? 'customer' : 'internal',
+                    ),
+                  ],
+                  { type: 'text/markdown;charset=utf-8' },
+                );
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `方案对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}.md`;
+                a.download = `方案对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}${compareCustomer ? '-客户版' : ''}.md`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -371,13 +380,19 @@ export function SolutionsTab({
               disabled={!compareDiff}
               onClick={() => {
                 if (!compareDiff) return;
-                const blob = new Blob([solutionDiffCsv(compareDiff)], {
-                  type: 'text/csv;charset=utf-8',
-                });
+                const blob = new Blob(
+                  [
+                    solutionDiffCsv(
+                      compareDiff,
+                      compareCustomer ? 'customer' : 'internal',
+                    ),
+                  ],
+                  { type: 'text/csv;charset=utf-8' },
+                );
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `方案对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}.csv`;
+                a.download = `方案对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}${compareCustomer ? '-客户版' : ''}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -409,13 +424,23 @@ export function SolutionsTab({
               ))}
           </Select>
         </Field>
+        <label className="checkbox-line">
+          <input
+            type="checkbox"
+            checked={compareCustomer}
+            onChange={(e) => setCompareCustomer(e.target.checked)}
+          />
+          客户版导出口径（隐藏内部工作量成本，保留报价）
+        </label>
         {compareLoading ? <Spinner /> : null}
         {compareError ? <ErrorBox error={compareError} /> : null}
         {compareDiff ? (
           <div className="editor-stack">
             <p className="muted">
-              共 <strong>{compareDiff.changedCount}</strong> 处变化；工作量成本{' '}
-              {compareDiff.workloadBefore} → {compareDiff.workloadAfter} 万元（内部口径）。
+              共 <strong>{compareDiff.changedCount}</strong> 处变化
+              {compareCustomer
+                ? '；客户版隐藏内部工作量成本。'
+                : `；工作量成本 ${compareDiff.workloadBefore} → ${compareDiff.workloadAfter} 万元（内部口径）。`}
             </p>
             <p className="muted small">
               报价（一次性 / 年运维）：

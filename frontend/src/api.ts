@@ -553,8 +553,14 @@ export const api = {
       json('POST', payload),
     ),
   getSolution: (id: string) => request<SolutionDetail>(`/api/solutions/${id}`),
-  exportSolutionCompareDocx: (id: string, otherId: string) =>
-    requestBlob(`/api/solutions/${id}/compare/${otherId}/document.docx`),
+  exportSolutionCompareDocx: (
+    id: string,
+    otherId: string,
+    audience: 'internal' | 'customer' = 'internal',
+  ) =>
+    requestBlob(
+      `/api/solutions/${id}/compare/${otherId}/document.docx?audience=${audience}`,
+    ),
   updateSolution: (id: string, payload: Record<string, unknown>) =>
     request<{ item: Solution }>(`/api/solutions/${id}`, json('PATCH', payload)),
   deleteSolution: (id: string) =>

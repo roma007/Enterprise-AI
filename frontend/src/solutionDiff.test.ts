@@ -133,4 +133,20 @@ describe('diffSolutionDetails', () => {
     expect(csv).toContain('"工作量成本"');
     expect(csv).toContain('"5"');
   });
+
+  it('客户版 Markdown/CSV 隐藏内部工作量成本', () => {
+    const before = base(1);
+    const after = base(2);
+    after.item.scope = '二期推广';
+    after.workloadTotal = 5;
+    const diff = diffSolutionDetails(before, after);
+
+    const markdown = solutionDiffMarkdown(diff, 'customer');
+    expect(markdown).toContain('二期推广');
+    expect(markdown).not.toContain('工作量成本');
+
+    const csv = solutionDiffCsv(diff, 'customer');
+    expect(csv).toContain('二期推广');
+    expect(csv).not.toContain('"工作量成本"');
+  });
 });

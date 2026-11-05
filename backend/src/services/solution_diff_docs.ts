@@ -44,10 +44,12 @@ export function renderSolutionCompare(
   afterWorkloadCost = 0,
   beforeQuote = { oneTime: 0, annualOps: 0 },
   afterQuote = { oneTime: 0, annualOps: 0 },
+  audience: 'internal' | 'customer' = 'internal',
 ): { title: string; markdown: string; meta: { client: string; project: string; version: string } } {
   const s1 = before.solution;
   const s2 = after.solution;
-  const title = `${s1.opportunity_title} · 方案版本对比 v${s1.version} → v${s2.version}`;
+  const customer = audience === 'customer';
+  const title = `${s1.opportunity_title} · 方案版本对比 v${s1.version} → v${s2.version}${customer ? '（客户版）' : ''}`;
   const fields: Array<[string, string, string]> = [
     ['状态', STATUS_LABEL[s1.status] ?? s1.status, STATUS_LABEL[s2.status] ?? s2.status],
     ['范围', text(s1.scope), text(s2.scope)],
@@ -98,13 +100,20 @@ export function renderSolutionCompare(
       ...rows.map((row) => `| ${row.join(' | ')} |`),
     ].join('\n');
 
+  const summaryLines = [
+    `- 报价（一次性 / 年运维）：${beforeQuote.oneTime} / ${beforeQuote.annualOps} 万元 → ${afterQuote.oneTime} / ${afterQuote.annualOps} 万元`,
+  ];
+  if (!customer) {
+    summaryLines.unshift(
+      `- 工作量成本：${beforeWorkloadCost} → ${afterWorkloadCost} 万元（内部口径）`,
+    );
+  }
   const lines = [
     `# ${title}`,
     '',
     `> 客户：${s1.client_name} ｜ 项目：${s1.engagement_name} ｜ 机会点：${s1.opportunity_code}`,
     '',
-    `- 工作量成本：${beforeWorkloadCost} → ${afterWorkloadCost} 万元（内部口径）`,
-    `- 报价（一次性 / 年运维）：${beforeQuote.oneTime} / ${beforeQuote.annualOps} 万元 → ${afterQuote.oneTime} / ${afterQuote.annualOps} 万元`,
+    ...summaryLines,
     '',
     '## 一、概要字段',
     '',
@@ -131,7 +140,12 @@ export function renderSolutionCompare(
       }
     }
   }
-  lines.push('', '> 本对比稿用于内部评审；客户版交付物以正式方案书/报价单为准。');
+  lines.push(
+    '',
+    customer
+      ? '> 本对比稿用于客户沟通；正式交付以签署的方案书/报价单为准。'
+      : '> 本对比稿用于内部评审；客户版交付物以正式方案书/报价单为准。',
+  );
   return {
     title,
     markdown: `${lines.join('\n')}\n`,

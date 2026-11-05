@@ -348,7 +348,7 @@ curl -s -X POST http://127.0.0.1:8788/api/deliverables/generate \
 | 分享访问 | `GET /api/shares/:id/views`；记录浏览/Word/PDF、IP、User-Agent、Referer；`POST /api/share-views/archive` 按组织+保留期归档 |
 | 分享归档 | `GET /api/share-views/archive`（分页/过滤）、`GET /api/share-views/archive/export.csv`；仅管理员/总监 |
 | 客户确认 | `GET/POST /api/engagements/:id/confirmations`、`DELETE /api/confirmations/:id`；对象/确认人必须属于该项目 |
-| S2 方案 | `GET/POST /api/opportunities/:id/solutions`、`GET/PATCH/DELETE /api/solutions/:id`；组件/集成/工作量/验收/评审；前端支持两个方案版本对比（概要/组件/集成/验收/工作量）并导出 Markdown/CSV |
+| S2 方案 | `GET/POST /api/opportunities/:id/solutions`、`GET/PATCH/DELETE /api/solutions/:id`；组件/集成/工作量/验收/评审；前端支持两个方案版本对比（概要/组件/集成/验收/工作量）并导出 Markdown/CSV/Word |
 | S2 报价 | `GET/POST /api/engagements/:id/quotes`、`GET/PATCH/DELETE /api/quotes/:id`、报价行 CRUD |
 | S2 文档 | `POST /api/solutions/:id/documents`、`GET /api/solutions/:id/document(.docx)`、`POST /api/quotes/:id/documents`、`GET /api/quotes/:id/document.docx` |
 | G2 门禁 | `GET /api/engagements/:id/g2-checks`（9 项：覆盖 / 范围 / 组件 / 验收 / 工作量 / 报价 / 关联 / 阻断 / 评审） |

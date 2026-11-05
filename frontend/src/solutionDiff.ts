@@ -127,7 +127,7 @@ export function solutionDiffMarkdown(diff: SolutionDiff): string {
     `# 方案版本对比：v${diff.versionBefore} → v${diff.versionAfter}`,
     '',
     `- 变化点：${diff.changedCount}`,
-    `- 工作量：${diff.workloadBefore} → ${diff.workloadAfter} 人天`,
+    `- 工作量成本：${diff.workloadBefore} → ${diff.workloadAfter} 万元（内部口径）`,
     '',
     '## 概要字段',
     '',
@@ -186,7 +186,7 @@ export function solutionDiffCsv(diff: SolutionDiff): string {
   }
   if (diff.workloadBefore !== diff.workloadAfter) {
     lines.push([
-      cell('工作量'),
+      cell('工作量成本'),
       cell('合计人天'),
       cell('变更'),
       cell(diff.workloadBefore),

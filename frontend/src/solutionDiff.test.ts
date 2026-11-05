@@ -130,7 +130,7 @@ describe('diffSolutionDetails', () => {
     const csv = solutionDiffCsv(diff);
     expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(csv).toContain('"类型","名称","变化","基准","对比"');
-    expect(csv).toContain('"工作量"');
+    expect(csv).toContain('"工作量成本"');
     expect(csv).toContain('"5"');
   });
 });

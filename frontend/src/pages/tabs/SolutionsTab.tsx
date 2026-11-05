@@ -320,6 +320,33 @@ export function SolutionsTab({
             <Button
               size="sm"
               variant="ghost"
+              disabled={!compareDiff || !compareWith || !activeSolutionId}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const blob = await api.exportSolutionCompareDocx(
+                      activeSolutionId,
+                      compareWith,
+                    );
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `方案对比-v${compareDiff?.versionBefore}-v${compareDiff?.versionAfter}.docx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+                  } catch (err) {
+                    setCompareError(err);
+                  }
+                })();
+              }}
+            >
+              下载 Word
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               disabled={!compareDiff}
               onClick={() => {
                 if (!compareDiff) return;
@@ -387,8 +414,8 @@ export function SolutionsTab({
         {compareDiff ? (
           <div className="editor-stack">
             <p className="muted">
-              共 <strong>{compareDiff.changedCount}</strong> 处变化；工作量{' '}
-              {compareDiff.workloadBefore} → {compareDiff.workloadAfter} 人天。
+              共 <strong>{compareDiff.changedCount}</strong> 处变化；工作量成本{' '}
+              {compareDiff.workloadBefore} → {compareDiff.workloadAfter} 万元（内部口径）。
             </p>
             <div className="table-wrap">
               <table>

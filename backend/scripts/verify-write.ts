@@ -1568,6 +1568,13 @@ async function main() {
     assert.equal(proposalDocx.statusCode, 200);
     assert.equal(proposalDocx.rawPayload.subarray(0, 2).toString(), 'PK');
 
+    const compareDocx = await app.inject({
+      method: 'GET',
+      url: `/api/solutions/${solution.id}/compare/${solutionV2.id}/document.docx`,
+    });
+    assert.equal(compareDocx.statusCode, 200, '版本对比 Word 应成功');
+    assert.equal(compareDocx.rawPayload.subarray(0, 2).toString(), 'PK');
+
     const quoteDoc = ok(
       await req('POST', `/api/quotes/${quote.id}/documents`, {}),
       201,

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "企业 AI 化项目管理系统 API",
-    "version": "0.1.0",
+    "version": "local-2026.11.05",
     "description": "S1 诊断阶段 API。请求/响应体的完整 JSON Schema 仍在补齐，当前先提供路径、方法与标签导航。"
   },
   "components": {
@@ -2236,6 +2236,68 @@
             },
             "in": "path",
             "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/solutions/{id}/compare/{otherId}/document": {
+      "get": {
+        "summary": "GET /api/solutions/:id/compare/:otherId/document",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "otherId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/solutions/{id}/compare/{otherId}/document.docx": {
+      "get": {
+        "summary": "GET /api/solutions/:id/compare/:otherId/document.docx",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "otherId",
             "required": true
           }
         ],
@@ -4484,6 +4546,19 @@
         }
       }
     },
+    "/api/platform/tenants/export.csv": {
+      "get": {
+        "summary": "GET /api/platform/tenants/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/platform/plans": {
       "get": {
         "summary": "GET /api/platform/plans",
@@ -4624,6 +4699,19 @@
         }
       }
     },
+    "/api/org/snapshots/retime": {
+      "post": {
+        "summary": "POST /api/org/snapshots/retime",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/org/billing/invoices": {
       "get": {
         "summary": "GET /api/org/billing/invoices",
@@ -4745,6 +4833,511 @@
         }
       }
     },
+    "/api/holidays": {
+      "get": {
+        "summary": "GET /api/holidays",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/holidays",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/holidays/{id}": {
+      "delete": {
+        "summary": "DELETE /api/holidays/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/unread-count": {
+      "get": {
+        "summary": "GET /api/notifications/unread-count",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "summary": "GET /api/notifications",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notification-audits": {
+      "get": {
+        "summary": "GET /api/notification-audits",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notification-audits/export.csv": {
+      "get": {
+        "summary": "GET /api/notification-audits/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/delete": {
+      "post": {
+        "summary": "POST /api/notifications/delete",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/restore": {
+      "post": {
+        "summary": "POST /api/notifications/restore",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/purge": {
+      "post": {
+        "summary": "POST /api/notifications/purge",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/read": {
+      "post": {
+        "summary": "POST /api/notifications/read",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notification-filter-views": {
+      "get": {
+        "summary": "GET /api/notification-filter-views",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/notification-filter-views",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notification-filter-views/{id}": {
+      "patch": {
+        "summary": "PATCH /api/notification-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "DELETE /api/notification-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "summary": "POST /api/notifications/read-all",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "post": {
+        "summary": "POST /api/notifications/:id/read",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits": {
+      "get": {
+        "summary": "GET /api/collab-audits",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/stats": {
+      "get": {
+        "summary": "GET /api/collab-audits/stats",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/merged": {
+      "get": {
+        "summary": "GET /api/collab-audits/merged",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/archive": {
+      "get": {
+        "summary": "GET /api/collab-audits/archive",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/merged/export.csv": {
+      "get": {
+        "summary": "GET /api/collab-audits/merged/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/snapshots": {
+      "get": {
+        "summary": "GET /api/collab-audits/snapshots",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/snapshots/export.csv": {
+      "get": {
+        "summary": "GET /api/collab-audits/snapshots/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/report.md": {
+      "get": {
+        "summary": "GET /api/collab-audits/report.md",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/report.docx": {
+      "get": {
+        "summary": "GET /api/collab-audits/report.docx",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/snapshots/export-long.csv": {
+      "get": {
+        "summary": "GET /api/collab-audits/snapshots/export-long.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/snapshots/comparison/export.csv": {
+      "get": {
+        "summary": "GET /api/collab-audits/snapshots/comparison/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/archive-runs": {
+      "get": {
+        "summary": "GET /api/collab-audits/archive-runs",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/archive/export.csv": {
+      "get": {
+        "summary": "GET /api/collab-audits/archive/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audits/export.csv": {
+      "get": {
+        "summary": "GET /api/collab-audits/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audit-filter-views": {
+      "get": {
+        "summary": "GET /api/collab-audit-filter-views",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/collab-audit-filter-views",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/collab-audit-filter-views/{id}": {
+      "patch": {
+        "summary": "PATCH /api/collab-audit-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "DELETE /api/collab-audit-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/system/storage": {
       "get": {
         "summary": "GET /api/system/storage",
@@ -4844,11 +5437,276 @@
         }
       }
     },
+    "/api/audit-logs/facets": {
+      "get": {
+        "summary": "GET /api/audit-logs/facets",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/audit-logs": {
       "get": {
         "summary": "GET /api/audit-logs",
         "tags": [
           "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-logs/export.csv": {
+      "get": {
+        "summary": "GET /api/audit-logs/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-exports": {
+      "post": {
+        "summary": "POST /api/audit-exports",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "summary": "GET /api/audit-exports",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-export-cleanups": {
+      "get": {
+        "summary": "GET /api/audit-export-cleanups",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-export-cleanups/export.csv": {
+      "get": {
+        "summary": "GET /api/audit-export-cleanups/export.csv",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-exports/cleanup": {
+      "post": {
+        "summary": "POST /api/audit-exports/cleanup",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-exports/{id}/retry": {
+      "post": {
+        "summary": "POST /api/audit-exports/:id/retry",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-exports/{id}/download": {
+      "get": {
+        "summary": "GET /api/audit-exports/:id/download",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-exports/{id}": {
+      "delete": {
+        "summary": "DELETE /api/audit-exports/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-filter-views": {
+      "get": {
+        "summary": "GET /api/audit-filter-views",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/audit-filter-views",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-filter-views/export.json": {
+      "get": {
+        "summary": "GET /api/audit-filter-views/export.json",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-filter-views/import/preview": {
+      "post": {
+        "summary": "POST /api/audit-filter-views/import/preview",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-filter-views/import": {
+      "post": {
+        "summary": "POST /api/audit-filter-views/import",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/audit-filter-views/{id}": {
+      "patch": {
+        "summary": "PATCH /api/audit-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "DELETE /api/audit-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
         ],
         "responses": {
           "200": {
@@ -5114,6 +5972,682 @@
     "/api/engagements/{id}/copilot-syncs": {
       "get": {
         "summary": "GET /api/engagements/:id/copilot-syncs",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/hooks/copilot/reconcile": {
+      "post": {
+        "summary": "POST /api/hooks/copilot/reconcile",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/decisions": {
+      "put": {
+        "summary": "PUT /api/copilot-reconcile-reviews/:id/decisions",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/decisions/batch": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-reviews/:id/decisions/batch",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/document": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/document",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/documents": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/documents",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/copilot-reconcile-reviews/:id/documents",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/document.pdf": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/document.pdf",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/document.docx": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/document.docx",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/actions": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-reviews/:id/actions",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/actions/batch/stream": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-reviews/:id/actions/batch/stream",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/actions/batch": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-reviews/:id/actions/batch",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/action-batches": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/action-batches",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/batch-filter-views": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/batch-filter-views",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "POST /api/copilot-reconcile-reviews/:id/batch-filter-views",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/batch-filter-view-audits": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/batch-filter-view-audits",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/batch-filter-view-audits/export.csv": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/batch-filter-view-audits/export.csv",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-batch-filter-views/{id}": {
+      "delete": {
+        "summary": "DELETE /api/copilot-batch-filter-views/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/action-batches/export-estimate": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/action-batches/export-estimate",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/action-batches/export.csv": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/action-batches/export.csv",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/differences/export.csv": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/differences/export.csv",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/action-batches/export-items.csv": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/action-batches/export-items.csv",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-reviews/{id}/action-batches/export.zip": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-reviews/:id/action-batches/export.zip",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-batches/{id}": {
+      "get": {
+        "summary": "GET /api/copilot-reconcile-batches/:id",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-batches/{id}/cancel": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-batches/:id/cancel",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-batches/{id}/resume/stream": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-batches/:id/resume/stream",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/copilot-reconcile-batches/{id}/retry/stream": {
+      "post": {
+        "summary": "POST /api/copilot-reconcile-batches/:id/retry/stream",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/engagements/{id}/copilot-reconcile-diff-stats": {
+      "get": {
+        "summary": "GET /api/engagements/:id/copilot-reconcile-diff-stats",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/engagements/{id}/copilot-reconcile-diff-stats/export.csv": {
+      "get": {
+        "summary": "GET /api/engagements/:id/copilot-reconcile-diff-stats/export.csv",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/engagements/{id}/copilot-reconcile-reviews": {
+      "get": {
+        "summary": "GET /api/engagements/:id/copilot-reconcile-reviews",
         "tags": [
           "engagements"
         ],

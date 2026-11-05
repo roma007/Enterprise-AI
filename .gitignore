@@ -18,3 +18,9 @@ ai-copilot/.env
 ai-copilot/samples/fixtures/booking_degraded.png
 
 ai-copilot/data/settings.json
+# Autopilot 本机运行态（规则与队列仍纳入版本管理）
+autopilot/logs/
+autopilot/PAUSE
+autopilot/session-id
+autopilot/worktree
+autopilot/.run.lock/

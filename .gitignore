@@ -24,3 +24,6 @@ autopilot/PAUSE
 autopilot/session-id
 autopilot/worktree
 autopilot/.run.lock/
+
+# devctl 本地进程与日志
+.run/

@@ -83,7 +83,7 @@ def add_bullets(slide, items, left, top, width, height, size=14, color=BLACK,
         if isinstance(item, tuple):
             head, tail = item
             r2 = p.add_run()
-            r2.text = head
+            r2.text = head if head.endswith(("：", ":", " ")) else head + "："
             set_font(r2, size, True, color)
             r3 = p.add_run()
             r3.text = tail
@@ -128,9 +128,10 @@ def add_header(slide, eyebrow, title, subtitle=None):
     add_line(slide, 0.7, 1.82 if subtitle else 1.52, 1.15, ORANGE, 0.045)
 
 
-def add_footer(slide, index, total=15):
+def add_footer(slide, index=None, total=18):
+    page = len(prs.slides)
     add_text(slide, "Enterprise AI · 客户能力说明", 0.7, 7.12, 5.5, 0.22, 9, False, GRAY)
-    add_text(slide, f"{index:02d} / {total:02d}", 12.0, 7.12, 0.65, 0.22, 9, False, GRAY, PP_ALIGN.RIGHT)
+    add_text(slide, f"{page:02d} / {total:02d}", 12.0, 7.12, 0.65, 0.22, 9, False, GRAY, PP_ALIGN.RIGHT)
 
 
 def add_image_fit(slide, filename, left, top, max_w, max_h):
@@ -219,6 +220,22 @@ add_footer(s, 3)
 add_notes(s, "这一页要打消一个误解：客户不需要学我们的交付平台。客户只用 ai-copilot；交付平台是我们保证项目不烂尾的内部系统。")
 
 
+
+# ---------------------------------------------------------------- 04 界面：客户侧
+s = prs.slides.add_slide(prs.slide_layouts[6])
+add_header(s, "系统界面 ①", "客户侧：一张托书进来，右侧直接变成结构化草稿", "字段带置信度；规则先挑错；低置信转人工。")
+add_image_fit(s, "ui-copilot-index.png", 4.55, 1.9, 8.2, 5.05)
+add_bullets(s, [
+    ("逐字段置信度", "客户、箱号、截港、费用都有分数"),
+    ("规则先挑错", "箱号校验位、截港、地址冲突"),
+    ("人确认才入业务", "确认与修正全部留痕"),
+], 0.7, 2.0, 3.55, 2.5, 11.5, BLACK, TEAL, 10)
+add_rect(s, 0.7, 4.9, 3.55, 1.55, LIGHT, LIGHT_2)
+add_text(s, "老板看到的不是“模型多强”，而是“单证员少抄多少、错单少多少”。", 0.95, 5.15, 3.05, 1.0, 11.5, True, NAVY, line_spacing=1.35)
+add_text(s, "截图：本地演示数据；真实客户需用客户样本复测。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
+add_footer(s, 4)
+add_notes(s, "这一页让老板看到真实界面：左边原文，右边结构化字段和置信度。强调规则先挑错、人工确认后才入业务。")
+
 # ---------------------------------------------------------------- 04 能力全景
 s = prs.slides.add_slide(prs.slide_layouts[6])
 add_header(s, "端到端", "从一张托书，到一张能算账的经营报表", "上半段决定数据质量，下半段决定财务 AI 的上限。")
@@ -263,6 +280,24 @@ for i, (title, desc, evidence, color) in enumerate(scenes):
 add_footer(s, 5)
 add_notes(s, "五个场景按“客户今天就在做”的顺序讲，不按技术模块讲。每个都补一句：可以用你们的样本复测。")
 
+
+
+# ---------------------------------------------------------------- 07 界面：对账分析
+s = prs.slides.add_slide(prs.slide_layouts[6])
+add_header(s, "系统界面 ② / 分析", "分析不是大屏：先把四类账算清，再谈经营洞察", "对账差异、账龄催收、外协结算、运营价值；每一类都能落到动作。")
+add_image_fit(s, "ui-copilot-reconcile.png", 4.55, 1.9, 8.2, 5.05)
+add_bullets(s, [
+    ("对账差异", "系统无此单 / 金额不符 / 客户漏单"),
+    ("账龄催收", "逾期分层、重点客户、催收优先级"),
+    ("外协结算", "合同价 vs 报账、重复/算术/未知费用"),
+    ("运营价值", "指标快照、价值兑现、续约/二期"),
+], 0.7, 1.98, 3.55, 2.6, 10.5, BLACK, TEAL, 7)
+add_rect(s, 0.7, 4.65, 3.55, 1.8, LIGHT, LIGHT_2)
+add_text(s, "以对账为例", 0.95, 4.8, 2.5, 0.25, 10.5, True, ORANGE)
+add_text(s, "11 条对账单，2 条金额不符、9 条系统无此单；每条有说明、可导出，直接分给财务跟进。", 0.95, 5.1, 3.05, 1.05, 10.5, True, NAVY, line_spacing=1.3)
+add_text(s, "截图：本地演示数据；真实客户需用客户对账单复测。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
+add_footer(s, 7)
+add_notes(s, "这页回答“分析到底是什么”。四类：对账差异、账龄催收、外协结算、运营价值。以对账为例：11 条、2 条金额不符、9 条系统无此单，每条有说明、能分给财务处理。")
 
 # ---------------------------------------------------------------- 06 AI 边界
 s = prs.slides.add_slide(prs.slide_layouts[6])
@@ -318,6 +353,22 @@ add_text(s, "客户能导出油卡、路桥、维修、港杂明细，并能按�
 add_footer(s, 8)
 add_notes(s, "这页体现专业度：敢说“现在算不了”。单车毛利卡在客户费用数据源，不是模型能力。先把能算的对账/账龄做出来。")
 
+
+
+# ---------------------------------------------------------------- 10 界面：管理侧
+s = prs.slides.add_slide(prs.slide_layouts[6])
+add_header(s, "系统界面 ③ / 管理", "管理侧：项目、门禁、校验证据在同一条链上", "不是一张大屏，是每个项目都能追到门禁和校验结果。")
+add_image_fit(s, "ui-platform-overview.png", 4.55, 1.9, 8.2, 5.05)
+add_bullets(s, [
+    ("项目总览", "机会点、痛点、交付物、客户"),
+    ("门禁", "G1–G5 与 14 项一致性校验"),
+    ("证据", "生成、确认、导出全部留痕"),
+], 0.7, 2.0, 3.55, 2.2, 11.5, BLACK, TEAL, 10)
+add_rect(s, 0.7, 4.4, 3.55, 2.0, LIGHT, LIGHT_2)
+add_text(s, "老板不需要学这套系统；它保证项目不靠人记忆，而靠门禁和证据推进。", 0.95, 4.65, 3.05, 1.45, 11.5, True, NAVY, line_spacing=1.35)
+add_text(s, "截图：内部演示项目；客户不安装交付平台。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
+add_footer(s, 10)
+add_notes(s, "管理侧界面给老板看“项目有没有按门禁走”，不是给客户用的。强调客户不装这套系统。")
 
 # ---------------------------------------------------------------- 09 证据
 s = prs.slides.add_slide(prs.slide_layouts[6])

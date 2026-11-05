@@ -109,6 +109,8 @@ export function OrgPage() {
   const [holidayRegion, setHolidayRegion] = useState('CN');
   const [slaRegion, setSlaRegion] = useState('CN');
   const [timezone, setTimezone] = useState('Asia/Shanghai');
+  const [exportRetention, setExportRetention] = useState('7');
+  const [retentionBusy, setRetentionBusy] = useState(false);
   const [holidayBusy, setHolidayBusy] = useState(false);
   const [retimeBusy, setRetimeBusy] = useState(false);
   const [opError, setOpError] = useState<unknown>(null);
@@ -128,6 +130,10 @@ export function OrgPage() {
       if (typeof region === 'string' && region.trim()) setSlaRegion(region);
       const tz = data.org.settings?.timezone;
       if (typeof tz === 'string' && tz.trim()) setTimezone(tz);
+      const retention = data.org.settings?.audit_export_retention_days;
+      if (retention !== undefined && retention !== null) {
+        setExportRetention(String(retention));
+      }
     }
   }, [data]);
 
@@ -170,6 +176,31 @@ export function OrgPage() {
       setOpError(err);
     } finally {
       setCheckingOut(false);
+    }
+  };
+
+  const saveRetention = async () => {
+    const days = Math.floor(Number(exportRetention));
+    if (!Number.isFinite(days) || days < 1 || days > 365) {
+      setOpError(new Error('审计导出保留天数需为 1–365 的整数'));
+      return;
+    }
+    setRetentionBusy(true);
+    setOpError(null);
+    setNotice(null);
+    try {
+      await api.updateOrg({
+        settings: {
+          ...(data?.org.settings ?? {}),
+          audit_export_retention_days: days,
+        },
+      });
+      setNotice(`审计导出保留天数已设为 ${days} 天。`);
+      await reload();
+    } catch (err) {
+      setOpError(err);
+    } finally {
+      setRetentionBusy(false);
     }
   };
 
@@ -409,6 +440,35 @@ export function OrgPage() {
           {billing.price.yearly > 0
             ? `年付 ${money(billing.price.yearly)}，约 ${money(Math.round(billing.price.yearly / 12))} / 月。`
             : '企业版按实际团队规模与交付范围报价，请联系商务。'}
+        </p>
+      </Card>
+
+      <Card
+        title="数据保留"
+        subtitle="控制审计异步导出任务与文件的保留天数；到期由后台自动清理。"
+      >
+        <div className="form-grid">
+          <Field label="审计导出保留天数">
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={exportRetention}
+              onChange={(e) => setExportRetention(e.target.value)}
+            />
+          </Field>
+          <Field label="操作">
+            <Button
+              variant="primary"
+              disabled={retentionBusy || !exportRetention}
+              onClick={() => void saveRetention()}
+            >
+              {retentionBusy ? '保存中…' : '保存保留天数'}
+            </Button>
+          </Field>
+        </div>
+        <p className="muted">
+          默认 7 天；未配置时使用环境变量 `AUDIT_EXPORT_RETENTION_DAYS`。
         </p>
       </Card>
 

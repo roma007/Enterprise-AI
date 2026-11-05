@@ -255,6 +255,17 @@ export async function platformRoutes(app: FastifyInstance) {
         throw httpError(422, 'INVALID_TIMEZONE', '无效的时区');
       }
     }
+    const exportRetention = body.settings?.audit_export_retention_days;
+    if (exportRetention !== undefined) {
+      const days = Number(exportRetention);
+      if (!Number.isInteger(days) || days < 1 || days > 365) {
+        throw httpError(
+          422,
+          'INVALID_EXPORT_RETENTION',
+          '审计导出保留天数需为 1–365 的整数',
+        );
+      }
+    }
     const keys = Object.keys(body).filter((k) => (body as any)[k] !== undefined);
     if (!keys.length) throw httpError(400, 'EMPTY_UPDATE', '没有可更新字段');
     const values = keys.map((k) => (body as any)[k]);

@@ -5899,6 +5899,48 @@ async function main() {
       '清理重试任务',
     );
 
+    const orgSettings = await one<{ settings: any }>(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [eng!.org_id],
+    );
+    const originalSettings = orgSettings?.settings ?? {};
+    const badRetention = await auditCall('PATCH', '/api/org', {
+      settings: { ...originalSettings, audit_export_retention_days: 0 },
+    });
+    assert.equal(badRetention.status, 422);
+    assert.equal(badRetention.body.error, 'INVALID_EXPORT_RETENTION');
+
+    const setRetention = await auditCall('PATCH', '/api/org', {
+      settings: { ...originalSettings, audit_export_retention_days: 2 },
+    });
+    assert.equal(setRetention.status, 200, '组织保留天数应保存成功');
+
+    const shortLivedJob = await one<{ id: string }>(
+      `INSERT INTO audit_export_jobs
+         (org_id, user_id, scope, filters, columns, status, created_at, finished_at)
+       VALUES ($1,$2,'live','{}'::jsonb,'[]'::jsonb,'done',
+               now() - interval '3 days', now())
+       RETURNING id`,
+      [eng!.org_id, auditLogin.user.id],
+    );
+    const cleanedByOrg = await cleanupAuditExportJobs(7);
+    assert.ok(cleanedByOrg >= 1, '组织保留天数应优先生效');
+    const goneByOrg = await one<{ id: string }>(
+      `SELECT id FROM audit_export_jobs WHERE id = $1`,
+      [shortLivedJob!.id],
+    );
+    assert.equal(goneByOrg, null, '按组织保留天数应删除任务');
+    const orgCleanupLog = await one<{ detail: any }>(
+      `SELECT detail FROM audit_logs
+        WHERE action = 'CLEANUP audit-exports' AND org_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [eng!.org_id],
+    );
+    assert.equal(orgCleanupLog!.detail.retention_days, 2);
+
+    await auditCall('PATCH', '/api/org', { settings: originalSettings });
+
     const viewName = `审计视图-${Date.now()}`;
     const savedView = ok(
       await auditCall('POST', '/api/audit-filter-views', {

@@ -200,10 +200,29 @@ export function auditExportCleanupIntervalSeconds(): number {
 /** 删除超过保留期的导出任务及其文件。 */
 export async function cleanupAuditExportJobs(days?: number): Promise<number> {
   const retention = days ?? auditExportRetentionDays();
-  const rows = await query<{ id: string; org_id: string }>(
-    `SELECT id, org_id FROM audit_export_jobs
-      WHERE created_at < now() - make_interval(days => $1)
-      ORDER BY created_at
+  const rows = await query<{
+    id: string;
+    org_id: string;
+    retention_days: number;
+  }>(
+    `SELECT j.id, j.org_id,
+            COALESCE(
+              NULLIF(regexp_replace(
+                o.settings->>'audit_export_retention_days', '\\D', '', 'g'
+              ), '')::int,
+              $1
+            ) AS retention_days
+       FROM audit_export_jobs j
+       JOIN organizations o ON o.id = j.org_id
+      WHERE j.created_at < now() - make_interval(
+              days => COALESCE(
+                NULLIF(regexp_replace(
+                  o.settings->>'audit_export_retention_days', '\\D', '', 'g'
+                ), '')::int,
+                $1
+              )
+            )
+      ORDER BY j.created_at
       LIMIT 500`,
     [retention],
   );
@@ -219,11 +238,16 @@ export async function cleanupAuditExportJobs(days?: number): Promise<number> {
   );
   if (!deleted.length) return 0;
 
-  const byOrg = new Map<string, number>();
+  const byOrg = new Map<string, { count: number; retention: number }>();
   for (const row of rows) {
-    byOrg.set(row.org_id, (byOrg.get(row.org_id) ?? 0) + 1);
+    const current = byOrg.get(row.org_id) ?? {
+      count: 0,
+      retention: row.retention_days,
+    };
+    current.count += 1;
+    byOrg.set(row.org_id, current);
   }
-  for (const [orgId, count] of byOrg) {
+  for (const [orgId, info] of byOrg) {
     await query(
       `INSERT INTO audit_logs
          (org_id, user_id, action, object_type, status_code, detail)
@@ -231,8 +255,8 @@ export async function cleanupAuditExportJobs(days?: number): Promise<number> {
       [
         orgId,
         JSON.stringify({
-          retention_days: retention,
-          deleted: count,
+          retention_days: info.retention,
+          deleted: info.count,
         }),
       ],
     ).catch(() => undefined);

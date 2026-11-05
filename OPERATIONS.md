@@ -151,7 +151,7 @@ scrape_configs:
 | 审计归档表 | 手工清理/导出 | 无自动删除 |
 | PDF 文件缓存 | 30 天 | `PDF_CACHE_TTL_DAYS` |
 | PDF 任务 `pdf_jobs` | 30 天 | `PDF_JOB_RETENTION_DAYS` + 清理 cron |
-| 审计导出任务与文件 | 7 天 | `AUDIT_EXPORT_RETENTION_DAYS` + 常驻清理（`AUDIT_EXPORT_CLEANUP_INTERVAL_SECONDS`）；写 `CLEANUP audit-exports` |
+| 审计导出任务与文件 | 7 天 | 组织 `settings.audit_export_retention_days`（1–365）优先，否则 `AUDIT_EXPORT_RETENTION_DAYS`；常驻清理 `AUDIT_EXPORT_CLEANUP_INTERVAL_SECONDS`；写 `CLEANUP audit-exports` |
 | 分享访问 `share_views` | 180 天热数据 | `SHARE_VIEW_RETENTION_DAYS` + 归档 cron；归档表手工清理 |
 | 登录会话 `user_sessions` | 30 天（仅过期/撤销） | `USER_SESSION_RETENTION_DAYS` + 清理 cron |
 | 数据库备份 | 按 cron + 人工异地 | `scripts/backup.sh` |

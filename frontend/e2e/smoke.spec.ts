@@ -258,6 +258,8 @@ test.describe('关键路径冒烟', () => {
     await expect(page.getByText('到期日')).toBeVisible();
     await expect(page.getByText('本月 PDF 任务')).toBeVisible();
     await expect(page.getByRole('heading', { name: '续费与账单' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '数据保留' })).toBeVisible();
+    await expect(page.getByText('审计导出保留天数')).toBeVisible();
     await expect(page.getByRole('button', { name: /生成续费账单|升级并生成账单/ })).toBeVisible();
   });
 

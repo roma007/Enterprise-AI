@@ -116,6 +116,38 @@ def add_line(slide, left, top, width, color=TEAL, height=0.035):
     return bar
 
 
+def add_box(slide, left, top, width, height, title, detail, fill, line, title_color=NAVY):
+    shape = add_rect(slide, left, top, width, height, fill, line)
+    tf = shape.text_frame
+    tf.clear()
+    tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    tf.margin_left = Inches(0.08)
+    tf.margin_right = Inches(0.08)
+    tf.margin_top = Inches(0.04)
+    tf.margin_bottom = Inches(0.04)
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    p.line_spacing = 1.08
+    r = p.add_run(); r.text = title
+    set_font(r, 11.5, True, title_color)
+    if detail:
+        p2 = tf.add_paragraph()
+        p2.alignment = PP_ALIGN.CENTER
+        p2.line_spacing = 1.08
+        r2 = p2.add_run(); r2.text = detail
+        set_font(r2, 9.2, False, GRAY)
+    return shape
+
+
+def add_arrow(slide, left, top, width=0.45, height=0.3, color=ORANGE):
+    shape = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.fill.solid(); shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+    shape.shadow.inherit = False
+    return shape
+
+
 def add_header(slide, eyebrow, title, subtitle=None):
     add_text(slide, eyebrow, 0.7, 0.45, 7.0, 0.3, 11, True, TEAL)
     add_text(slide, title, 0.7, 0.78, 11.9, 0.55, 27, True, NAVY)
@@ -262,41 +294,52 @@ add_footer(s)
 add_notes(s, "这是整套系统的分析出口：结论、指标差距、建议动作。强调可追溯，不是大模型拍脑袋。")
 
 
-# ---------------------------------------------------------------- 07 AI 介入点
+# ---------------------------------------------------------------- 07 大模型介入点
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "大模型介入点", "只有这几步用大模型，其他靠规则和人", "先把“哪里用了大模型、哪里只是规则、哪里必须人确认”画清楚。")
-add_image_fit(s, "ai-intervention-map.png", 0.7, 1.8, 11.95, 3.9)
-# 图例
-legend = [
-    ("大模型", "托书、发票字段抽取；对账差异原因解释", TEAL),
-    ("规则 / 系统", "箱号/税号/金额校验、对账匹配、账龄、结算、指标", ORANGE),
-    ("人工确认", "确认、修正、审批、签收；大模型只出草稿", RGBColor(0x1F, 0x4E, 0x79)),
+add_header(s, "大模型介入点", "两条链路：大模型只负责读和解释，规则负责查和算", "绿色=大模型；橙色=规则；蓝色=人工；每一步都有明确产出。")
+# 上链路：托书 / 发票
+add_box(s, 0.7, 2.0, 2.5, 1.15, "托书 / 发票", "图片、扫描件、聊天", LIGHT, LIGHT_2)
+add_box(s, 3.45, 2.0, 2.5, 1.15, "大模型读", "文字识别 + 字段抽取", RGBColor(0xD4, 0xF4, 0xDD), GREEN)
+add_box(s, 6.2, 2.0, 2.5, 1.15, "规则查", "箱号 / 税号 / 金额 / 截港", RGBColor(0xFF, 0xF4, 0xE5), ORANGE)
+add_box(s, 8.95, 2.0, 2.5, 1.15, "人工确认", "低置信 / 异常", RGBColor(0xE8, 0xF0, 0xFB), RGBColor(0x1F, 0x4E, 0x79))
+for x in (3.2, 5.95, 8.7):
+    add_arrow(s, x, 2.42, 0.25, 0.3)
+# 下链路：对账单
+add_box(s, 0.7, 4.05, 2.5, 1.15, "对账单 / 运单", "结算单、差异明细", LIGHT, LIGHT_2)
+add_box(s, 3.45, 4.05, 2.5, 1.15, "规则匹配", "对账 / 账龄 / 结算 / 异常费用", RGBColor(0xFF, 0xF4, 0xE5), ORANGE)
+add_box(s, 6.2, 4.05, 2.5, 1.15, "大模型解释", "只写差异原因", RGBColor(0xD4, 0xF4, 0xDD), GREEN)
+add_box(s, 8.95, 4.05, 2.5, 1.15, "人工确认", "差异处理 / 审批", RGBColor(0xE8, 0xF0, 0xFB), RGBColor(0x1F, 0x4E, 0x79))
+for x in (3.2, 5.95, 8.7):
+    add_arrow(s, x, 4.47, 0.25, 0.3)
+add_rect(s, 0.7, 5.5, 11.3, 0.55, NAVY, NAVY)
+add_text(s, "系统：权限 / 审计 / 版本 / 导出", 0.9, 5.63, 5.0, 0.3, 11.5, True, WHITE)
+add_text(s, "大模型不参与：对账匹配、账龄计算、结算规则、经营指标计算。", 0.7, 6.25, 11.95, 0.3, 11, True, RED)
+add_text(s, "经营洞察由规则引擎生成，避免模型编造结论。", 0.7, 6.6, 11.95, 0.3, 10.5, False, GRAY)
+add_footer(s)
+add_notes(s, "上链路：托书/发票先由大模型读，再由规则校验，最后人工确认。下链路：对账单先由规则匹配，大模型只解释差异原因，人工处理。对账匹配、账龄、结算、指标都不是大模型。")
+
+# ---------------------------------------------------------------- 08 四步路径
+s = prs.slides.add_slide(prs.slide_layouts[6])
+add_header(s, "怎么做", "四步把人工智能变成可验收的流程", "先做入口数据，再做规则，最后人确认和分析。")
+steps = [
+    ("第一步", "结构化", "托书 / 发票 → 字段、置信度", "大模型只出草稿"),
+    ("第二步", "规则校验", "箱号 / 税号 / 金额 / 截港", "规则先挑错"),
+    ("第三步", "人工确认", "确认、修正、审批", "确认后才入业务"),
+    ("第四步", "经营分析", "对账 / 账龄 / 指标 / 洞察", "规则算，人解读"),
 ]
-for i, (title, detail, color) in enumerate(legend):
-    x = 0.7 + i * 4.0
-    add_rect(s, x, 6.12, 3.8, 0.72, LIGHT, LIGHT_2)
-    add_text(s, title, x + 0.18, 6.22, 1.6, 0.26, 10, True, color)
-    add_text(s, detail, x + 1.55, 6.22, 2.1, 0.5, 8.3, False, NAVY, line_spacing=1.15)
-add_text(s, "大模型不参与：对账匹配、账龄计算、结算规则、经营指标计算。", 0.7, 5.8, 11.95, 0.25, 10.5, True, RED)
+for i, (step, title, detail, note) in enumerate(steps):
+    x = 0.7 + i * 3.12
+    add_rect(s, x, 2.0, 2.72, 2.55, LIGHT, LIGHT_2)
+    add_text(s, step, x + 0.25, 2.15, 1.4, 0.28, 10.5, True, ORANGE)
+    add_text(s, title, x + 0.25, 2.5, 2.2, 0.4, 18, True, NAVY)
+    add_text(s, detail, x + 0.25, 3.0, 2.25, 0.75, 10.5, False, GRAY, line_spacing=1.3)
+    add_text(s, note, x + 0.25, 3.88, 2.25, 0.35, 9.5, True, TEAL)
+    if i < 3:
+        add_arrow(s, x + 2.78, 3.02, 0.28, 0.3)
+add_rect(s, 0.7, 5.2, 11.95, 0.9, NAVY, NAVY)
+add_text(s, "入口数据不干净，后面的对账、账龄、洞察都不成立。先做入口，再谈分析。", 0.95, 5.45, 11.45, 0.4, 13, True, WHITE, PP_ALIGN.CENTER)
 add_footer(s)
-add_notes(s, "这页回答“AI 到底介入哪几步”。绿色才是大模型：托书、发票字段抽取，对账差异原因解释。对账匹配、账龄、结算、指标都是规则；人工确认后才入业务。")
-
-
-# ---------------------------------------------------------------- 08 怎么做
-s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "怎么做", "先把入口数据做干净，再谈财务分析和经营洞察", "从一张托书开始，逐段接上业务与财务。")
-add_image_fit(s, "data-flow.png", 7.55, 1.85, 5.1, 5.05)
-add_bullets(s, [
-    ("第一步：结构化", "托书/发票 → 字段、置信度、异常"),
-    ("第二步：规则校验", "箱号、税号、金额、截港先挑错"),
-    ("第三步：流程确认", "人工确认、留痕、可回滚"),
-    ("第四步：经营分析", "对账、账龄、成本、续约与二期"),
-], 0.7, 1.98, 6.45, 2.9, 12.5, BLACK, TEAL, 9)
-add_rect(s, 0.7, 5.15, 6.35, 1.35, LIGHT, LIGHT_2)
-add_text(s, "关键判断", 0.95, 5.3, 2.0, 0.3, 11, True, ORANGE)
-add_text(s, "业务数据还躺在微信里，财务分析就永远算不清。先做入口，再做分析。", 0.95, 5.6, 5.85, 0.75, 11.5, True, NAVY, line_spacing=1.3)
-add_footer(s)
-add_notes(s, "这页讲路径：不要一上来卖经营分析大屏；先把托书、发票变成结构化数据，后面的对账、账龄、洞察才成立。")
+add_notes(s, "四步：结构化、规则校验、人工确认、经营分析。每一步都有明确产出；不要一上来做经营分析大屏。")
 
 
 # ---------------------------------------------------------------- 09 三周试点

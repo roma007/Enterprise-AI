@@ -1,0 +1,36 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#fff;}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}.diagram{display:inline-block;background:#fff;padding:24px;}</style></head><body><div class="diagram"><pre class="mermaid">flowchart LR
+  subgraph IN[&quot;输入&quot;]
+    I1[&quot;托书 / 聊天 / 图片 / PDF&quot;]
+    I2[&quot;发票&quot;]
+    I3[&quot;对账单 / 运单 / 结算单&quot;]
+  end
+
+  subgraph AI[&quot;AI / 大模型介入&quot;]
+    A1[&quot;托书字段抽取&lt;br/&gt;OCR + LLM&quot;]
+    A2[&quot;发票字段抽取&lt;br/&gt;OCR + LLM&quot;]
+    A3[&quot;差异解释&lt;br/&gt;规则先找差异，LLM 写原因&quot;]
+  end
+
+  subgraph RULE[&quot;规则 / 系统&quot;]
+    R1[&quot;箱号 / 税号 / 金额&lt;br/&gt;截港 / 地址校验&quot;]
+    R2[&quot;对账匹配 / 账龄&lt;br/&gt;结算 / 异常费用&quot;]
+    R3[&quot;指标计算 / 权限&lt;br/&gt;审计 / 版本 / 导出&quot;]
+  end
+
+  H[&quot;人工确认 / 修正 / 审批&quot;]
+
+  I1 --&gt; A1 --&gt; R1 --&gt; H
+  I2 --&gt; A2 --&gt; R1 --&gt; H
+  I3 --&gt; R2 --&gt; A3 --&gt; H
+  H --&gt; R3
+
+  classDef ai fill:#d4f4dd,stroke:#2f855a,stroke-width:2px
+  classDef rule fill:#fff4e5,stroke:#b7791f,stroke-width:2px
+  classDef human fill:#e8f0fb,stroke:#1f4e79,stroke-width:2px
+  classDef input fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px
+
+  class I1,I2,I3 input
+  class A1,A2,A3 ai
+  class R1,R2,R3 rule
+  class H human
+</pre></div><script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'18px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:45,rankSpacing:55,wrappingWidth:320}});</script></body></html>

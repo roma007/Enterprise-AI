@@ -200,8 +200,8 @@ export function auditExportCleanupIntervalSeconds(): number {
 /** 删除超过保留期的导出任务及其文件。 */
 export async function cleanupAuditExportJobs(days?: number): Promise<number> {
   const retention = days ?? auditExportRetentionDays();
-  const rows = await query<{ id: string }>(
-    `SELECT id FROM audit_export_jobs
+  const rows = await query<{ id: string; org_id: string }>(
+    `SELECT id, org_id FROM audit_export_jobs
       WHERE created_at < now() - make_interval(days => $1)
       ORDER BY created_at
       LIMIT 500`,
@@ -217,6 +217,24 @@ export async function cleanupAuditExportJobs(days?: number): Promise<number> {
       RETURNING id`,
     [rows.map((row) => row.id)],
   );
+  if (!deleted.length) return 0;
+
+  const byOrg = new Map<string, number>();
+  for (const row of rows) {
+    byOrg.set(row.org_id, (byOrg.get(row.org_id) ?? 0) + 1);
+  }
+  await query(
+    `INSERT INTO audit_logs
+       (org_id, user_id, action, object_type, status_code, detail)
+     VALUES (NULL, NULL, 'CLEANUP audit-exports', 'audit_export_job', 200, $1::jsonb)`,
+    [
+      JSON.stringify({
+        retention_days: retention,
+        deleted: deleted.length,
+        by_org: [...byOrg].map(([org_id, count]) => ({ org_id, count })),
+      }),
+    ],
+  ).catch(() => undefined);
   return deleted.length;
 }
 

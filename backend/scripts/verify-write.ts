@@ -5825,6 +5825,17 @@ async function main() {
     const oldFile = await objectStorage().get(oldKey);
     assert.equal(oldFile, null, '过期导出文件应被删除');
 
+    const cleanupLog = await one<{ detail: any }>(
+      `SELECT detail FROM audit_logs
+        WHERE action = 'CLEANUP audit-exports'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+    );
+    assert.ok(cleanupLog, '清理应写审计日志');
+    assert.ok((cleanupLog!.detail.deleted ?? 0) >= 1);
+    assert.equal(cleanupLog!.detail.retention_days, 7);
+    assert.ok(Array.isArray(cleanupLog!.detail.by_org));
+
     const failedJob = await one<{ id: string }>(
       `INSERT INTO audit_export_jobs
          (org_id, user_id, scope, filters, columns, status, error)

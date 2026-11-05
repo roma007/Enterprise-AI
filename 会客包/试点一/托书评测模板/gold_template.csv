@@ -1,0 +1,4 @@
+doc_id,field,expected
+S01,client,示例客户
+S01,booking_no,示例单号
+S01,container_no,CSQU3054383

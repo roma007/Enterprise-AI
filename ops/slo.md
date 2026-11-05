@@ -142,7 +142,7 @@ make drill-restore
 3. 失败任务看 `error` 字段；修复后调用 `POST /api/audit-exports/:id/retry` 重试
 4. 大批量导出会占用内存与数据库连接，必要时错峰或调低 `AUDIT_EXPORT_MAX_ROWS`
 5. 若为持续高失败率，先降级到同步小批量导出，再排查存储与 SQL
-6. 过期清理结果见审计日志 `CLEANUP audit-exports`（保留天数、删除数、按组织计数）
+6. 过期清理结果见各组织的审计日志 `CLEANUP audit-exports`（保留天数、该组织删除数）
 
 ### DbPoolSaturated / DbPoolWaiting
 

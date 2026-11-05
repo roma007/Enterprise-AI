@@ -5827,14 +5827,14 @@ async function main() {
 
     const cleanupLog = await one<{ detail: any }>(
       `SELECT detail FROM audit_logs
-        WHERE action = 'CLEANUP audit-exports'
+        WHERE action = 'CLEANUP audit-exports' AND org_id = $1
         ORDER BY created_at DESC
         LIMIT 1`,
+      [eng!.org_id],
     );
-    assert.ok(cleanupLog, '清理应写审计日志');
+    assert.ok(cleanupLog, '清理应为组织写审计日志');
     assert.ok((cleanupLog!.detail.deleted ?? 0) >= 1);
     assert.equal(cleanupLog!.detail.retention_days, 7);
-    assert.ok(Array.isArray(cleanupLog!.detail.by_org));
 
     const failedJob = await one<{ id: string }>(
       `INSERT INTO audit_export_jobs

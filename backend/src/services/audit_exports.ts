@@ -223,18 +223,20 @@ export async function cleanupAuditExportJobs(days?: number): Promise<number> {
   for (const row of rows) {
     byOrg.set(row.org_id, (byOrg.get(row.org_id) ?? 0) + 1);
   }
-  await query(
-    `INSERT INTO audit_logs
-       (org_id, user_id, action, object_type, status_code, detail)
-     VALUES (NULL, NULL, 'CLEANUP audit-exports', 'audit_export_job', 200, $1::jsonb)`,
-    [
-      JSON.stringify({
-        retention_days: retention,
-        deleted: deleted.length,
-        by_org: [...byOrg].map(([org_id, count]) => ({ org_id, count })),
-      }),
-    ],
-  ).catch(() => undefined);
+  for (const [orgId, count] of byOrg) {
+    await query(
+      `INSERT INTO audit_logs
+         (org_id, user_id, action, object_type, status_code, detail)
+       VALUES ($1, NULL, 'CLEANUP audit-exports', 'audit_export_job', 200, $2::jsonb)`,
+      [
+        orgId,
+        JSON.stringify({
+          retention_days: retention,
+          deleted: count,
+        }),
+      ],
+    ).catch(() => undefined);
+  }
   return deleted.length;
 }
 

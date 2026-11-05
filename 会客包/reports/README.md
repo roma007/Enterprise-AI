@@ -7,6 +7,7 @@
 | `15_本轮能力说明_管理层版.pdf` | `../15_本轮能力说明_管理层版.md` | 3 | 客户管理层阅读版 |
 | `16_本轮能力一页纸.pdf` | `../16_本轮能力一页纸.html` | 1 | 单页摘要，可直接发送 |
 | `本轮能力说明_合并版.pdf` | 封面 + 15 + 16 | 5 | 对外发送的合并版 |
+| `客户老板版_系统能力介绍_2026-11-05.pptx` | `make_capability_ppt.py` + `ppt_assets/` | 15 | 给客户老板介绍系统能力与试点路径 |
 
 ## 重新导出
 
@@ -37,3 +38,12 @@ for f in ['cover.pdf', '15.pdf', '16.pdf']:
         w.add_page(p)
 w.write('本轮能力说明_合并版.pdf')
 ```
+
+
+## 老板版 PPT
+
+```bash
+ai-copilot/.venv/bin/python 会客包/reports/make_capability_ppt.py
+```
+
+依赖 `python-pptx`；图表 PNG 由 `ppt_assets/*.html` 通过 Edge/Playwright 截图生成。

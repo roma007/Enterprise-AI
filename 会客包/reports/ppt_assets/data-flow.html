@@ -1,0 +1,37 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+.diagram{display:inline-block;background:#fff;padding:20px;}
+</style></head><body>
+<div class="diagram"><pre class="mermaid">flowchart TB
+  X1[&quot;托书原文&lt;br/&gt;微信 / 图片 / Excel&quot;]
+  X2[&quot;结构化订单&lt;br/&gt;箱号·客户·截港·费用&quot;]
+  X3[&quot;TMS 运单&quot;]
+  X4[&quot;结算清单&quot;]
+  X5[&quot;客户对账单&quot;]
+  X6[&quot;成本归集&quot;]
+  X7[&quot;对账 · 开票 · 回款&quot;]
+  X8[&quot;单车毛利&quot;]
+  X9[&quot;经营分析&quot;]
+
+  X1 --&gt;|&quot;AI 抽取&quot;| X2
+  X2 --&gt; X3 --&gt; X4
+  X4 --&gt; X5 --&gt; X7 --&gt; X9
+  X4 --&gt; X6 --&gt; X8 --&gt; X9
+
+  classDef src fill:#e2e8f0,stroke:#64748b,stroke-width:2px
+  classDef core fill:#d4f4dd,stroke:#2f855a,stroke-width:4px
+  classDef partial fill:#fff4e5,stroke:#b7791f,stroke-width:2px
+  classDef blocked fill:#fde8e8,stroke:#c53030,stroke-width:2px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+
+  class X1 src
+  class X2 core
+  class X7 partial
+  class X8 blocked
+  class X9 out</pre></div>
+<script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});
+</script></body></html>

@@ -1,0 +1,55 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+.diagram{display:inline-block;background:#fff;padding:20px;}
+</style></head><body>
+<div class="diagram"><pre class="mermaid">flowchart TB
+  subgraph J[&quot;① 接单&quot;]
+    A1[&quot;客户下单&lt;br/&gt;微信 / 邮件 / 电话&quot;]
+    A2[&quot;报价与接单&quot;]
+    A3[&quot;托书解析&lt;br/&gt;&lt;b&gt;AI&lt;/b&gt;&quot;]
+    A4[&quot;订单录入 TMS&quot;]
+    A1 --&gt; A2 --&gt; A3 --&gt; A4
+  end
+
+  subgraph D[&quot;② 单证&quot;]
+    B1[&quot;单证核对&lt;br/&gt;箱号 / 封号 / 重量&quot;]
+    B2[&quot;派车与调箱&quot;]
+    B1 --&gt; B2
+  end
+
+  subgraph Z[&quot;③ 执行&quot;]
+    C1[&quot;提空箱 EIR&quot;]
+    C2[&quot;工厂装柜&quot;]
+    C3[&quot;重箱进港&quot;]
+    C4[&quot;报关与放行&quot;]
+    C5[&quot;提单确认&quot;]
+    C6[&quot;在途异常&lt;br/&gt;压车 / 等候 / 改单&quot;]
+    C1 --&gt; C2 --&gt; C3 --&gt; C4 --&gt; C5 --&gt; C6
+  end
+
+  subgraph S[&quot;④ 收尾&quot;]
+    D1[&quot;运单完成&quot;]
+    D2[&quot;结算清单&quot;]
+    D1 --&gt; D2
+  end
+
+  A4 --&gt; B1
+  B2 --&gt; C1
+  C6 --&gt; D1
+
+  classDef done fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  classDef partial fill:#fff4e5,stroke:#b7791f,stroke-width:2px,stroke-dasharray:5 5
+  classDef blocked fill:#fde8e8,stroke:#c53030,stroke-width:2px
+  classDef src fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+
+  class A1 src
+  class A3 done
+  class B1,C6 partial
+  class B2,C1,C2,C3,C4,C5,D1,D2 out</pre></div>
+<script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});
+</script></body></html>

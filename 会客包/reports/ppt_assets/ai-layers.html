@@ -1,0 +1,15 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+.diagram{display:inline-block;background:#fff;padding:20px;}
+</style></head><body>
+<div class="diagram"><pre class="mermaid">flowchart LR
+  P0[&quot;P0 感知/结构化&lt;br/&gt;托书、发票&quot;] --&gt; P1[&quot;P1 规则自动化 + 生成辅助&lt;br/&gt;对账、账龄、异常解释&quot;]
+  P1 --&gt; P2[&quot;P2 预测&lt;br/&gt;回款、ETA、成本、运力&quot;]
+  P2 --&gt; P3[&quot;P3 优化&lt;br/&gt;派车、路线、信用、定价&quot;]
+  P3 --&gt; P4[&quot;P4 Agent&lt;br/&gt;自动执行 + 审批&quot;]</pre></div>
+<script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});
+</script></body></html>

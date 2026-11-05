@@ -1,0 +1,25 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#fff;}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}.diagram{display:inline-block;background:#fff;padding:20px;}</style></head><body><div class="diagram"><pre class="mermaid">flowchart LR
+  subgraph V[&quot;供应商侧（我们的电脑/服务器）&quot;]
+    direction TB
+    V1[&quot;交付平台&lt;br/&gt;backend + frontend&quot;]
+    V2[&quot;会客包文档&quot;]
+    V3[&quot;评测与规则设计&quot;]
+  end
+
+  subgraph C[&quot;客户侧（客户内网或我们云上）&quot;]
+    direction TB
+    C1[&quot;AI 应用&lt;br/&gt;ai-copilot&quot;]
+    C2[&quot;企微 / H5 入口&quot;]
+    C3[&quot;单证员 · 财务&quot;]
+  end
+
+  V2 -.-&gt;|面对面| C3
+  V1 -.-&gt;|交付物/报告| C3
+  V3 -.-&gt;|部署与调参| C1
+  C2 --&gt; C1 --&gt; C3
+  C1 -.-&gt;|评测结果、指标回写&lt;br/&gt;已实现| V1
+
+  classDef vendor fill:#e8f0fb,stroke:#1f4e79,stroke-width:2px
+  classDef client fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  class V1,V2,V3 vendor
+  class C1,C2,C3 client</pre></div><script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});</script></body></html>

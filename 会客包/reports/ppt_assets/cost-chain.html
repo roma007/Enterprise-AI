@@ -1,0 +1,31 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+.diagram{display:inline-block;background:#fff;padding:20px;}
+</style></head><body>
+<div class="diagram"><pre class="mermaid">flowchart TB
+  P1[&quot;外协车队结算&quot;]
+  P2[&quot;司机运费 / 工资&quot;]
+  P3[&quot;油费 / 路桥 / 维修 / 港杂&quot;]
+  P4[&quot;发票收票与认证&lt;br/&gt;&lt;b&gt;AI 已实现识别+校验&lt;/b&gt;&quot;]
+  S1[&quot;成本归集&lt;br/&gt;按车 / 按单&quot;]
+  S2[&quot;单车毛利&lt;br/&gt;&lt;b&gt;现在算不出来&lt;/b&gt;&quot;]
+  S3[&quot;经营分析&quot;]
+
+  P1 --&gt; P4
+  P2 --&gt; P4
+  P3 --&gt; P4
+  P4 --&gt; S1 --&gt; S2 --&gt; S3
+
+  classDef done fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  classDef blocked fill:#fde8e8,stroke:#c53030,stroke-width:2px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+
+  class P1,P4 done
+  class S1,S2 blocked
+  class S3 out</pre></div>
+<script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});
+</script></body></html>

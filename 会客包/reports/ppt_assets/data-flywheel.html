@@ -1,0 +1,18 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+.diagram{display:inline-block;background:#fff;padding:20px;}
+</style></head><body>
+<div class="diagram"><pre class="mermaid">flowchart LR
+  D1[&quot;单据/聊天/图片&quot;] --&gt; D2[&quot;结构化数据&quot;]
+  D2 --&gt; D3[&quot;规则校验与业务系统&quot;]
+  D3 --&gt; D4[&quot;历史数据沉淀&quot;]
+  D4 --&gt; D5[&quot;预测模型&quot;]
+  D5 --&gt; D6[&quot;优化建议&quot;]
+  D6 --&gt; D7[&quot;人工确认/执行&quot;]
+  D7 --&gt; D4</pre></div>
+<script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});
+</script></body></html>

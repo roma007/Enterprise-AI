@@ -1,0 +1,23 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+.diagram{display:inline-block;background:#fff;padding:20px;}
+</style></head><body>
+<div class="diagram"><pre class="mermaid">flowchart TB
+  R1[&quot;运单 / 结算清单&quot;]
+  R2[&quot;客户对账单&lt;br/&gt;&lt;b&gt;人工 2 人 × 5 天/月&lt;/b&gt;&quot;]
+  R3[&quot;开票&quot;]
+  R4[&quot;回款&quot;]
+  R5[&quot;账龄与催收&lt;br/&gt;&lt;b&gt;规则自动化&lt;/b&gt;&quot;]
+
+  R1 --&gt; R2 --&gt; R3 --&gt; R4 --&gt; R5
+
+  classDef done fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+  class R2,R5 done
+  class R3,R4 out</pre></div>
+<script src="../../../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad:true,securityLevel:'loose',theme:'base',themeVariables:{fontFamily:'-apple-system,"PingFang SC","Microsoft YaHei",sans-serif',fontSize:'17px'},flowchart:{useMaxWidth:false,htmlLabels:true,nodeSpacing:40,rankSpacing:40,wrappingWidth:300}});
+</script></body></html>

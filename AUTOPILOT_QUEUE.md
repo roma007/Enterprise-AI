@@ -34,7 +34,7 @@
 | T07 | 版本对比报价汇总 + 客户版脱敏导出 | 后端 + 前端 | `backend/src/services/solution_diff_docs.ts`、`backend/src/routes/s2_docs.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx`、`frontend/src/solutionDiff.ts`、`frontend/src/solutionDiff.test.ts` | 前后端 `typecheck`；`verify:write`；`test:unit`；`build`；全量 e2e | done | 无 |
 | T08 | G2-10 关联报价覆盖工作量成本检查 | 后端 | `backend/src/rules/g2.ts`、`backend/src/routes/s2.ts`、`backend/scripts/verify-write.ts` | `npm run typecheck`；`npm run verify:write` | done | 无 |
 | T09 | 方案列表报价覆盖率/负毛利提示 | 前端 | `frontend/src/solutionDiff.ts`、`frontend/src/solutionDiff.test.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx` | `npm run test:unit`；`npm run typecheck`；`npm run build`；全量 e2e | done | T07 已 done |
-| T10 | 文档同步：版本对比客户版、G2-10、报价覆盖率提示 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | 只读 grep 核对功能描述与测试数量；不改历史快照 | pending | T07/T08/T09 已 done |
+| T10 | 文档同步：版本对比客户版、G2-10、报价覆盖率提示 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | 只读 grep 核对功能描述与测试数量；不改历史快照 | done | T07/T08/T09 已 done；完成记录见执行日志 |
 | T11 | 依赖审计风险记录（不升级 breaking 依赖） | 文档/运维 | `SECURITY.md`（新）、`OPERATIONS.md` | `cd backend && npm audit --omit=dev`；`cd frontend && npm audit --omit=dev`；`git diff --stat` 确认只改文档 | pending | 无 |
 
 ### 1.1 建议波次（文件所有权不重叠）
@@ -568,6 +568,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 2026-11-05 16:12 | T07 | main（人工协调者执行） | pending → done | 串行：前后端 `typecheck`；`verify:write`；`test:unit`；`build`；全量 e2e | typecheck 0；verify:write **51 项通过**；单测 9/9；build OK；e2e 24/24 | 新增对比 Markdown 端点、客户版脱敏口径与 UI 勾选；未改测试断言、未重启服务、未 push 以外无外部操作；双远端已同步。 |
 | 2026-11-05 16:16 | T08 | main（人工协调者执行） | pending → done | 串行：`npm run typecheck`；`npm run verify:write` | typecheck 0；verify:write **51 项通过**（新增低报价 warn/恢复 pass 断言） | 新增 G2-10；G2 pass 数由 9 更新为 10；未放宽既有断言、未跑 e2e（后端规则由 verify:write 覆盖）。 |
 | 2026-11-05 16:19 | T09 | main（人工协调者执行） | pending → done | 串行：`npm run typecheck`；`npm run test:unit`；`npm run build`；全量 e2e | typecheck 0；单测 **10/10**；build OK；e2e 24/24 | 新增 `quoteCoverage()` 纯函数与列表提示；未改后端、未改 e2e 断言。 |
+| 2026-11-05 17:05 | T10 | main（人工协调者执行） | pending → done | 只读：`npx playwright test --list`；`grep -c "\- \[x\]"`；文档校对 | 24 tests / 2 files；TODO 105 项、06 计划 60 项已勾选，06 剩余 9 项均依赖真实客户/外部环境 | 更新执行状态、R1/R2/R3 门禁与 backlog 勾选；新增“完成即勾选”约定。历史快照 08 未改写。 |
 
 ### 日志填写要求
 

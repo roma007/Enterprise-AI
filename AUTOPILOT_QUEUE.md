@@ -17,7 +17,7 @@
 | ID | 任务 | 类型 | 涉及文件 | 验证 | 状态 | 依赖 |
 |---|---|---|---|---|---|---|
 | T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | blocked | 无（解除条件见 §2 T01 阻塞说明） |
-| T02 | 导出任务手动清理：dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | pending | 无 |
+| T02 | 导出任务手动清理：dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | blocked | 无（解除条件见 §2 T02 阻塞说明） |
 | T03 | 审计视图导入 JSON 版本兼容与错误提示 | 后端 + 前端 | `backend/src/routes/system.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T02（同文件） |
 | T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T03（同文件） |
 | T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | pending | 无 |
@@ -154,6 +154,16 @@ cd frontend && npm run typecheck
 
 - revert 本任务提交；已删除的测试导出文件不可恢复，因此只允许在测试组织/测试数据上执行确认清理。
 - 生产环境默认只使用 dry-run，确认执行需用户单独批准。
+
+#### T02 阻塞说明（2026-11-05 12:39 AUTOPILOT 执行器记录）
+
+- 状态：`pending` → `blocked`（未 `done`）。
+- 环境核对（只读）：`DATABASE_URL` UNSET、无 `backend/.env` → 与 T01 阻塞说明的**解除条件①仍未满足**相同；`backend/src/db.ts:19` 默认指向 `postgres://127.0.0.1:5432/ai_delivery`，本机 5432 有本地 Postgres，但按 §3.2 与用户「不执行外部环境操作」，上一轮已记录「未擅自构造连接串、未连接」，本轮用户仍未提供已确认本地/测试库凭据。`backend/scripts/cleanup-audit-exports.ts`（新）与 `package.json` 的 `audit:exports:cleanup` 脚本尚不存在。
+- 验证（串行；未跑 `verify:write` / `e2e`，未重启服务）：`cd backend && npm run typecheck` → exit 0；`cd frontend && npm run typecheck` → exit 0（均在**未改动**的现有代码上）。`npm run audit:exports:cleanup -- --dry-run` → 未执行（脚本未实现、且需 DB）；`npm run verify:write` → 未执行（共享 PostgreSQL 写测试，§3.1 仅协调者合并后串行、§3.2 需先确认本地/测试库）。typecheck 通过不能作为「实现完成」证据。
+- 阻塞原因：验收核心 `verify:write`（共享库写回归）与 cleanup CLI 都依赖已确认本地/测试库，该外部资源仍未满足；且 CLI 脚本缺失、清单命令 #2 现不可执行。按 §5/#9、§9.2 与「宁可停，不伪造 / 不继续再试一次」，**不先写一大段无法验证的实现**，不把疑似可跑的 DB 当通过证据；不修改测试断言、不伪造 dry-run / 清理结果、不执行真实删除。
+- 未改动：T02 声明的 8 个文件一字未动；未做实现提交；未 `git push`；未做生产/外部环境操作；工作区保持干净。
+- **解除条件**：① 提供指向已确认本地/测试库的 `DATABASE_URL`（或等价用户确认），使 `verify:write` / cleanup CLI 可安全连接（与 T01 解除条件①相同）；② 用户确认允许在该测试库串行执行 `verify:write` 与 dry-run 清理；③ 满足后再实现 T02 范围内 CLI/接口/前端/断言，串行跑完 4 条验收命令全部通过方可标 `done`。
+- 详细执行记录：`autopilot/logs/20261105-123947-T02-run.md`（gitignore）。
 
 ---
 
@@ -410,6 +420,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 |---|---|---|---|---|---|---|
 | 2026-11-05 | — | — | — | — | 队列创建，未执行任何测试 | 等待协调者派单 |
 | 2026-11-05 12:26 | T01 | main（单轮单任务，未建 Worker 分支） | pending → blocked | 串行：`npx playwright test --list`；`ls backend/db/migrations \| wc -l`；`psql "$DATABASE_URL" -Atc …`×2；`grep` | #1 exit 0 / 20 条；#2 58；#3 exit 2 `FATAL: database "mengfeng" does not exist`（DATABASE_URL 未设置）；#4 exit 0 | 需外部资源：指向已确认本地/测试库的 `DATABASE_URL`（实测表 86 / RLS 81）+ 用户确认 backend/README.md:450 历史记录口径。未改 4 份产品文档、未改测试断言、未跑 verify:write/e2e、未重启服务、未 push。详见 autopilot/logs/20261105-122632-T01-run.md |
+| 2026-11-05 12:39 | T02 | main（单轮单任务，未建 Worker 分支） | pending → blocked | 串行：`cd backend && npm run typecheck`；`cd frontend && npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run` 与 `npm run verify:write` 未执行 | 前后端 typecheck exit 0（在未改动现有代码上）；DB 相关两条未执行 | 需外部资源：指向已确认本地/测试库的 `DATABASE_URL`（与 T01 解除条件①相同，仍未满足）；`audit:exports:cleanup` 脚本尚不存在。verify:write 为共享库写测试（§3.1/§3.2）故不跑；未写无法验证的实现、未改 8 个声明文件、未改测试断言、未跑 e2e、未重启服务、未 push。详见 autopilot/logs/20261105-123947-T02-run.md |
 
 ### 日志填写要求
 

@@ -204,6 +204,36 @@ export function runG2Checks(data: G2Data): G2Result {
     );
   }
 
+  // G2-12 组件人天与角色估算人天一致性（提示，不阻断）
+  {
+    const mismatch = solutions
+      .map((s) => ({
+        code: s.opportunity_code,
+        version: s.version,
+        componentDays: Number(s.component_days ?? 0),
+        workloadDays: Number(s.workload_days ?? 0),
+      }))
+      .filter(
+        (s) =>
+          s.componentDays > 0 &&
+          s.workloadDays > 0 &&
+          Math.abs(s.componentDays - s.workloadDays) > 1e-9,
+      );
+    checks.push(
+      mismatch.length
+        ? warn('G2-12', '组件人天与角色估算应一致', 'warn',
+            `${mismatch.map((s) => `${s.code} v${s.version}（组件 ${s.componentDays} / 角色 ${s.workloadDays} 人天）`).join('、')} 存在差异`,
+            mismatch.map((s) => ({
+              code: s.code,
+              version: s.version,
+              component_days: s.componentDays,
+              workload_days: s.workloadDays,
+            })))
+        : ok('G2-12', '组件人天与角色估算应一致', 'warn',
+            '组件人天与角色估算一致，或尚未具备比较条件'),
+    );
+  }
+
   const summary = { pass: 0, warn: 0, block: 0 };
   for (const c of checks) summary[c.outcome] += 1;
   return { summary, blocked: summary.block > 0, checks };

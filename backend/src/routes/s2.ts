@@ -199,8 +199,10 @@ export async function s2Routes(app: FastifyInstance) {
                 o.code AS opportunity_code, o.title AS opportunity_title,
                 o.has_tech_blocker, o.blocker_owner,
                 (SELECT count(*) FROM solution_components c WHERE c.solution_id = s.id) AS component_count,
+                (SELECT COALESCE(sum(c.effort_days), 0) FROM solution_components c WHERE c.solution_id = s.id) AS component_days,
                 (SELECT count(*) FROM acceptance_criteria a WHERE a.solution_id = s.id) AS criteria_count,
                 (SELECT count(*) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_count,
+                (SELECT COALESCE(sum(w.days), 0) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_days,
                 (SELECT COALESCE(sum(w.cost), 0) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_cost,
                 (SELECT COALESCE(sum(qi.amount), 0)
                    FROM quote_items qi

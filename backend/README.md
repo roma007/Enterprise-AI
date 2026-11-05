@@ -351,7 +351,7 @@ curl -s -X POST http://127.0.0.1:8788/api/deliverables/generate \
 | S2 方案 | `GET/POST /api/opportunities/:id/solutions`、`GET/PATCH/DELETE /api/solutions/:id`；方案负责人；组件/集成/工作量/验收/评审；前端支持两个方案版本对比（概要/组件/集成/验收/工作量）并导出 Markdown/CSV/Word；Word 汇总报价并支持 `audience=customer` 客户版脱敏 |
 | S2 报价 | `GET/POST /api/engagements/:id/quotes`、`GET/PATCH/DELETE /api/quotes/:id`、报价行 CRUD |
 | S2 文档 | `POST /api/solutions/:id/documents`、`GET /api/solutions/:id/document(.docx)`、`GET /api/solutions/:id/compare/:otherId/document(.docx)`、`POST /api/quotes/:id/documents`、`GET /api/quotes/:id/document.docx` |
-| G2 门禁 | `GET /api/engagements/:id/g2-checks`（10 项：覆盖 / 范围 / 组件 / 验收 / 工作量 / 报价 / 关联 / 阻断 / 评审 / 报价覆盖成本） |
+| G2 门禁 | `GET /api/engagements/:id/g2-checks`（12 项：覆盖 / 范围 / 组件 / 验收 / 工作量 / 报价 / 关联 / 阻断 / 评审 / 报价覆盖成本 / 方案负责人 / 组件与人天一致性） |
 | S3 POC | `GET/POST /api/opportunities/:id/poc-experiments`、实验详情/样本/运行/复核/结论 CRUD |
 | S3 报告 | `POST /api/poc-experiments/:id/documents`、`GET .../document`、`GET .../document.docx` |
 | G3 门禁 | `GET /api/engagements/:id/g3-checks`（8 项：覆盖 / 设计 / 样本 / 运行 / 复核 / 结论 / 决策 / 后续条件） |

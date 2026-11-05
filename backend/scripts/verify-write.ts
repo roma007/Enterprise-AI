@@ -1380,7 +1380,7 @@ async function main() {
     );
     ok(
       await req('PUT', `/api/solutions/${solutionV2.id}/workload`, {
-        items: [{ role: '顾问', days: 1, rate: 0.2 }],
+        items: [{ role: '顾问', days: 2, rate: 0.2 }],
       }),
       200,
       '添加 v2 工作量',
@@ -1755,6 +1755,9 @@ async function main() {
       'pass',
       '补齐负责人后 G2-11 应通过',
     );
+    const g2Workload = (after.checks as any[]).find((c) => c.code === 'G2-12');
+    assert.equal(g2Workload?.outcome, 'warn', '组件/角色人天不一致应提示');
+    assert.match(String(g2Workload?.message), /v2/);
   });
 
   await check('S3 POC：实验、样本、运行、复核、结论与 G3', async () => {

@@ -42,6 +42,7 @@
 | T15 | 试点就绪检查脚本 + 值班模板 | 后端 + 运维 | `backend/scripts/pilot-readiness.ts`（新）、`backend/package.json`、`ops/oncall.example.yml`（新）、`.gitignore`、`OPERATIONS.md`、`企业AI化项目管理系统/09_试点启动包.md`（新） | `npm run typecheck`；`npm run readiness:check -- --report-only` | done | 无；完成记录见执行日志；不勾选真实外部项 |
 | T16 | 平台管理员就绪看板 | 后端 + 前端 | `backend/src/services/readiness.ts`（新）、`backend/src/routes/platform.ts`、`backend/scripts/pilot-readiness.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/api.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | done | T15 已 done；完成记录见执行日志 |
 | T17 | 报价对比与就绪看板 e2e | 测试 | `frontend/e2e/edge.spec.ts`、`frontend/e2e/smoke.spec.ts` | `PW_CHANNEL=msedge npx playwright test` | done | T14/T16 已 done；完成记录见执行日志 |
+| T18 | 合成演示数据：S2–S5 页面与 G2–G5 门禁 | 后端 + 数据 | `backend/scripts/seed-demo-s2s5.ts`（新）、`backend/package.json`、`DEMO_DATA.md`（新）、`DEV.md`、`TODO.md`、`06_实施计划.md` | `npm run typecheck`；`npm run demo:seed`；G2/G3/G4/G5 API；`verify:write`；全量 e2e | done | 无；完成记录见执行日志；数据仅用于演示 |
 
 ### 1.1 建议波次（文件所有权不重叠）
 
@@ -582,6 +583,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 2026-11-05 18:35 | T15 | main（人工协调者执行） | pending → done | `npm run typecheck`；`npm run readiness:check -- --report-only` | typecheck 0；检查输出 PASS 13 / WARN 5 / FAIL 3（本地未配 AUTH_REQUIRED/AUTH_SECRET/METRICS_TOKEN） | 新增就绪检查、值班模板与试点启动包；真实客户/K8s/支付/模型/Alertmanager 项仍未勾选。 |
 | 2026-11-05 18:45 | T16 | main（人工协调者执行） | pending → done | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | verify:write 51 项通过（管理员可读/非管理员 403）；单测 13/13；build OK；e2e 24/24 | 就绪检查抽到 service，CLI 与平台接口共用；租户管理页展示 PASS/WARN/FAIL 明细；未改真实外部项状态。 |
 | 2026-11-05 19:00 | T17 | main（人工协调者执行） | pending → done | e2e 全量 | e2e **25/25** 通过 | 新增报价对比弹窗用例（API 建两版报价→UI 对比→清理）并扩展平台就绪看板断言；未改产品代码。 |
+| 2026-11-05 21:10 | T18 | main（人工协调者执行） | pending → done | `npm run typecheck`；`npm run demo:seed`；G2–G5 API；`verify:write`；全量 e2e | G2 12/12、G3 8/8、G4 11/11、G5 9/9；verify:write 51 项通过；e2e 25/25 | 新增可重复执行的合成演示数据；所有记录带 `【合成演示】` 标记，不改变真实客户/外部项状态。 |
 
 ### 日志填写要求
 

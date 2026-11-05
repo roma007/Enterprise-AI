@@ -17,6 +17,7 @@
     "verify:write": "tsx scripts/verify-write.ts",
     "openapi": "tsx scripts/export-openapi.ts",
     "readiness:check": "tsx scripts/pilot-readiness.ts",
+    "demo:seed": "tsx scripts/seed-demo-s2s5.ts",
     "audit:archive": "tsx scripts/archive-audit.ts",
     "pdf:cleanup": "tsx scripts/cleanup-pdf-jobs.ts",
     "audit:exports:cleanup": "tsx scripts/cleanup-audit-exports.ts",

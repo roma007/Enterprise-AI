@@ -115,3 +115,11 @@ ps -axo pid,command \
 - 使用 Ensemble 时先暂停 Autopilot：`touch autopilot/PAUSE`，避免定时器与 teammate 同时改同一工作区。
 - 只给 teammate 分配独立文件；共用文件（如 `verify-write.ts`、`AUTOPILOT_QUEUE.md`）集中到合并阶段处理。
 - 不要把真实客户数据、密钥或生产环境操作交给 teammate。
+
+## 8. 合成演示数据
+
+```bash
+cd backend && npm run demo:seed
+```
+
+填充 S2–S5 页面并跑通 G2–G5 门禁；所有数据带 `【合成演示】` 标记，不代表真实客户结果。详见根目录 `DEMO_DATA.md`。

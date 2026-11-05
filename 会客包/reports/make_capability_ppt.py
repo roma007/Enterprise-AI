@@ -357,18 +357,24 @@ add_notes(s, "这页体现专业度：敢说“现在算不了”。单车毛利
 
 # ---------------------------------------------------------------- 10 界面：管理侧
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "系统界面 ③ / 管理", "管理侧：项目、门禁、校验证据在同一条链上", "不是一张大屏，是每个项目都能追到门禁和校验结果。")
-add_image_fit(s, "ui-platform-overview.png", 4.55, 1.9, 8.2, 5.05)
-add_bullets(s, [
-    ("项目总览", "机会点、痛点、交付物、客户"),
-    ("门禁", "G1–G5 与 14 项一致性校验"),
-    ("证据", "生成、确认、导出全部留痕"),
-], 0.7, 2.0, 3.55, 2.2, 11.5, BLACK, TEAL, 10)
-add_rect(s, 0.7, 4.4, 3.55, 2.0, LIGHT, LIGHT_2)
-add_text(s, "老板不需要学这套系统；它保证项目不靠人记忆，而靠门禁和证据推进。", 0.95, 4.65, 3.05, 1.45, 11.5, True, NAVY, line_spacing=1.35)
+add_header(s, "系统界面 ③ / 管理", "管理侧：G2–G5 在演示数据上全部跑通", "不是空页面：方案、POC、交付、价值都有数据，门禁全部 0 block。")
+add_image_fit(s, "ui-platform-value.png", 4.55, 1.9, 8.2, 5.05)
+stats = [
+    ("G2  12 / 12", "方案 / 报价 / 评审", TEAL),
+    ("G3  8 / 8", "实验 / 样本 / 复核", ORANGE),
+    ("G4  11 / 11", "计划 / UAT / 签收", GREEN),
+    ("G5  9 / 9", "指标 / 价值 / 续约", TEAL),
+]
+for i, (num, label, color) in enumerate(stats):
+    y = 1.98 + i * 0.98
+    add_rect(s, 0.7, y, 3.55, 0.82, LIGHT, LIGHT_2)
+    add_text(s, num, 0.92, y + 0.12, 1.55, 0.3, 15, True, color)
+    add_text(s, label, 2.45, y + 0.17, 1.65, 0.3, 9.5, False, GRAY)
+add_rect(s, 0.7, 6.0, 3.55, 0.55, NAVY, NAVY)
+add_text(s, "以上为合成演示数据，不代表真实客户结果", 0.9, 6.13, 3.15, 0.3, 8.5, True, WHITE, PP_ALIGN.CENTER)
 add_text(s, "截图：内部演示项目；客户不安装交付平台。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
 add_footer(s, 10)
-add_notes(s, "管理侧界面给老板看“项目有没有按门禁走”，不是给客户用的。强调客户不装这套系统。")
+add_notes(s, "管理侧不是空页面：G2 12 项、G3 8 项、G4 11 项、G5 9 项门禁在合成演示数据上全部通过。强调这是演示数据，不是真实客户结果。")
 
 # ---------------------------------------------------------------- 09 证据
 s = prs.slides.add_slide(prs.slide_layouts[6])

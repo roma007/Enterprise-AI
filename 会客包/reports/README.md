@@ -47,3 +47,5 @@ ai-copilot/.venv/bin/python 会客包/reports/make_capability_ppt.py
 ```
 
 依赖 `python-pptx`；图表 PNG 由 `ppt_assets/*.html` 通过 Edge/Playwright 截图生成。
+
+演示数据生成见根目录 [`DEMO_DATA.md`](../DEMO_DATA.md)。

@@ -29,6 +29,7 @@ npm run verify:write # 51 项录入闭环回归（R1–R6、门禁、导出、�
 npm run demo         # 跑 14 项校验 + 打印组合数字 + 生成 1 份报告
 npm run openapi      # 生成 docs/openapi.json
 npm run readiness:check # 试点/生产配置就绪检查（不含真实客户联调）
+npm run demo:seed    # 合成演示数据：S2–S5 页面与门禁（非真实客户结论）
 npm run dev          # http://127.0.0.1:8788
 ```
 

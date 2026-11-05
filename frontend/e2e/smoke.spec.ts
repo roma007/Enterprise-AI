@@ -182,21 +182,44 @@ test.describe('关键路径冒烟', () => {
     await expect(page.getByRole('button', { name: '修改密码' })).toBeVisible();
   });
 
-  test('供应商可自助注册并进入独立工作台', async ({ page }) => {
+  test('供应商可自助注册并进入独立工作台', async ({ page, request }) => {
     const stamp = Date.now();
-    await page.goto('/#/register');
-    await expect(page.getByRole('heading', { name: '注册供应商' })).toBeVisible();
+    const slug = `e2e-${stamp}`;
+    try {
+      await page.goto('/#/register');
+      await expect(page.getByRole('heading', { name: '注册供应商' })).toBeVisible();
 
-    await page.getByLabel('供应商/组织名称').fill(`E2E供应商${stamp}`);
-    await page.getByLabel('组织标识').fill(`e2e-${stamp}`);
-    await page.getByLabel('管理员姓名').fill('E2E管理员');
-    await page.getByLabel('登录邮箱').fill(`e2e-${stamp}@vendor.test`);
-    await page.getByLabel(/^密码/).fill('E2eTenant1');
-    await page.getByLabel('确认密码').fill('E2eTenant1');
-    await page.getByRole('button', { name: '创建供应商租户' }).click();
+      await page.getByLabel('供应商/组织名称').fill(`E2E供应商${stamp}`);
+      await page.getByLabel('组织标识').fill(slug);
+      await page.getByLabel('管理员姓名').fill('E2E管理员');
+      await page.getByLabel('登录邮箱').fill(`e2e-${stamp}@vendor.test`);
+      await page.getByLabel(/^密码/).fill('E2eTenant1');
+      await page.getByLabel('确认密码').fill('E2eTenant1');
+      await page.getByRole('button', { name: '创建供应商租户' }).click();
 
-    await expect(page.getByRole('heading', { name: '项目列表' })).toBeVisible();
-    await expect(page.getByText('还没有项目')).toBeVisible();
+      await expect(page.getByRole('heading', { name: '项目列表' })).toBeVisible();
+      await expect(page.getByText('还没有项目')).toBeVisible();
+    } finally {
+      const login = await request.post('/api/auth/login', {
+        data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
+      });
+      if (login.ok()) {
+        const { token } = await login.json();
+        const headers = { authorization: `Bearer ${token}` };
+        const tenants = await request.get('/api/platform/tenants', { headers });
+        if (tenants.ok()) {
+          const created = (await tenants.json()).items.find(
+            (item: any) => item.slug === slug,
+          );
+          if (created) {
+            await request.delete(
+              `/api/platform/tenants/${created.id}?confirm=${encodeURIComponent(slug)}`,
+              { headers },
+            );
+          }
+        }
+      }
+    }
   });
 
   test('管理员可打开用户管理页', async ({ page, request }) => {

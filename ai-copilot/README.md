@@ -327,7 +327,7 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | 按需调用模型（规则够好就不花 5 秒） | `app/extract.py` `_needs_llm` | 结构化托书 18ms |
 | 合并策略可切换（fill_only / floor / llm_wins） | `app/extract.py` | 28 份样本对照 |
 | CSV 导出 | `static/index.html` | 手工验证 |
-| 演示前自检 | `scripts/smoke.sh` | 13 项全绿 |
+| 演示前自检 | `scripts/smoke.sh` | 15 项全绿 |
 
 ### 8.2 未实现（按计划排期）
 

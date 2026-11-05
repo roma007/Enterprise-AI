@@ -108,10 +108,10 @@ clamp_min(sum(db_pool_max_connections), 1)
 
 示例配置：
 
-- [`ops/prometheus.scrape.example.yml`](../ops/prometheus.scrape.example.yml)
-- [`ops/alerts.yml`](../ops/alerts.yml)
-- [`ops/grafana-dashboard.json`](../ops/grafana-dashboard.json)（导入 Grafana，选择 Prometheus 数据源）
-- [`ops/slo.md`](../ops/slo.md)（SLO、错误预算、告警路由与值班 Runbook）
+- [`ops/prometheus.scrape.example.yml`](ops/prometheus.scrape.example.yml)
+- [`ops/alerts.yml`](ops/alerts.yml)
+- [`ops/grafana-dashboard.json`](ops/grafana-dashboard.json)（导入 Grafana，选择 Prometheus 数据源）
+- [`ops/slo.md`](ops/slo.md)（SLO、错误预算、告警路由与值班 Runbook）
 
 设置 `METRICS_TOKEN` 后，Prometheus 需带 Bearer：
 

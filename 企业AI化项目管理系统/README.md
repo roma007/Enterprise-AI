@@ -17,6 +17,7 @@
 | [08_本轮变更说明_2026-11-04.md](./08_本轮变更说明_2026-11-04.md) | **本轮变更说明**：多租户、试点一、协作审计、工程与测试；含接口/数据模型/验证/风险，供评审与交接 |
 | [06_实施计划.md](./06_实施计划.md) | **全系统分阶段实施计划**：S1 生产化 → S2 方案 → S3 POC → S4 交付 → S5 运营，含数据/API/页面/门禁/排期/风险/最近 6 周 backlog |
 | [09_试点启动包.md](./09_试点启动包.md) | **真实客户试点启动包**：客户/数据输入清单、S2/POC/上线证据要求、值班告警模板与勾选规则 |
+| [../VERIFICATION.md](../VERIFICATION.md) | **全项目核验报告**：自动化回归、数据库/RLS、API/OpenAPI、ai-copilot、文档与 8 个流程图、问题与阻塞项 |
 | [DEPLOY.md](../DEPLOY.md) | Docker Compose 部署、备份恢复、生产检查清单 |
 | [prototype/index.html](./prototype/index.html) | 可点击 HTML 原型，浏览器直接打开 |
 | [../backend/](../backend/) | **可运行后端**：PostgreSQL 85 张表（59 个迁移） + 增量迁移 + Fastify API + 登录骨架 + OpenAPI/Swagger + S1 录入写接口 + 17 项数据库规则断言 + 14 项一致性校验 + 11 项报告回归 + 51 项录入闭环回归 + 25 条 Playwright 冒烟（`npm run demo` / `verify:report` / `verify:write`） |

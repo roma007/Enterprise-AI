@@ -1009,6 +1009,35 @@ export const api = {
         created_at: string;
       }>;
     }>('/api/audit-export-cleanups'),
+  previewAuditExportCleanup: (payload: {
+    days?: number;
+    limit?: number;
+  } = {}) =>
+    request<{
+      dry_run: true;
+      retention_days: number;
+      candidates: number;
+      items: Array<{
+        id: string;
+        status: string;
+        created_at: string;
+        row_count: number | null;
+      }>;
+    }>('/api/audit-exports/cleanup', json('POST', payload)),
+  cleanupAuditExportJobs: (payload: {
+    days?: number;
+    limit?: number;
+  } = {}) =>
+    request<{
+      dry_run: false;
+      retention_days: number;
+      deleted: number;
+      items: Array<{ id: string }>;
+    }>(
+      '/api/audit-exports/cleanup',
+      json('POST', { ...payload, dry_run: false, confirm: 'CLEANUP' }),
+    ),
+
   exportAuditExportCleanupsCsv: () =>
     requestBlob('/api/audit-export-cleanups/export.csv'),
   downloadAuditExportJob: (id: string) =>

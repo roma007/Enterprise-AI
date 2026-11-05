@@ -18,6 +18,7 @@
     "openapi": "tsx scripts/export-openapi.ts",
     "audit:archive": "tsx scripts/archive-audit.ts",
     "pdf:cleanup": "tsx scripts/cleanup-pdf-jobs.ts",
+    "audit:exports:cleanup": "tsx scripts/cleanup-audit-exports.ts",
     "share:cleanup": "tsx scripts/cleanup-share-views.ts",
     "share:archive": "tsx scripts/cleanup-share-views.ts",
     "sessions:cleanup": "tsx scripts/cleanup-user-sessions.ts",

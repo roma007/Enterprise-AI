@@ -345,6 +345,9 @@ test.describe('关键路径冒烟', () => {
       modal.getByRole('heading', { name: '导出任务' }),
     ).toBeVisible();
     await expect(modal.getByRole('heading', { name: '最近清理' })).toBeVisible();
+    await expect(
+      modal.getByRole('button', { name: '清理过期导出' }),
+    ).toBeVisible();
     const [cleanupDownload] = await Promise.all([
       page.waitForEvent('download'),
       modal.getByRole('button', { name: '导出清理 CSV' }).click(),

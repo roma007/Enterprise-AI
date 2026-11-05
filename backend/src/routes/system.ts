@@ -24,10 +24,12 @@ import {
   normalizeAuditExportColumns,
 } from '../services/audit_query';
 import {
+  cleanupAuditExportJobsForOrg,
   createAuditExportJob,
   deleteAuditExportJob,
   getAuditExportDownload,
   listAuditExportJobs,
+  previewAuditExportCleanup,
   retryAuditExportJob,
 } from '../services/audit_exports';
 
@@ -475,6 +477,54 @@ export async function systemRoutes(app: FastifyInstance) {
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="${filename}"`)
       .send(csv);
+  });
+
+  /** 手动清理当前组织的过期导出任务；默认 dry-run。 */
+  app.post('/api/audit-exports/cleanup', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    if (!['admin', 'director'].includes(auth.role)) {
+      throw httpError(403, 'FORBIDDEN', '仅管理员/总监可清理导出任务');
+    }
+    const body = z
+      .object({
+        dry_run: z.boolean().default(true),
+        confirm: z.string().optional(),
+        days: z.number().int().min(1).max(365).optional(),
+        limit: z.number().int().min(1).max(500).default(100),
+      })
+      .parse(req.body ?? {});
+
+    if (body.dry_run !== false) {
+      const preview = await previewAuditExportCleanup(
+        auth.org_id,
+        body.days,
+        body.limit,
+      );
+      return {
+        dry_run: true,
+        retention_days: preview.retention_days,
+        candidates: preview.items.length,
+        items: preview.items,
+      };
+    }
+    if (body.confirm !== 'CLEANUP') {
+      throw httpError(422, 'CONFIRM_REQUIRED', '确认清理需要 confirm=CLEANUP');
+    }
+    const result = await cleanupAuditExportJobsForOrg({
+      orgId: auth.org_id,
+      userId: auth.sub,
+      days: body.days,
+      limit: body.limit,
+    });
+    return {
+      dry_run: false,
+      retention_days: result.retention_days,
+      deleted: result.deleted,
+      items: result.items,
+    };
   });
 
   app.get('/api/audit-exports', async (req) => {

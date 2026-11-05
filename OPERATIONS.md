@@ -362,6 +362,14 @@ cd backend && npm run drill:rollout   # 滚动发布/回滚：readiness → 切�
 
 ---
 
+### 4.18 审计导出任务清理
+
+- 常驻清理：`AUDIT_EXPORT_CLEANUP_INTERVAL_SECONDS`（默认 3600 秒，0 关闭），按组织保留期删除任务与对象存储文件。
+- 手动预演：`POST /api/audit-exports/cleanup { "dry_run": true }`，只返回候选与保留天数。
+- 确认执行：`{ "dry_run": false, "confirm": "CLEANUP" }`，仅管理员/总监；缺确认返回 `422 CONFIRM_REQUIRED`。
+- CLI：`npm run audit:exports:cleanup -- --dry-run`；确认删除用 `--yes`，可加 `--days=7 --limit=100 --org=<slug>`。
+- 手动清理写 `CLEANUP audit-exports`，`detail.manual=true` 并记录操作人。
+
 ## 5. 发布与回滚
 
 1. 备份：`make backup`

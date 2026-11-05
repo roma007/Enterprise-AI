@@ -5887,6 +5887,109 @@ async function main() {
       '清理 CSV 审计日志应记录导出条数',
     );
 
+    const manualCleanupJob = await one<{ id: string }>(
+      `INSERT INTO audit_export_jobs
+         (org_id, user_id, scope, filters, columns, status, created_at, finished_at)
+       VALUES ($1,$2,'live','{}'::jsonb,'[]'::jsonb,'done',
+               now() - interval '30 days', now())
+       RETURNING id`,
+      [eng!.org_id, auditLogin.user.id],
+    );
+    const manualCleanupKey = `audit-exports/${manualCleanupJob!.id}.csv`;
+    await objectStorage().put(
+      manualCleanupKey,
+      Buffer.from('manual-old'),
+      'text/csv',
+    );
+    const manualPreview = ok(
+      await auditCall('POST', '/api/audit-exports/cleanup', {
+        dry_run: true,
+        days: 7,
+        limit: 100,
+      }),
+      200,
+      '手动清理预览',
+    );
+    assert.equal(manualPreview.dry_run, true);
+    assert.equal(manualPreview.retention_days, 7);
+    assert.ok(manualPreview.candidates >= 1);
+    assert.ok(
+      (manualPreview.items as any[]).some(
+        (item) => item.id === manualCleanupJob!.id,
+      ),
+    );
+    assert.ok(
+      await one<{ id: string }>(
+        `SELECT id FROM audit_export_jobs WHERE id = $1`,
+        [manualCleanupJob!.id],
+      ),
+      'dry-run 不应删除任务',
+    );
+
+    const noConfirmCleanup = await auditCall(
+      'POST',
+      '/api/audit-exports/cleanup',
+      {
+        dry_run: false,
+        days: 7,
+      },
+    );
+    assert.equal(noConfirmCleanup.status, 422);
+    assert.equal(noConfirmCleanup.body.error, 'CONFIRM_REQUIRED');
+
+    const manualCleanup = ok(
+      await auditCall('POST', '/api/audit-exports/cleanup', {
+        dry_run: false,
+        confirm: 'CLEANUP',
+        days: 7,
+        limit: 100,
+      }),
+      200,
+      '手动确认清理',
+    );
+    assert.equal(manualCleanup.dry_run, false);
+    assert.ok(manualCleanup.deleted >= 1);
+    assert.equal(
+      await one<{ id: string }>(
+        `SELECT id FROM audit_export_jobs WHERE id = $1`,
+        [manualCleanupJob!.id],
+      ),
+      null,
+      '确认清理后任务应删除',
+    );
+    assert.equal(
+      await objectStorage().get(manualCleanupKey),
+      null,
+      '确认清理后文件应删除',
+    );
+    const manualLog = await one<{ user_id: string | null; detail: any }>(
+      `SELECT user_id, detail FROM audit_logs
+        WHERE action = 'CLEANUP audit-exports' AND org_id = $1
+        ORDER BY created_at DESC LIMIT 1`,
+      [eng!.org_id],
+    );
+    assert.equal(manualLog?.user_id, auditLogin.user.id);
+    assert.equal(manualLog?.detail.manual, true);
+
+    const cleanupZhangLogin = ok(
+      await req('POST', '/api/auth/login', {
+        email: 'zhang@hengzhi.ai',
+        password: 'demo1234',
+      }),
+      200,
+      '普通顾问登录',
+    );
+    const forbiddenCleanup = await app.inject({
+      method: 'POST',
+      url: '/api/audit-exports/cleanup',
+      headers: {
+        authorization: `Bearer ${cleanupZhangLogin.token}`,
+        'content-type': 'application/json',
+      },
+      payload: JSON.stringify({ dry_run: true }),
+    });
+    assert.equal(forbiddenCleanup.statusCode, 403);
+
     const failedJob = await one<{ id: string }>(
       `INSERT INTO audit_export_jobs
          (org_id, user_id, scope, filters, columns, status, error)

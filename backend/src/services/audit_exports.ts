@@ -197,6 +197,93 @@ export function auditExportCleanupIntervalSeconds(): number {
   return Math.min(86400, Math.max(0, Math.floor(raw)));
 }
 
+export interface AuditExportCleanupItem {
+  id: string;
+  status: string;
+  created_at: string;
+  row_count: number | null;
+  retention_days: number;
+}
+
+/**
+ * 手动清理：返回当前组织在指定保留期之前的导出任务。
+ * days 省略时读取组织设置，再回退环境变量默认值。
+ */
+export async function previewAuditExportCleanup(
+  orgId: string,
+  days: number | undefined,
+  limit: number,
+): Promise<{ retention_days: number; items: AuditExportCleanupItem[] }> {
+  const org = await one<{ settings: any }>(
+    `SELECT settings FROM organizations WHERE id = $1`,
+    [orgId],
+  );
+  const configured = Number(org?.settings?.audit_export_retention_days);
+  const retention =
+    days ??
+    (Number.isInteger(configured) && configured >= 1
+      ? Math.min(365, configured)
+      : auditExportRetentionDays());
+  const items = await query<AuditExportCleanupItem>(
+    `SELECT id, status, created_at, row_count, $2::int AS retention_days
+       FROM audit_export_jobs
+      WHERE org_id = $1
+        AND created_at < now() - make_interval(days => $2)
+      ORDER BY created_at
+      LIMIT $3`,
+    [orgId, retention, limit],
+  );
+  return { retention_days: retention, items };
+}
+
+/** 手动确认清理；调用方负责校验确认口令与权限。 */
+export async function cleanupAuditExportJobsForOrg(input: {
+  orgId: string;
+  userId: string | null;
+  days?: number;
+  limit?: number;
+}): Promise<{ retention_days: number; deleted: number; items: AuditExportCleanupItem[] }> {
+  const limit = Math.min(500, Math.max(1, input.limit ?? 100));
+  const preview = await previewAuditExportCleanup(
+    input.orgId,
+    input.days,
+    limit,
+  );
+  if (!preview.items.length) {
+    return { retention_days: preview.retention_days, deleted: 0, items: [] };
+  }
+  for (const item of preview.items) {
+    await objectStorage().delete(fileKey(item.id)).catch(() => undefined);
+  }
+  const deleted = await query<{ id: string }>(
+    `DELETE FROM audit_export_jobs
+      WHERE org_id = $1 AND id = ANY($2::uuid[])
+      RETURNING id`,
+    [input.orgId, preview.items.map((item) => item.id)],
+  );
+  if (deleted.length) {
+    await query(
+      `INSERT INTO audit_logs
+         (org_id, user_id, action, object_type, status_code, detail)
+       VALUES ($1, $2, 'CLEANUP audit-exports', 'audit_export_job', 200, $3::jsonb)`,
+      [
+        input.orgId,
+        input.userId,
+        JSON.stringify({
+          retention_days: preview.retention_days,
+          deleted: deleted.length,
+          manual: true,
+        }),
+      ],
+    ).catch(() => undefined);
+  }
+  return {
+    retention_days: preview.retention_days,
+    deleted: deleted.length,
+    items: preview.items,
+  };
+}
+
 /** 删除超过保留期的导出任务及其文件。 */
 export async function cleanupAuditExportJobs(days?: number): Promise<number> {
   const retention = days ?? auditExportRetentionDays();

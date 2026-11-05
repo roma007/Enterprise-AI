@@ -197,6 +197,8 @@ export function AuditPage() {
   >([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobError, setJobError] = useState<unknown>(null);
+  const [jobNotice, setJobNotice] = useState<string | null>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const [columnPicker, setColumnPicker] = useState(false);
   const [exportColumns, setExportColumns] = useState<string[]>(readExportColumns);
   const [viewError, setViewError] = useState<unknown>(null);
@@ -564,6 +566,33 @@ export function AuditPage() {
       await loadExportJobs();
     } catch (err) {
       setJobError(err);
+    }
+  };
+
+  const cleanupExpiredExports = async () => {
+    setJobError(null);
+    setJobNotice(null);
+    setCleanupBusy(true);
+    try {
+      const preview = await api.previewAuditExportCleanup();
+      if (!preview.candidates) {
+        setJobNotice(`没有超过 ${preview.retention_days} 天的导出任务。`);
+        return;
+      }
+      if (
+        !window.confirm(
+          `将清理 ${preview.candidates} 个超过 ${preview.retention_days} 天的导出任务及其文件。\n\n确认执行？`,
+        )
+      ) {
+        return;
+      }
+      const res = await api.cleanupAuditExportJobs();
+      setJobNotice(`已清理 ${res.deleted} 个导出任务。`);
+      await loadExportJobs();
+    } catch (err) {
+      setJobError(err);
+    } finally {
+      setCleanupBusy(false);
     }
   };
 
@@ -1222,6 +1251,14 @@ export function AuditPage() {
             </Button>
             <Button
               size="sm"
+              variant="ghost"
+              disabled={cleanupBusy}
+              onClick={() => void cleanupExpiredExports()}
+            >
+              {cleanupBusy ? '清理中…' : '清理过期导出'}
+            </Button>
+            <Button
+              size="sm"
               disabled={visibleExportColumns.length === 0}
               onClick={() => void createExportJob()}
             >
@@ -1233,6 +1270,7 @@ export function AuditPage() {
           </>
         }
       >
+        {jobNotice ? <Notice tone="green">{jobNotice}</Notice> : null}
         {jobError ? <ErrorBox error={jobError} /> : null}
         {jobsLoading && exportJobs.length === 0 ? <Spinner /> : null}
         {!jobsLoading && exportJobs.length === 0 ? (

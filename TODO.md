@@ -108,7 +108,7 @@
 4. **R4 后续**：真实试点上线。
 5. **R5 后续**：真实客户运营数据接入与价值口径校准。
 6. **R6 后续**：真实模型联调、提示词评测与知识过期提醒。
-7. **工程待办**：`npm audit --omit=dev` 后端仍有 5 个 moderate（exceljs → uuid、@fastify/static → glob/minimatch），前端 0 个；当前无非破坏性修复，已评估为低风险，记录见 `SECURITY.md`（待补）；后续替换库或等上游修复。
+7. **工程待办**：`npm audit --omit=dev` 后端仍有 5 个 moderate（exceljs → uuid、@fastify/static → glob/minimatch），前端 0 个；当前无非破坏性修复，已评估为低风险，记录见 `SECURITY.md`；后续替换库或等上游修复。
 
 ## 已完成（近期）
 

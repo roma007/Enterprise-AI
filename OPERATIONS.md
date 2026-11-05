@@ -385,6 +385,8 @@ cd backend && npm run drill:rollout   # 滚动发布/回滚：readiness → 切�
 
 ## 6. 安全清单
 
+> 依赖漏洞的实测结果、影响面与升级条件见 [`SECURITY.md`](./SECURITY.md)；发布前确认没有执行破坏性 `npm audit fix --force`。
+
 - [ ] `AUTH_REQUIRED=true`
 - [ ] `AUTH_SECRET` 为随机长串
 - [ ] `METRICS_TOKEN` 已设置且仅监控网段可访问

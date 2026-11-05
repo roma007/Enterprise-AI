@@ -16,11 +16,11 @@
 
 | ID | 任务 | 类型 | 涉及文件 | 验证 | 状态 | 依赖 |
 |---|---|---|---|---|---|---|
-| T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | blocked | 无（解除条件见 §2 T01 阻塞说明） |
-| T02 | 导出任务手动清理：dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | blocked | 无（解除条件见 §2 T02 阻塞说明） |
+| T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | done | 无 |
+| T02 | 导出任务手动清理：dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | pending | 本地库已授权，见 `autopilot/APPROVALS.md` |
 | T03 | 审计视图导入 JSON 版本兼容与错误提示 | 后端 + 前端 | `backend/src/routes/system.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T02（同文件） |
 | T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T03（同文件） |
-| T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | blocked | 无（解除条件见 §2 T05 阻塞说明） |
+| T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | pending | npm 安装已授权，见 `autopilot/APPROVALS.md` |
 | T06 | 更多边界 e2e（导出清理、视图版本、日期范围等） | 测试 | `frontend/e2e/edge.spec.ts`（新）、`frontend/e2e/helpers.ts`（可选新） | `PW_CHANNEL=msedge npm run e2e -- --grep "边界"`；协调者串行跑全量 e2e | pending | T02、T03 |
 
 ### 1.1 建议波次（文件所有权不重叠）
@@ -89,11 +89,11 @@ grep -RInE "13 条|16 条|16/16|54 个迁移|82 张表|78 张|43 项" \
 
 #### T01 阻塞说明（2026-11-05 12:26 AUTOPILOT 执行器记录）
 
-- 状态：`pending` → `blocked`（未 `done`）。
-- 验证命令已串行执行：`npx playwright test --list` → exit 0 / `Total: 20 tests in 1 file`；`ls backend/db/migrations \| wc -l` → `58`；`psql "$DATABASE_URL" -Atc …`（表数、RLS 数两条）→ **exit 2 / `FATAL: database "mengfeng" does not exist`**；`grep` 过时数字 → exit 0（4 处仍在）。未运行 `verify:write` / `e2e`，未重启服务。
+- 状态：已解除；2026-11-05 由协调者按实测完成并标 `done`。
+- 历史验证记录：`npx playwright test --list` → exit 0 / `Total: 20 tests in 1 file`；`ls backend/db/migrations \| wc -l` → `58`；`psql "$DATABASE_URL" -Atc …`（表数、RLS 数两条）→ **exit 2 / `FATAL: database "mengfeng" does not exist`**；`grep` 过时数字 → exit 0（4 处仍在）。未运行 `verify:write` / `e2e`，未重启服务。
 - 阻塞原因：`DATABASE_URL` 未设置、无 `backend/.env`，清单 #3 的只读 SQL 无法执行，**表数 86 / 启用 RLS 81 无法实测**；按「以实际输出为准、不沿用旧数字 / 不伪造」不得把未实测数字写入文档。5432 上有 Postgres 但无法确认其为本地/测试库，按 §3.2 未擅自构造连接串、未连接。`verify:write` 项数未运行，按完成标准写「以实际输出为准」。另 `backend/README.md:450` 带日期历史演练记录是否改写为当前值需用户判断。
 - 未改动：4 份产品文档一字未动；未改测试断言；未做实现提交；未 `git push`；未做生产/外部环境操作。
-- **解除条件**：① 提供指向已确认本地/测试库的 `DATABASE_URL`，使清单 #3 的 psql 可执行并实测表数 / RLS 数；② 用户确认 `backend/README.md:450` 历史记录口径；③ 满足后重跑 T01 全部验收命令并确认 `verify:write` 实际项数后再定稿。
+- **解除条件**：已满足。`backend/.env` 指向本地库；历史记录保留并标注；实测 20 条 e2e、58 迁移、86 表、81 RLS、`verify:write` 51 项。
 - 详细执行记录：`autopilot/logs/20261105-122632-T01-run.md`（gitignore）。
 
 ---
@@ -157,12 +157,12 @@ cd frontend && npm run typecheck
 
 #### T02 阻塞说明（2026-11-05 12:39 AUTOPILOT 执行器记录）
 
-- 状态：`pending` → `blocked`（未 `done`）。
-- 环境核对（只读）：`DATABASE_URL` UNSET、无 `backend/.env` → 与 T01 阻塞说明的**解除条件①仍未满足**相同；`backend/src/db.ts:19` 默认指向 `postgres://127.0.0.1:5432/ai_delivery`，本机 5432 有本地 Postgres，但按 §3.2 与用户「不执行外部环境操作」，上一轮已记录「未擅自构造连接串、未连接」，本轮用户仍未提供已确认本地/测试库凭据。`backend/scripts/cleanup-audit-exports.ts`（新）与 `package.json` 的 `audit:exports:cleanup` 脚本尚不存在。
+- 状态：已解除；本地库与串行验证已授权，可开始实现。
+- 历史环境核对（只读）：`DATABASE_URL` UNSET、无 `backend/.env` → 与 T01 阻塞说明的**解除条件①仍未满足**相同；`backend/src/db.ts:19` 默认指向 `postgres://127.0.0.1:5432/ai_delivery`，本机 5432 有本地 Postgres，但按 §3.2 与用户「不执行外部环境操作」，上一轮已记录「未擅自构造连接串、未连接」，本轮用户仍未提供已确认本地/测试库凭据。`backend/scripts/cleanup-audit-exports.ts`（新）与 `package.json` 的 `audit:exports:cleanup` 脚本尚不存在。
 - 验证（串行；未跑 `verify:write` / `e2e`，未重启服务）：`cd backend && npm run typecheck` → exit 0；`cd frontend && npm run typecheck` → exit 0（均在**未改动**的现有代码上）。`npm run audit:exports:cleanup -- --dry-run` → 未执行（脚本未实现、且需 DB）；`npm run verify:write` → 未执行（共享 PostgreSQL 写测试，§3.1 仅协调者合并后串行、§3.2 需先确认本地/测试库）。typecheck 通过不能作为「实现完成」证据。
 - 阻塞原因：验收核心 `verify:write`（共享库写回归）与 cleanup CLI 都依赖已确认本地/测试库，该外部资源仍未满足；且 CLI 脚本缺失、清单命令 #2 现不可执行。按 §5/#9、§9.2 与「宁可停，不伪造 / 不继续再试一次」，**不先写一大段无法验证的实现**，不把疑似可跑的 DB 当通过证据；不修改测试断言、不伪造 dry-run / 清理结果、不执行真实删除。
 - 未改动：T02 声明的 8 个文件一字未动；未做实现提交；未 `git push`；未做生产/外部环境操作；工作区保持干净。
-- **解除条件**：① 提供指向已确认本地/测试库的 `DATABASE_URL`（或等价用户确认），使 `verify:write` / cleanup CLI 可安全连接（与 T01 解除条件①相同）；② 用户确认允许在该测试库串行执行 `verify:write` 与 dry-run 清理；③ 满足后再实现 T02 范围内 CLI/接口/前端/断言，串行跑完 4 条验收命令全部通过方可标 `done`。
+- **解除条件**：已满足。`backend/.env` 指向本地 `ai_delivery`；授权在该库串行跑 `verify:write` 与 dry-run/确认清理（仅测试数据），见 `autopilot/APPROVALS.md`。
 - 详细执行记录：`autopilot/logs/20261105-123947-T02-run.md`（gitignore）。
 
 ---
@@ -310,13 +310,13 @@ cd frontend && npm run build
 
 #### T05 阻塞说明（2026-11-05 13:03 AUTOPILOT 执行器记录）
 
-- 状态：`pending` → `blocked`（未 `done`）。
-- 选单：按 §2.4 step 3 / §8「依赖必须全部 done」，T03（依赖 T02）、T04（依赖 T03）、T06（依赖 T02/T03）依赖均非 done 不可派单；T05（依赖 无、纯前端、无数据库、文件不重叠）为第一个可派单 `pending`。
+- 状态：已解除；npm registry 安装已授权，见 `autopilot/APPROVALS.md`。
+- 历史选单：按 §2.4 step 3 / §8「依赖必须全部 done」，T03（依赖 T02）、T04（依赖 T03）、T06（依赖 T02/T03）依赖均非 done 不可派单；T05（依赖 无、纯前端、无数据库、文件不重叠）为第一个可派单 `pending`。
 - 只读核对：`vitest` / `jsdom` / `@testing-library/*` 在 `frontend/node_modules`、`package.json`、`package-lock.json` 中均不存在；三个新文件（vitest.config.ts、src/test/setup.ts、src/ui.test.tsx）不存在；`src/ui.tsx` 含 Badge/Button/Modal。`npm view vitest version` → 5.1.0（exit 0，registry 可达、缓存有元数据），但**新依赖未预置在本地**。
 - 阻塞原因：实施 T05 必须从公共 npm registry 拉取新包（外部资源）。按用户「不要执行任何…外部环境操作」、规则 6「需要外部资源时标记 blocked」、§5/#9「依赖安装等基础环境不可用」、§9.1「只依赖代码和本地环境」与「宁可停，不伪造」，不擅自访问外部 registry、不开始无法本地闭环验证的半套实现、不伪造 test:unit/typecheck/build 结果。诚实说明：registry 可达，但「能联网」不等于「已获授权」，本执行器把拉取新依赖视为需用户授权/预置的外部资源。
 - 验证命令 `npm run test:unit` / `typecheck` / `build` 均未执行（实现未开始、无 test:unit 脚本）；未跑 verify:write / e2e，未重启服务。
 - 未改动：T05 声明的 7 个文件一字未动；未改测试断言；未做实现提交；未 `git push`；未做生产/外部环境操作；工作区保持干净。
-- **解除条件**：① 用户预置所需依赖到本地（离线缓存/供应商化，node_modules 与 lockfile 已含 vitest+jsdom+Testing Library），或明确授权访问公共 npm registry 执行 `npm install` 并同步提交 package.json/package-lock.json；② 明确兼容 React 19 / Vite 8 / Node 22 的依赖版本；③ 满足后在 7 个声明文件内实现，串行跑 test:unit、typecheck、build 全通过并确认 build 产物不含测试文件，方可标 `done`。
+- **解除条件**：已满足。允许访问公共 npm registry 安装兼容 React 19 / Vite 8 / Node 22 的 Vitest + jsdom + Testing Library，并提交 lockfile；实现后串行跑 test:unit、typecheck、build。
 - 详细执行记录：`autopilot/logs/20261105-130331-T05-run.md`（gitignore）。
 
 ---

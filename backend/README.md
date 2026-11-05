@@ -447,7 +447,7 @@ curl -s -X POST localhost:8788/api/deliverables/generate -H 'content-type: appli
 - `db/legacy/`：迁移体系引入前的原始 SQL，仅作对照。
 - `schema_migrations` 记录已执行迁移与 checksum；历史迁移不允许修改，变更走新文件。
 
-**全新库演练**（2026-11-04）：新建空库执行 54 个迁移得到 82 张表、78 张启用 RLS，`db:seed` 正常；`verify:write` 51/51、`verify:report` 11/11、`verify`（规则）17/17，验证从零建库到种子与回归全链路可用。
+**全新库演练（历史记录，2026-11-04）**：新建空库执行 54 个迁移得到 82 张表、78 张启用 RLS，`db:seed` 正常；`verify:write` 51/51、`verify:report` 11/11、`verify`（规则）17/17，验证从零建库到种子与回归全链路可用。
 - 金额单位统一 **万元**；`realized_value` 保留 1 位小数（1 千元精度），与报告口径一致。
 - 回本用生成列计算，两种口径并存：`payback_months`（不含运维）、`payback_months_with_ops`（含运维）。
 - 生成列不能引用生成列，所以 `realized_value` 内联了 `neutral_value × realization_factor` 的表达式，而不是引用另一个生成列。

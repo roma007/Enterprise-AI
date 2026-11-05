@@ -71,7 +71,7 @@ fi
 SESSION="$(tr -d '[:space:]' < "$SESSION_FILE")"
 
 PROMPT="$(cat <<'PROMPT_EOF'
-你是 AUTOPILOT 执行器。先阅读 AUTOPILOT.md 和 AUTOPILOT_QUEUE.md。
+你是 AUTOPILOT 执行器。先阅读 AUTOPILOT.md、AUTOPILOT_QUEUE.md 和 autopilot/APPROVALS.md。
 
 规则：
 1. 只处理队列中状态为 pending 且不依赖外部环境的第一项；不要并行处理多项。

@@ -1,14 +1,14 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#fff;}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}.diagram{display:inline-block;background:#fff;padding:24px;}</style></head><body><div class="diagram"><pre class="mermaid">flowchart LR
   subgraph IN[&quot;输入&quot;]
-    I1[&quot;托书 / 聊天 / 图片 / PDF&quot;]
+    I1[&quot;托书 / 聊天 / 图片 / 扫描件&quot;]
     I2[&quot;发票&quot;]
     I3[&quot;对账单 / 运单 / 结算单&quot;]
   end
 
-  subgraph AI[&quot;AI / 大模型介入&quot;]
-    A1[&quot;托书字段抽取&lt;br/&gt;OCR + LLM&quot;]
-    A2[&quot;发票字段抽取&lt;br/&gt;OCR + LLM&quot;]
-    A3[&quot;差异解释&lt;br/&gt;规则先找差异，LLM 写原因&quot;]
+  subgraph AI[&quot;大模型介入&quot;]
+    A1[&quot;托书字段抽取&lt;br/&gt;文字识别 + 大模型&quot;]
+    A2[&quot;发票字段抽取&lt;br/&gt;文字识别 + 大模型&quot;]
+    A3[&quot;差异解释&lt;br/&gt;规则先找差异，大模型写原因&quot;]
   end
 
   subgraph RULE[&quot;规则 / 系统&quot;]

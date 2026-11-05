@@ -1534,6 +1534,17 @@ async function main() {
     assert.equal(quoteDetail.totals.annualOps, 8, `年运维合计 ${quoteDetail.totals.annualOps}`);
     assert.equal(quoteDetail.items.length, 2);
 
+    const listWithQuote = ok(
+      await req('GET', `/api/engagements/${engagementId}/solutions`),
+      200,
+      '方案列表含报价',
+    );
+    const quoted = (listWithQuote.items as any[]).find(
+      (item) => item.id === solution.id,
+    );
+    assert.equal(quoted.quote_one_time, 50, '方案应汇总一次性报价');
+    assert.equal(quoted.quote_annual_ops, 0, '未关联的年运维不计入方案');
+
     const quotes = ok(
       await req('GET', `/api/engagements/${engagementId}/quotes`),
       200,

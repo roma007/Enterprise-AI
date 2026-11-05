@@ -440,6 +440,8 @@ export interface Solution {
   component_count?: number;
   workload_cost?: number;
   criteria_count?: number;
+  quote_one_time?: number;
+  quote_annual_ops?: number;
 }
 
 export interface SolutionComponent {

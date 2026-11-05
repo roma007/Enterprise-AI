@@ -101,23 +101,44 @@ export async function s2DocRoutes(app: FastifyInstance) {
         .code(422)
         .send({ error: 'SOLUTION_MISMATCH', message: '只能对比同一机会点的方案版本' });
     }
-    const costs = await Promise.all([
-      one<{ total: number }>(
-        `SELECT COALESCE(sum(cost), 0)::float8 AS total
-           FROM workload_estimates WHERE solution_id = $1`,
-        [params.id],
-      ),
-      one<{ total: number }>(
-        `SELECT COALESCE(sum(cost), 0)::float8 AS total
-           FROM workload_estimates WHERE solution_id = $1`,
-        [params.otherId],
-      ),
+    const quoteSql = `SELECT
+        COALESCE(sum(qi.amount) FILTER (WHERE qi.kind = 'one_time'), 0)::float8 AS one_time,
+        COALESCE(sum(qi.amount) FILTER (WHERE qi.kind = 'annual_ops'), 0)::float8 AS annual_ops
+       FROM quote_items qi
+       JOIN quotes q ON q.id = qi.quote_id
+      WHERE qi.solution_id = $1
+        AND q.status NOT IN ('expired','rejected')`;
+    const [costs, quotes] = await Promise.all([
+      Promise.all([
+        one<{ total: number }>(
+          `SELECT COALESCE(sum(cost), 0)::float8 AS total
+             FROM workload_estimates WHERE solution_id = $1`,
+          [params.id],
+        ),
+        one<{ total: number }>(
+          `SELECT COALESCE(sum(cost), 0)::float8 AS total
+             FROM workload_estimates WHERE solution_id = $1`,
+          [params.otherId],
+        ),
+      ]),
+      Promise.all([
+        one<{ one_time: number; annual_ops: number }>(quoteSql, [params.id]),
+        one<{ one_time: number; annual_ops: number }>(quoteSql, [params.otherId]),
+      ]),
     ]);
     const rendered = renderSolutionCompare(
       before,
       after,
       Number(costs[0]?.total ?? 0),
       Number(costs[1]?.total ?? 0),
+      {
+        oneTime: Number(quotes[0]?.one_time ?? 0),
+        annualOps: Number(quotes[0]?.annual_ops ?? 0),
+      },
+      {
+        oneTime: Number(quotes[1]?.one_time ?? 0),
+        annualOps: Number(quotes[1]?.annual_ops ?? 0),
+      },
     );
     const buffer = await buildDocx(rendered.markdown, {
       title: rendered.title,

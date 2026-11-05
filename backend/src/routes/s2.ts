@@ -238,7 +238,17 @@ export async function s2Routes(app: FastifyInstance) {
       `SELECT s.*, o.code AS opportunity_code, o.title AS opportunity_title,
               (SELECT count(*) FROM solution_components c WHERE c.solution_id = s.id) AS component_count,
               (SELECT COALESCE(sum(w.cost), 0) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_cost,
-              (SELECT count(*) FROM acceptance_criteria a WHERE a.solution_id = s.id) AS criteria_count
+              (SELECT count(*) FROM acceptance_criteria a WHERE a.solution_id = s.id) AS criteria_count,
+              (SELECT COALESCE(sum(qi.amount), 0)
+                 FROM quote_items qi
+                 JOIN quotes q ON q.id = qi.quote_id
+                WHERE qi.solution_id = s.id AND qi.kind = 'one_time'
+                  AND q.status NOT IN ('expired','rejected')) AS quote_one_time,
+              (SELECT COALESCE(sum(qi.amount), 0)
+                 FROM quote_items qi
+                 JOIN quotes q ON q.id = qi.quote_id
+                WHERE qi.solution_id = s.id AND qi.kind = 'annual_ops'
+                  AND q.status NOT IN ('expired','rejected')) AS quote_annual_ops
          FROM solutions s
          JOIN opportunities o ON o.id = s.opportunity_id
         WHERE o.engagement_id = $1

@@ -417,6 +417,28 @@ export function SolutionsTab({
               共 <strong>{compareDiff.changedCount}</strong> 处变化；工作量成本{' '}
               {compareDiff.workloadBefore} → {compareDiff.workloadAfter} 万元（内部口径）。
             </p>
+            <p className="muted small">
+              报价（一次性 / 年运维）：
+              {fmtMoney(
+                oppSolutions.find((s) => s.id === activeSolutionId)
+                  ?.quote_one_time ?? 0,
+              )}{' '}
+              /{' '}
+              {fmtMoney(
+                oppSolutions.find((s) => s.id === activeSolutionId)
+                  ?.quote_annual_ops ?? 0,
+              )}{' '}
+              →{' '}
+              {fmtMoney(
+                oppSolutions.find((s) => s.id === compareWith)
+                  ?.quote_one_time ?? 0,
+              )}{' '}
+              /{' '}
+              {fmtMoney(
+                oppSolutions.find((s) => s.id === compareWith)
+                  ?.quote_annual_ops ?? 0,
+              )}
+            </p>
             <div className="table-wrap">
               <table>
                 <thead>

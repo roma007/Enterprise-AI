@@ -42,6 +42,8 @@ export function renderSolutionCompare(
   after: Bundle,
   beforeWorkloadCost = 0,
   afterWorkloadCost = 0,
+  beforeQuote = { oneTime: 0, annualOps: 0 },
+  afterQuote = { oneTime: 0, annualOps: 0 },
 ): { title: string; markdown: string; meta: { client: string; project: string; version: string } } {
   const s1 = before.solution;
   const s2 = after.solution;
@@ -102,6 +104,7 @@ export function renderSolutionCompare(
     `> 客户：${s1.client_name} ｜ 项目：${s1.engagement_name} ｜ 机会点：${s1.opportunity_code}`,
     '',
     `- 工作量成本：${beforeWorkloadCost} → ${afterWorkloadCost} 万元（内部口径）`,
+    `- 报价（一次性 / 年运维）：${beforeQuote.oneTime} / ${beforeQuote.annualOps} 万元 → ${afterQuote.oneTime} / ${afterQuote.annualOps} 万元`,
     '',
     '## 一、概要字段',
     '',

@@ -6333,6 +6333,54 @@ async function main() {
     assert.equal(preview.new, 0);
     assert.deepEqual(preview.conflicts, [ioNames[0]]);
 
+    // T03 · 视图导入 JSON 版本兼容边界：无版本/版本 1 可导入，高版本与缺 views 明确 422。
+    // 不新增同名之外的视图，避免影响后续列表断言；导入端按 name 覆盖。
+    const exportedView = exportedItem as Record<string, unknown>;
+    assert.equal(exportedJson.version, 1, '导出版本仍为 1（旧版本可读）');
+    assert.equal(
+      exportedJson.kind,
+      'audit-filter-views',
+      '导出携带 kind 标识',
+    );
+    const noVersion = ok(
+      await auditCall('POST', '/api/audit-filter-views/import', {
+        views: [exportedView],
+      }),
+      201,
+      '无 version 导入成功',
+    );
+    assert.equal(noVersion.imported, 1, '无 version 应成功导入');
+    const versionOne = ok(
+      await auditCall('POST', '/api/audit-filter-views/import', {
+        version: 1,
+        kind: 'audit-filter-views',
+        views: [exportedView],
+      }),
+      201,
+      'version: 1 导入成功',
+    );
+    assert.equal(versionOne.imported, 1, 'version: 1 应成功导入');
+    const highVersion = await auditCall(
+      'POST',
+      '/api/audit-filter-views/import',
+      { version: 999, views: [exportedView] },
+    );
+    assert.equal(highVersion.status, 422, '高版本应返回 422');
+    assert.equal(highVersion.body?.error, 'UNSUPPORTED_VIEW_VERSION');
+    assert.match(String(highVersion.body?.message), /请用当前版本重新导出/);
+    const highVersionPreview = await auditCall(
+      'POST',
+      '/api/audit-filter-views/import/preview',
+      { version: 999, views: [exportedView] },
+    );
+    assert.equal(highVersionPreview.status, 422, '预览也应拒绝高版本');
+    const missingViews = await auditCall(
+      'POST',
+      '/api/audit-filter-views/import',
+      { version: 1 },
+    );
+    assert.equal(missingViews.status, 422, '缺少 views 应返回 422');
+
     const skipped = ok(
       await auditCall('POST', '/api/audit-filter-views/import', {
         version: 1,

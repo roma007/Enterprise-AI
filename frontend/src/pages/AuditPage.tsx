@@ -431,8 +431,16 @@ export function AuditPage() {
       if (!Array.isArray(parsed?.views) || !parsed.views.length) {
         throw new Error('文件缺少 views 数组');
       }
+      // 使用文件中的版本（缺省为 1），并把文件类型标识透传；高版本由后端明确拒绝。
+      const fileVersion =
+        typeof parsed?.version === 'number' && Number.isFinite(parsed.version)
+          ? parsed.version
+          : 1;
+      const fileKind =
+        typeof parsed?.kind === 'string' ? parsed.kind : undefined;
       const preview = await api.previewAuditFilterViews({
-        version: 1,
+        version: fileVersion,
+        kind: fileKind,
         views: parsed.views,
       });
       let mode: 'overwrite' | 'skip' = 'overwrite';
@@ -443,7 +451,8 @@ export function AuditPage() {
         mode = overwrite ? 'overwrite' : 'skip';
       }
       const res = await api.importAuditFilterViews({
-        version: 1,
+        version: fileVersion,
+        kind: fileKind,
         mode,
         views: parsed.views,
       });

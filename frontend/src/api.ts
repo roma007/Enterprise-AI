@@ -1076,6 +1076,7 @@ export const api = {
     requestBlob('/api/audit-filter-views/export.json'),
   previewAuditFilterViews: (payload: {
     version?: number;
+    kind?: string;
     views: Array<{
       name: string;
       mode?: 'live' | 'archive';
@@ -1094,6 +1095,7 @@ export const api = {
     ),
   importAuditFilterViews: (payload: {
     version?: number;
+    kind?: string;
     mode?: 'overwrite' | 'skip';
     views: Array<{
       name: string;

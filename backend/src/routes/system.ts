@@ -802,6 +802,27 @@ export async function systemRoutes(app: FastifyInstance) {
     return reply.code(201).send({ item: result.item });
   });
 
+  /** 视图导入/导出文件的类型标识与当前版本；旧文件可无 version / kind。 */
+  const AUDIT_VIEW_EXPORT_KIND = 'audit-filter-views';
+  const AUDIT_VIEW_EXPORT_VERSION = 1;
+
+  /** 缺失/空 views 与高版本给出明确 422，而不是笼统的 zod 400。 */
+  const ensureImportViewsArray = (raw: unknown) => {
+    const obj = (raw ?? {}) as { views?: unknown };
+    if (!Array.isArray(obj.views) || obj.views.length === 0) {
+      throw httpError(422, 'VALIDATION_ERROR', '文件缺少 views 数组');
+    }
+  };
+  const assertSupportedViewVersion = (version?: number) => {
+    if (version !== undefined && version > AUDIT_VIEW_EXPORT_VERSION) {
+      throw httpError(
+        422,
+        'UNSUPPORTED_VIEW_VERSION',
+        '视图文件版本不受支持，请用当前版本重新导出',
+      );
+    }
+  };
+
   app.get('/api/audit-filter-views/export.json', async (req, reply) => {
     const auth = (req as any).authUser;
     if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
@@ -819,7 +840,8 @@ export async function systemRoutes(app: FastifyInstance) {
       .header('content-type', 'application/json; charset=utf-8')
       .header('content-disposition', `attachment; filename="${filename}"`)
       .send({
-        version: 1,
+        kind: AUDIT_VIEW_EXPORT_KIND,
+        version: AUDIT_VIEW_EXPORT_VERSION,
         exported_at: new Date().toISOString(),
         views: rows.map((row) => ({
           name: row.name,
@@ -848,7 +870,9 @@ export async function systemRoutes(app: FastifyInstance) {
   });
 
   const importViewsBody = z.object({
-    version: z.literal(1).optional(),
+    kind: z.string().optional(),
+    // 缺失或 1 均可；> 1 由 assertSupportedViewVersion 明确拒绝（422）。
+    version: z.number().int().positive().optional(),
     views: z.array(importViewItem).min(1).max(100),
   });
 
@@ -876,7 +900,9 @@ export async function systemRoutes(app: FastifyInstance) {
   app.post('/api/audit-filter-views/import/preview', async (req) => {
     const auth = (req as any).authUser;
     if (!auth?.sub) throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    ensureImportViewsArray(req.body);
     const body = importViewsBody.parse(req.body ?? {});
+    assertSupportedViewVersion(body.version);
     const views = normalizeImportViews(body.views);
     const rows = await query<{ name: string }>(
       `SELECT name FROM audit_filter_views
@@ -900,9 +926,11 @@ export async function systemRoutes(app: FastifyInstance) {
     if (!auth?.sub || !auth.org_id) {
       throw httpError(401, 'UNAUTHORIZED', '请先登录');
     }
+    ensureImportViewsArray(req.body);
     const body = importViewsBody
       .extend({ mode: z.enum(['overwrite', 'skip']).default('overwrite') })
       .parse(req.body ?? {});
+    assertSupportedViewVersion(body.version);
     const views = normalizeImportViews(body.views);
 
     const existingRows = await query<{ name: string }>(

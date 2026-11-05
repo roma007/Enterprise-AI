@@ -10,6 +10,10 @@
 
 ## 0. 最近完成
 
+- 2026-11-05 S2 版本对比报价：Word 汇总一次性/年运维报价；新增客户版脱敏导出（隐藏内部工作量成本，保留报价），后端提供 Markdown/Word 双端点；客户版导出在页面上可勾选。
+
+- 2026-11-05 G2-10：关联报价低于工作量成本时告警；`verify:write` 覆盖「低报价告警 → 删除后恢复通过」。方案列表新增报价覆盖率/负毛利/未报价提示与纯函数单测。
+
 - 2026-11-05 S2 方案版本对比：前端选择两个版本，比较概要字段、组件、集成、验收标准与工作量；支持导出 Markdown/CSV/Word；附带纯函数单测。
 
 - 2026-11-05 平台租户用量 CSV：`GET /api/platform/tenants/export.csv`，含近 30 天导出任务/行数/失败；平台页新增「导出用量 CSV」。
@@ -27,6 +31,11 @@
 | T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | done | T03 已 done；完成证据见执行日志与 autopilot/logs/20261105-144917-T04-run.md |
 | T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | done | 无（npm 安装已授权，见 `autopilot/APPROVALS.md`；完成记录见 §2 T05 完成说明） |
 | T06 | 更多边界 e2e（导出清理、视图版本、日期范围等） | 测试 | `frontend/e2e/edge.spec.ts`（新）、`frontend/e2e/helpers.ts`（可选新） | `PW_CHANNEL=msedge npm run e2e -- --grep "边界"`；协调者串行跑全量 e2e | done | T02/T03 已 done；完成记录见 §2 T06 完成说明 |
+| T07 | 版本对比报价汇总 + 客户版脱敏导出 | 后端 + 前端 | `backend/src/services/solution_diff_docs.ts`、`backend/src/routes/s2_docs.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx`、`frontend/src/solutionDiff.ts`、`frontend/src/solutionDiff.test.ts` | 前后端 `typecheck`；`verify:write`；`test:unit`；`build`；全量 e2e | done | 无 |
+| T08 | G2-10 关联报价覆盖工作量成本检查 | 后端 | `backend/src/rules/g2.ts`、`backend/src/routes/s2.ts`、`backend/scripts/verify-write.ts` | `npm run typecheck`；`npm run verify:write` | done | 无 |
+| T09 | 方案列表报价覆盖率/负毛利提示 | 前端 | `frontend/src/solutionDiff.ts`、`frontend/src/solutionDiff.test.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx` | `npm run test:unit`；`npm run typecheck`；`npm run build`；全量 e2e | done | T07 已 done |
+| T10 | 文档同步：版本对比客户版、G2-10、报价覆盖率提示 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | 只读 grep 核对功能描述与测试数量；不改历史快照 | pending | T07/T08/T09 已 done |
+| T11 | 依赖审计风险记录（不升级 breaking 依赖） | 文档/运维 | `SECURITY.md`（新）、`OPERATIONS.md` | `cd backend && npm audit --omit=dev`；`cd frontend && npm audit --omit=dev`；`git diff --stat` 确认只改文档 | pending | 无 |
 
 ### 1.1 建议波次（文件所有权不重叠）
 
@@ -394,6 +403,93 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 - 日期范围用例暴露审计页在已有数据时不展示请求错误；已补 `ErrorBox`，现在能看到“开始日期不能晚于结束日期”。
 - 全量 e2e 24/24 通过；现有 20 条冒烟断言未修改。
 
+#### T07 完成说明（2026-11-05）
+
+- 版本对比 Word 汇总一次性/年运维报价；新增 `audience=customer` 脱敏口径：隐藏工作量成本、保留报价，标题与文件名带“客户版”。
+- 后端新增对比 Markdown 端点 `/api/solutions/:id/compare/:otherId/document?audience=…`；前端客户版勾选应用到 Word/Markdown/CSV。
+- `verify:write` 51 项通过；前端单测 9/9、typecheck/build 通过；全量 e2e 24/24。
+
+#### T08 完成说明（2026-11-05）
+
+- G2 最新版本查询补充 `workload_cost` 与 `quote_one_time`；新增 `G2-10`：关联一次性报价小于工作量成本时 warn，报价缺失/成本未估算时不误报。
+- `verify:write` 覆盖「低报价 → warn」与「删除低报价 → pass」；G2 pass 数断言更新为 10，51 项全通过。
+
+#### T09 完成说明（2026-11-05）
+
+- 新增纯函数 `quoteCoverage()`：未估算成本 / 未关联报价 / 负毛利 / 覆盖率四档；单测 10/10。
+- 方案版本下拉与当前版本区展示提示，不改变后端数据与门禁判定；typecheck/build 通过；全量 e2e 24/24。
+
+---
+
+### T10 · 文档同步（增量）
+
+**目标**
+
+- 在 `TODO.md` 与 `06_实施计划.md` 记录：版本对比报价汇总/客户版导出、G2-10、方案列表报价覆盖率提示。
+- 数字只写实际输出：`verify:write` 51 项、前端单测 10 项、全量 e2e 24 条；如执行时数量已变，以实际为准并同步。
+- 不改写 `08_本轮变更说明_2026-11-04.md` 等历史快照。
+
+**涉及文件**
+
+- `TODO.md`
+- `企业AI化项目管理系统/06_实施计划.md`
+- `企业AI化项目管理系统/README.md`
+- `backend/README.md`
+
+**验收命令**
+
+```bash
+cd frontend && npx playwright test --list | tail -3
+cd backend && NO_COLOR=1 npm run verify:write 2>&1 | tail -3
+grep -RInE "客户版|G2-10|报价覆盖" TODO.md 企业AI化项目管理系统/06_实施计划.md 企业AI化项目管理系统/README.md backend/README.md
+```
+
+**完成标准**
+
+- 功能描述与代码一致，不把“提示”写成自动决策或 AI 能力。
+- 未运行的数字不写成已通过；历史快照不改写。
+
+**回滚**
+
+- `git revert` 文档提交。
+
+---
+
+### T11 · 依赖审计风险记录
+
+**背景**
+
+- 当前后端 `npm audit --omit=dev` 有 5 个 moderate；前端为 0。
+- 其中 `exceljs → uuid` 的修复需要 `npm audit fix --force`（会把 exceljs 降到 3.4.0，破坏性变更），不应在自动推进中执行。
+
+**目标**
+
+1. 新增 `SECURITY.md`，记录实测时间、命令、漏洞数量与依赖链、影响面、为何暂不升级、后续升级/验收条件。
+2. 在 `OPERATIONS.md` 增加“已知依赖风险”链接，供发布前检查。
+3. 只写文档，不执行 `npm audit fix` / `--force`，不改 `package.json` / `package-lock.json`。
+
+**涉及文件**
+
+- `SECURITY.md`（新）
+- `OPERATIONS.md`
+
+**验收命令**
+
+```bash
+cd backend && npm audit --omit=dev 2>&1 | tail -8
+cd frontend && npm audit --omit=dev 2>&1 | tail -5
+cd "/Users/mengfeng/我的文档/源码/Enterprise AI" && git diff --stat
+```
+
+**完成标准**
+
+- 文档中的数量与命令输出一致；明确“未修复”而不是“已解决”。
+- `git diff --stat` 只出现两个文档文件。
+
+**回滚**
+
+- 删除 `SECURITY.md` 并 revert `OPERATIONS.md`。
+
 ---
 
 ## 3. 可直接执行的命令速查
@@ -468,6 +564,10 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 2026-11-05 14:26 | T05 | main（单轮单任务，未建 Worker 分支） | pending → done | 串行：`cd frontend && npm run test:unit`；`npm run typecheck`；`npm run build` | test:unit exit 0 / `Test Files 1 passed`、`Tests 5 passed (5)`（1.05s）；typecheck exit 0；build exit 0（2407 modules，987ms）；dist 无测试文件标记 | APPROVALS.md 已授权 npm registry。按 §2.4/§8 依赖全部 done 选出首个可派单项：T03/T04/T06 依赖非 done 不可派单、T02=failed 非 pending。`npm install -D vitest jsdom @testing-library/react` exit 0 / added 67 packages / 无版本冲突（vitest ^5.1.0 兼容 Vite 8 / React 19 / Node 22）。仅改 7 个声明文件（含 package.json 与 package-lock.json 同步、ci.yml 加 test:unit 不改 typecheck/build 顺序、3 个新文件）；未引 jest、未动 e2e 配置、未改测试断言、未跑 verify:write/e2e、未重启服务、未 push、未做外部环境/生产操作。详见 autopilot/logs/20261105-142623-T05-run.md（§2 T05 完成说明） |
 | 2026-11-05 14:42 | T03 | main（单轮单任务，未建 Worker 分支） | pending → done | 串行：`cd backend && npm run typecheck`；`cd backend && npm run verify:write`；`cd frontend && npm run typecheck` | backend typecheck exit 0；verify:write exit 0 / **全部 51 项通过**（含新增版本边界断言）；frontend typecheck exit 0 | 用户 f480045 提交 T02 并标 done，按 §2.4/§8 依赖全部 done 选出首个可派单项 T03（T04/T06 依赖 T03=pending 仍不可派单）。仅改 4 个声明文件：system.ts 定义 kind/版本常量、导出带 kind 且保持 version:1、缺/空 views 与 >1 版本明确 422 `UNSUPPORTED_VIEW_VERSION`（两处 import 端点）、条目仍由 zod 校验；verify-write 新增无版本/版本1 成功、999→422、缺 views→422 覆盖；api.ts payload 加可选 kind；AuditPage 不再硬编码 version:1 并原样展示后端错误。未放宽/跳过任何既有断言、未动 e2e 配置、未并行 verify:write 与 e2e、未重启服务、未 push、未做外部/生产操作。详见 autopilot/logs/20261105-144214-T03-run.md |
 | 2026-11-05 14:49 | T04 | main（单轮单任务，未建 Worker 分支） | pending → done | 串行：`cd backend && npm run typecheck`；`cd backend && npm run verify:write`；`cd frontend && npm run typecheck` | backend typecheck exit 0；verify:write exit 0 / **全部 51 项通过**（含新增用量断言）；frontend typecheck exit 0 | 按 §2.4/§8 依赖全部 done 选出首个可派单项 T04（依赖 T03 已 done；T06 排在其后未并行）。仅改 4 个声明文件：platform.ts 的 TENANT_FIELDS 新增 audit_export_jobs_30d / audit_export_rows_30d / audit_export_failed_30d 三条近 30 天只读子查询（沿用 assertPlatformAdmin 403、未新增迁移/索引）；verify-write 在「平台租户」检查内以 SQL 抽查基线插入 done/failed/pending 测试任务并断言口径一致、用完即删；types.ts 加三个可选字段；PlatformTenantsPage 新增三列空值显示 0。未放宽/跳过任何既有断言、未动 e2e 配置、未并行 verify:write 与 e2e、未重启服务、未 push、未做外部/生产操作。详见 autopilot/logs/20261105-144917-T04-run.md |
+
+| 2026-11-05 16:12 | T07 | main（人工协调者执行） | pending → done | 串行：前后端 `typecheck`；`verify:write`；`test:unit`；`build`；全量 e2e | typecheck 0；verify:write **51 项通过**；单测 9/9；build OK；e2e 24/24 | 新增对比 Markdown 端点、客户版脱敏口径与 UI 勾选；未改测试断言、未重启服务、未 push 以外无外部操作；双远端已同步。 |
+| 2026-11-05 16:16 | T08 | main（人工协调者执行） | pending → done | 串行：`npm run typecheck`；`npm run verify:write` | typecheck 0；verify:write **51 项通过**（新增低报价 warn/恢复 pass 断言） | 新增 G2-10；G2 pass 数由 9 更新为 10；未放宽既有断言、未跑 e2e（后端规则由 verify:write 覆盖）。 |
+| 2026-11-05 16:19 | T09 | main（人工协调者执行） | pending → done | 串行：`npm run typecheck`；`npm run test:unit`；`npm run build`；全量 e2e | typecheck 0；单测 **10/10**；build OK；e2e 24/24 | 新增 `quoteCoverage()` 纯函数与列表提示；未改后端、未改 e2e 断言。 |
 
 ### 日志填写要求
 

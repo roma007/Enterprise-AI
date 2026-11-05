@@ -307,6 +307,24 @@ def save_run(raw: str, draft: Draft, kind: str = "booking", actor: str = "",
     return run_id
 
 
+def latest_unconfirmed_run(actor: str) -> dict | None:
+    """企业微信「回复确认」用：取该用户最近一条未确认记录。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT id, fields_json FROM runs"
+            " WHERE confirmed=0 AND actor=? ORDER BY ts DESC LIMIT 1",
+            (actor,),
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        fields = json.loads(row["fields_json"] or "{}")
+    except json.JSONDecodeError:
+        fields = {}
+    auto = {k: ((v or {}).get("value") or "") for k, v in fields.items()}
+    return {"id": row["id"], "auto": auto}
+
+
 def record_inbound(text: str, source: str = "wecom") -> dict:
     """记录一次"来单"。
 

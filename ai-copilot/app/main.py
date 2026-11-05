@@ -32,7 +32,7 @@ from .schema import BLOCKING_KEYS, FIELD_KEYS, LABELS, SPECS
 from .store import (
     AlreadyConfirmed, audit, audit_csv, count_users, create_session, create_user,
     dump_feedback, find_amend_candidates, find_by_booking_no, get_user,
-    get_user_by_email, init_db, ignore_item, label_item, learn_export,
+    get_user_by_email, init_db, ignore_item, label_item, latest_unconfirmed_run, learn_export,
     learn_item, learn_queue, learn_stats, list_users,
     metrics, queue, recent, record_inbound, report_md, revoke_session,
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
@@ -689,14 +689,28 @@ async def wecom_message(request: Request, msg_signature: str = "", timestamp: st
 
     msg = wecom.parse_message(xml_text)
     content = msg["content"].strip()
+    actor = f"wecom:{msg['from_user']}" if msg.get("from_user") else "wecom"
 
     if not content:
         inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], wecom.format_help())
         return _wecom_reply(inner, encrypted)
 
+    if content in {"确认", "确认入库", "确认并记录"}:
+        pending = latest_unconfirmed_run(actor) or latest_unconfirmed_run("wecom")
+        if not pending:
+            reply = "没有待确认的单。请先把托书文字发给我。"
+        else:
+            save_feedback(
+                pending["id"], pending["auto"], pending["auto"],
+                actor=actor,
+            )
+            reply = f"已确认入库。\n单号：{pending['id']}"
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
     record_inbound(content, source="wecom")
     draft = extract(content)
-    run_id = save_run(content, draft, actor="wecom")
+    run_id = save_run(content, draft, actor=actor)
     reply = wecom.format_result(draft, run_id)
     inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
     return _wecom_reply(inner, encrypted)

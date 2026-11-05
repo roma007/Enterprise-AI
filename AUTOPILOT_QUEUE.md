@@ -16,7 +16,7 @@
 
 | ID | 任务 | 类型 | 涉及文件 | 验证 | 状态 | 依赖 |
 |---|---|---|---|---|---|---|
-| T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | pending | 无 |
+| T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | blocked | 无（解除条件见 §2 T01 阻塞说明） |
 | T02 | 导出任务手动清理：dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | pending | 无 |
 | T03 | 审计视图导入 JSON 版本兼容与错误提示 | 后端 + 前端 | `backend/src/routes/system.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T02（同文件） |
 | T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T03（同文件） |
@@ -86,6 +86,15 @@ grep -RInE "13 条|16 条|16/16|54 个迁移|82 张表|78 张|43 项" \
 **回滚**
 
 - `git revert` 文档提交即可；不涉及代码和数据。
+
+#### T01 阻塞说明（2026-11-05 12:26 AUTOPILOT 执行器记录）
+
+- 状态：`pending` → `blocked`（未 `done`）。
+- 验证命令已串行执行：`npx playwright test --list` → exit 0 / `Total: 20 tests in 1 file`；`ls backend/db/migrations \| wc -l` → `58`；`psql "$DATABASE_URL" -Atc …`（表数、RLS 数两条）→ **exit 2 / `FATAL: database "mengfeng" does not exist`**；`grep` 过时数字 → exit 0（4 处仍在）。未运行 `verify:write` / `e2e`，未重启服务。
+- 阻塞原因：`DATABASE_URL` 未设置、无 `backend/.env`，清单 #3 的只读 SQL 无法执行，**表数 86 / 启用 RLS 81 无法实测**；按「以实际输出为准、不沿用旧数字 / 不伪造」不得把未实测数字写入文档。5432 上有 Postgres 但无法确认其为本地/测试库，按 §3.2 未擅自构造连接串、未连接。`verify:write` 项数未运行，按完成标准写「以实际输出为准」。另 `backend/README.md:450` 带日期历史演练记录是否改写为当前值需用户判断。
+- 未改动：4 份产品文档一字未动；未改测试断言；未做实现提交；未 `git push`；未做生产/外部环境操作。
+- **解除条件**：① 提供指向已确认本地/测试库的 `DATABASE_URL`，使清单 #3 的 psql 可执行并实测表数 / RLS 数；② 用户确认 `backend/README.md:450` 历史记录口径；③ 满足后重跑 T01 全部验收命令并确认 `verify:write` 实际项数后再定稿。
+- 详细执行记录：`autopilot/logs/20261105-122632-T01-run.md`（gitignore）。
 
 ---
 
@@ -400,6 +409,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 时间 | 任务 | 分支 | 状态 | 命令 | 结果 | 备注 |
 |---|---|---|---|---|---|---|
 | 2026-11-05 | — | — | — | — | 队列创建，未执行任何测试 | 等待协调者派单 |
+| 2026-11-05 12:26 | T01 | main（单轮单任务，未建 Worker 分支） | pending → blocked | 串行：`npx playwright test --list`；`ls backend/db/migrations \| wc -l`；`psql "$DATABASE_URL" -Atc …`×2；`grep` | #1 exit 0 / 20 条；#2 58；#3 exit 2 `FATAL: database "mengfeng" does not exist`（DATABASE_URL 未设置）；#4 exit 0 | 需外部资源：指向已确认本地/测试库的 `DATABASE_URL`（实测表 86 / RLS 81）+ 用户确认 backend/README.md:450 历史记录口径。未改 4 份产品文档、未改测试断言、未跑 verify:write/e2e、未重启服务、未 push。详见 autopilot/logs/20261105-122632-T01-run.md |
 
 ### 日志填写要求
 

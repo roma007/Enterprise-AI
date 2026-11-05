@@ -2,6 +2,15 @@
 
 macOS `launchd` 每 10 分钟调用一次 `scripts/autopilot-run.sh`。
 
+## 双定时器
+
+| 定时器 | 间隔 | 作用 |
+|---|---:|---|
+| `com.hengzhi.autopilot` | 600 秒 | 兜底触发一轮 |
+| `com.hengzhi.autopilot.watch` | 60 秒 | 当前轮结束后，尽快启动队列下一项 |
+
+两个定时器共用 `autopilot/.run.lock` 与每日上限，不会并行；`PAUSE` / `STOP` 对两者都生效。
+
 ## 当前状态
 
 已安装并加载，但处于**暂停**状态：

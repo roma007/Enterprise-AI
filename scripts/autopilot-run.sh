@@ -15,13 +15,44 @@ if [[ -f "$ROOT/autopilot/PAUSE" ]]; then
   exit 0
 fi
 
-# 原子锁，避免上一轮没跑完又叠一轮
+# 原子锁，避免上一轮没跑完又叠一轮；锁内记录 PID，便于判断陈旧锁
 LOCK="$ROOT/autopilot/.run.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
+acquire_lock() {
+  if mkdir "$LOCK" 2>/dev/null; then
+    print -r -- "$$" > "$LOCK/pid"
+    return 0
+  fi
+  if [[ -f "$LOCK/pid" ]]; then
+    local owner
+    owner="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [[ -n "$owner" ]] && kill -0 "$owner" 2>/dev/null; then
+      return 1
+    fi
+  fi
+  # 兼容旧锁（无 pid）：20 分钟内视为仍活跃
+  if [[ -d "$LOCK" ]]; then
+    local age=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || echo 0) ))
+    if (( age < 1200 )); then
+      return 1
+    fi
+  fi
+  rm -rf "$LOCK"
+  if mkdir "$LOCK" 2>/dev/null; then
+    print -r -- "$$" > "$LOCK/pid"
+    return 0
+  fi
+  return 1
+}
+if ! acquire_lock; then
   say "skip: another autopilot run is still active"
   exit 0
 fi
-trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+cleanup_lock() {
+  if [[ -f "$LOCK/pid" && "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]]; then
+    rm -rf "$LOCK"
+  fi
+}
+trap cleanup_lock EXIT
 
 QUEUE="$ROOT/AUTOPILOT_QUEUE.md"
 if [[ ! -f "$QUEUE" ]]; then

@@ -94,3 +94,5 @@ ps -axo pid,command \
 - 队列全部 `blocked` 时会产生 no-op 运行，仍消耗额度
 - 长期不用时创建 `autopilot/PAUSE` 暂停
 - 恢复前先看 `autopilot/logs/` 最近一次结果
+- 60 秒看门狗 `com.hengzhi.autopilot.watch` 会在上一轮结束后启动下一项
+- 看门狗与 10 分钟兜底共用同一把锁，不会重复启动

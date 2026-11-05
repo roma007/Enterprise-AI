@@ -165,6 +165,32 @@ export function runG2Checks(data: G2Data): G2Result {
     }
   }
 
+  // G2-10 报价覆盖成本（仅有报价且低于工作量成本时告警）
+  {
+    const under = solutions
+      .map((s) => ({
+        code: s.opportunity_code,
+        version: s.version,
+        cost: Number(s.workload_cost ?? 0),
+        quote: Number(s.quote_one_time ?? 0),
+      }))
+      .filter((s) => s.cost > 0 && s.quote > 0 && s.quote < s.cost);
+    checks.push(
+      under.length
+        ? warn('G2-10', '关联报价应覆盖工作量成本', 'warn',
+            `${under.map((s) => `${s.code} v${s.version}（报价 ${s.quote} / 成本 ${s.cost} 万元）`).join('、')} 报价低于工作量成本`,
+            under.map((s) => ({
+              code: s.code,
+              version: s.version,
+              quote_one_time: s.quote,
+              workload_cost: s.cost,
+              margin: Number((s.quote - s.cost).toFixed(2)),
+            })))
+        : ok('G2-10', '关联报价应覆盖工作量成本', 'warn',
+            '没有报价低于工作量成本的方案'),
+    );
+  }
+
   const summary = { pass: 0, warn: 0, block: 0 };
   for (const c of checks) summary[c.outcome] += 1;
   return { summary, blocked: summary.block > 0, checks };

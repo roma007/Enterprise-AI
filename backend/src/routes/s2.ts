@@ -198,6 +198,12 @@ export async function s2Routes(app: FastifyInstance) {
                 (SELECT count(*) FROM solution_components c WHERE c.solution_id = s.id) AS component_count,
                 (SELECT count(*) FROM acceptance_criteria a WHERE a.solution_id = s.id) AS criteria_count,
                 (SELECT count(*) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_count,
+                (SELECT COALESCE(sum(w.cost), 0) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_cost,
+                (SELECT COALESCE(sum(qi.amount), 0)
+                   FROM quote_items qi
+                   JOIN quotes q ON q.id = qi.quote_id
+                  WHERE qi.solution_id = s.id AND qi.kind = 'one_time'
+                    AND q.status NOT IN ('expired','rejected')) AS quote_one_time,
                 (SELECT count(*) FROM solution_reviews r WHERE r.solution_id = s.id) AS review_count,
                 (SELECT decision FROM solution_reviews r WHERE r.solution_id = s.id
                   ORDER BY reviewed_at DESC LIMIT 1) AS latest_review

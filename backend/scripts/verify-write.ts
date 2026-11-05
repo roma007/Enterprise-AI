@@ -1577,6 +1577,55 @@ async function main() {
       '客户版对比标题应带标识',
     );
 
+    const lowQuote = ok(
+      await req('POST', `/api/engagements/${engagementId}/quotes`, {
+        payment_terms: '回归测试低报价',
+        valid_until: '2026-12-31',
+        notes: 'G2-10 报价覆盖检查',
+      }),
+      201,
+      '创建低报价',
+    ).item;
+    ok(
+      await req('POST', `/api/quotes/${lowQuote.id}/items`, {
+        solution_id: solutionV2.id,
+        kind: 'one_time',
+        description: '低于工作量成本的报价',
+        qty: 1,
+        unit_price: 0.1,
+        sort_order: 1,
+      }),
+      201,
+      '添加低报价行',
+    );
+    const g2MarginWarn = ok(
+      await req('GET', `/api/engagements/${engagementId}/g2-checks`),
+      200,
+      'G2 报价覆盖（低于成本）',
+    );
+    const marginWarn = (g2MarginWarn.checks as any[]).find(
+      (c) => c.code === 'G2-10',
+    );
+    assert.equal(marginWarn?.outcome, 'warn', '报价低于成本应告警');
+    assert.match(String(marginWarn?.message), /v2/);
+
+    ok(
+      await req('DELETE', `/api/quotes/${lowQuote.id}`),
+      200,
+      '删除低报价',
+    );
+    const g2MarginPass = ok(
+      await req('GET', `/api/engagements/${engagementId}/g2-checks`),
+      200,
+      'G2 报价覆盖（恢复）',
+    );
+    assert.equal(
+      (g2MarginPass.checks as any[]).find((c) => c.code === 'G2-10')
+        ?.outcome,
+      'pass',
+      '删除低报价后应恢复通过',
+    );
+
     const quotes = ok(
       await req('GET', `/api/engagements/${engagementId}/quotes`),
       200,
@@ -1695,7 +1744,7 @@ async function main() {
     );
     assert.equal(after.blocked, false, `G2 仍有 block：${JSON.stringify(after.summary)}`);
     assert.equal(after.summary.block, 0);
-    assert.equal(after.summary.pass, 9, `G2 pass 数 ${after.summary.pass}`);
+    assert.equal(after.summary.pass, 10, `G2 pass 数 ${after.summary.pass}`);
   });
 
   await check('S3 POC：实验、样本、运行、复核、结论与 G3', async () => {

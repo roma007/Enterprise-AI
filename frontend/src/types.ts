@@ -1034,6 +1034,10 @@ export interface OrganizationSummary {
   user_count: number;
   client_count: number;
   engagement_count: number;
+  // 平台租户近 30 天审计导出用量（T04，只读统计）
+  audit_export_jobs_30d?: number;
+  audit_export_rows_30d?: number;
+  audit_export_failed_30d?: number;
 }
 
 export interface PlanDefinition {

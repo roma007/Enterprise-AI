@@ -2951,6 +2951,58 @@ async function main() {
     assert.equal(tenants.statusCode, 200);
     assert.ok(tenants.json().items.some((t: any) => t.slug === 'hengzhi'));
 
+    // T04 · 平台租户近 30 天审计导出用量：与 SQL 抽查口径一致，测试数据用完即删。
+    const usageOrgId = admin.user.org_id as string;
+    const usageUserId = admin.user.id as string;
+    const baseline = await one<any>(
+      `SELECT count(*)::int AS jobs,
+              COALESCE(sum(row_count) FILTER (WHERE status = 'done'), 0)::int AS rows,
+              count(*) FILTER (WHERE status = 'failed')::int AS failed
+         FROM audit_export_jobs
+        WHERE org_id = $1 AND created_at >= now() - interval '30 days'`,
+      [usageOrgId],
+    );
+    const inserted = await query<{ id: string }>(
+      `INSERT INTO audit_export_jobs
+         (org_id, user_id, status, scope, filters, columns, row_count, created_at)
+       VALUES ($1, $2, 'done', 'live', '{}'::jsonb, '[]'::jsonb, 7, now()),
+              ($1, $2, 'failed', 'live', '{}'::jsonb, '[]'::jsonb, NULL, now()),
+              ($1, $2, 'pending', 'live', '{}'::jsonb, '[]'::jsonb, NULL, now())
+       RETURNING id`,
+      [usageOrgId, usageUserId],
+    );
+    assert.equal(inserted.length, 3, '应插入 3 条测试导出任务');
+    const usageList = await app.inject({
+      method: 'GET',
+      url: '/api/platform/tenants',
+      headers: adminHeaders,
+    });
+    assert.equal(usageList.statusCode, 200);
+    const usageRow = (usageList.json().items as any[]).find(
+      (t: any) => t.id === usageOrgId,
+    );
+    assert.ok(usageRow, '平台租户列表应包含当前组织');
+    assert.equal(
+      usageRow.audit_export_jobs_30d,
+      baseline.jobs + 3,
+      '任务数应包含新增 3 条',
+    );
+    assert.equal(
+      usageRow.audit_export_rows_30d,
+      baseline.rows + 7,
+      '导出行数只累计已完成任务',
+    );
+    assert.equal(
+      usageRow.audit_export_failed_30d,
+      baseline.failed + 1,
+      '失败任务数应包含新增失败',
+    );
+    assert.equal(typeof usageRow.audit_export_jobs_30d, 'number');
+    await query(
+      `DELETE FROM audit_export_jobs WHERE id = ANY($1::uuid[])`,
+      [inserted.map((row: { id: string }) => row.id)],
+    );
+
     const storage = await app.inject({
       method: 'GET',
       url: '/api/system/storage',

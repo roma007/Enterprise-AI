@@ -210,7 +210,7 @@ export function PlatformTenantsPage() {
                   <thead>
                     <tr>
                       <th>组织</th><th>标识</th><th>套餐</th><th>试用</th><th>状态</th>
-                      <th>用户</th><th>客户</th><th>项目</th><th>创建</th><th />
+                      <th>用户</th><th>客户</th><th>项目</th><th>导出任务</th><th>导出行数</th><th>失败</th><th>创建</th><th />
                     </tr>
                   </thead>
                   <tbody>
@@ -232,6 +232,9 @@ export function PlatformTenantsPage() {
                         <td>{t.user_count}</td>
                         <td>{t.client_count}</td>
                         <td>{t.engagement_count}</td>
+                        <td>{t.audit_export_jobs_30d ?? 0}</td>
+                        <td>{t.audit_export_rows_30d ?? 0}</td>
+                        <td>{t.audit_export_failed_30d ?? 0}</td>
                         <td className="muted">{fmtDate(t.created_at)}</td>
                         <td className="actions-cell">
                           <Select

@@ -27,7 +27,15 @@ const TENANT_FIELDS = `o.id, o.name, o.slug, o.plan, o.status, o.settings, o.cre
   END AS renewal_days_left,
   (SELECT count(*)::int FROM users u WHERE u.org_id = o.id AND u.status = 'active') AS user_count,
   (SELECT count(*)::int FROM clients c WHERE c.org_id = o.id AND c.deleted_at IS NULL) AS client_count,
-  (SELECT count(*)::int FROM engagements e WHERE e.org_id = o.id AND e.deleted_at IS NULL) AS engagement_count`;
+  (SELECT count(*)::int FROM engagements e WHERE e.org_id = o.id AND e.deleted_at IS NULL) AS engagement_count,
+   (SELECT count(*)::int FROM audit_export_jobs j
+      WHERE j.org_id = o.id AND j.created_at >= now() - interval '30 days') AS audit_export_jobs_30d,
+   (SELECT COALESCE(sum(j.row_count), 0)::int FROM audit_export_jobs j
+      WHERE j.org_id = o.id AND j.status = 'done'
+        AND j.created_at >= now() - interval '30 days') AS audit_export_rows_30d,
+   (SELECT count(*)::int FROM audit_export_jobs j
+      WHERE j.org_id = o.id AND j.status = 'failed'
+        AND j.created_at >= now() - interval '30 days') AS audit_export_failed_30d`;
 
 function assertPlatformAdmin(req: any) {
   const auth = req.authUser;

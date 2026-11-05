@@ -3082,6 +3082,26 @@ async function main() {
     assert.equal(tenants.statusCode, 200);
     assert.ok(tenants.json().items.some((t: any) => t.slug === 'hengzhi'));
 
+    const readiness = await app.inject({
+      method: 'GET',
+      url: '/api/platform/readiness',
+      headers: adminHeaders,
+    });
+    assert.equal(readiness.statusCode, 200, '平台管理员应可查看就绪检查');
+    const readinessBody = readiness.json();
+    assert.equal(typeof readinessBody.summary?.fail, 'number', '缺少 FAIL 汇总');
+    assert.ok(
+      (readinessBody.checks as any[]).some((c) => c.name === 'AUTH_REQUIRED'),
+      '就绪检查缺少 AUTH_REQUIRED',
+    );
+
+    const readinessForbidden = await app.inject({
+      method: 'GET',
+      url: '/api/platform/readiness',
+      headers: zhangHeaders,
+    });
+    assert.equal(readinessForbidden.statusCode, 403, '非平台管理员应被拒绝');
+
     // T04 · 平台租户近 30 天审计导出用量：与 SQL 抽查口径一致，测试数据用完即删。
     const usageOrgId = admin.user.org_id as string;
     const usageUserId = admin.user.id as string;

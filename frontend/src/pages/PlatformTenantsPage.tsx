@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { useLoad } from '../hooks';
-import type { Invoice, OrganizationSummary } from '../types';
+import type { Invoice, OrganizationSummary, ReadinessReport } from '../types';
 import {
   Badge,
   Button,
@@ -33,11 +33,16 @@ const money = (value: number) => `¥${value.toLocaleString('zh-CN')}`;
 
 export function PlatformTenantsPage() {
   const { data, error, loading, reload } = useLoad(async () => {
-    const [tenantsRes, invoicesRes] = await Promise.all([
+    const [tenantsRes, invoicesRes, readiness] = await Promise.all([
       api.listPlatformTenants(),
       api.listPlatformInvoices(),
+      api.getPlatformReadiness(),
     ]);
-    return { tenants: tenantsRes.items, invoices: invoicesRes.items };
+    return {
+      tenants: tenantsRes.items,
+      invoices: invoicesRes.items,
+      readiness,
+    };
   }, []);
   const [busy, setBusy] = useState<string | null>(null);
   const [opError, setOpError] = useState<unknown>(null);
@@ -228,6 +233,51 @@ export function PlatformTenantsPage() {
             <Stat label="正常" value={active} tone="green" />
             <Stat label="已暂停" value={items.length - active} tone="red" />
           </div>
+
+          <Card
+            title="试点就绪"
+            subtitle="检查代码与配置；真实客户、K8s、支付、模型联调仍需外部资源。"
+          >
+            <div className="inline-stats">
+              <Badge tone="green">PASS {(data.readiness as ReadinessReport).summary.pass}</Badge>
+              <Badge tone="amber">WARN {(data.readiness as ReadinessReport).summary.warn}</Badge>
+              <Badge tone="red">FAIL {(data.readiness as ReadinessReport).summary.fail}</Badge>
+              <span className="muted">
+                生成于 {new Date((data.readiness as ReadinessReport).generated_at).toLocaleString('zh-CN')}
+              </span>
+            </div>
+            <details className="disclosure">
+              <summary>查看检查明细</summary>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>结果</th><th>检查项</th><th>说明</th></tr>
+                  </thead>
+                  <tbody>
+                    {(data.readiness as ReadinessReport).checks.map((check) => (
+                      <tr key={`${check.name}-${check.level}`}>
+                        <td>
+                          <Badge
+                            tone={
+                              check.level === 'PASS'
+                                ? 'green'
+                                : check.level === 'WARN'
+                                  ? 'amber'
+                                  : 'red'
+                            }
+                          >
+                            {check.level}
+                          </Badge>
+                        </td>
+                        <td>{check.name}</td>
+                        <td className="muted">{check.detail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </Card>
 
           <Card title="供应商租户" subtitle="组织标识用于登录区分；平台管理员可暂停/恢复。">
             {items.length === 0 ? (

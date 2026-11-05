@@ -46,6 +46,8 @@ npm run readiness:check -- --report-only
 
 检查项：关键环境变量（`AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` / `SEED_DEMO`）、数据库与迁移、RLS 白名单、告警与看板文件、值班表、备份目录、前端构建产物。
 
+平台管理员也可在「租户管理」页直接查看同一组检查结果（`GET /api/platform/readiness`）。
+
 - `FAIL` 必须在试点/上线前清零。
 - `WARN` 需逐项写明“接受 / 整改 / 不适用”。
 - 真实客户试点、K8s、支付、模型、Alertmanager 触发仍需外部资源，不能用脚本替代。清单见 [`企业AI化项目管理系统/09_试点启动包.md`](./企业AI化项目管理系统/09_试点启动包.md)。

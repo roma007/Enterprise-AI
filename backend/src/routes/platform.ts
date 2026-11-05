@@ -5,6 +5,7 @@ import { httpError } from '../services/s1';
 import { requestOrg } from '../services/tenant';
 import { revokeSessionsByOrg } from '../services/sessions';
 import { getPlan, listPlans, orgBilling } from '../services/plans';
+import { runReadinessChecks } from '../services/readiness';
 import {
   isValidTimezone,
   resolveOrgTimezone,
@@ -50,6 +51,11 @@ async function revokeOrgSessions(orgId: string) {
 }
 
 export async function platformRoutes(app: FastifyInstance) {
+  app.get('/api/platform/readiness', async (req) => {
+    assertPlatformAdmin(req);
+    return runReadinessChecks();
+  });
+
   app.get('/api/platform/tenants', async (req) => {
     assertPlatformAdmin(req);
     const items = await query(

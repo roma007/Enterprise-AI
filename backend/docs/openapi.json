@@ -4595,6 +4595,19 @@
         }
       }
     },
+    "/api/platform/readiness": {
+      "get": {
+        "summary": "GET /api/platform/readiness",
+        "tags": [
+          "other"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/platform/tenants": {
       "get": {
         "summary": "GET /api/platform/tenants",

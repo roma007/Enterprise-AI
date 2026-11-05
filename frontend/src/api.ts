@@ -77,6 +77,7 @@ import type {
   Stakeholder,
   TrashBatch,
   User,
+  ReadinessReport,
 } from './types';
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
@@ -1203,6 +1204,7 @@ export const api = {
     ),
   updateOrg: (payload: Record<string, unknown>) =>
     request<{ item: OrganizationSummary }>('/api/org', json('PATCH', payload)),
+  getPlatformReadiness: () => request<ReadinessReport>('/api/platform/readiness'),
   listPlatformTenants: () =>
     request<{ items: OrganizationSummary[] }>('/api/platform/tenants'),
   exportPlatformTenantUsageCsv: () =>

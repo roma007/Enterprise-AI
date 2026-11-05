@@ -549,6 +549,18 @@ export interface QuoteDetail {
   totals: { oneTime: number; annualOps: number };
 }
 
+export interface ReadinessCheck {
+  level: 'PASS' | 'WARN' | 'FAIL';
+  name: string;
+  detail: string;
+}
+
+export interface ReadinessReport {
+  generated_at: string;
+  summary: { pass: number; warn: number; fail: number };
+  checks: ReadinessCheck[];
+}
+
 export interface G2Check {
   code: string;
   title: string;

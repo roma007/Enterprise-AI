@@ -626,6 +626,8 @@ export const api = {
       `/api/quotes/${quoteId}/documents`,
       { method: 'POST' },
     ),
+  exportQuoteCompareDocx: (id: string, otherId: string) =>
+    requestBlob(`/api/quotes/${id}/compare/${otherId}/document.docx`),
   exportQuoteDocx: async (quoteId: string) => {
     const res = await fetch(`${BASE}/api/quotes/${quoteId}/document.docx`, {
       headers: authHeaders(),

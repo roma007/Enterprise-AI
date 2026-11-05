@@ -2308,6 +2308,68 @@
         }
       }
     },
+    "/api/quotes/{id}/compare/{otherId}/document": {
+      "get": {
+        "summary": "GET /api/quotes/:id/compare/:otherId/document",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "otherId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/quotes/{id}/compare/{otherId}/document.docx": {
+      "get": {
+        "summary": "GET /api/quotes/:id/compare/:otherId/document.docx",
+        "tags": [
+          "other"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "otherId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/quotes/{id}/document.docx": {
       "get": {
         "summary": "GET /api/quotes/:id/document.docx",

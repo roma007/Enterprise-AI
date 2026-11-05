@@ -10,12 +10,19 @@ import {
   ErrorBox,
   Field,
   Input,
+  Modal,
   Select,
   Spinner,
   Stat,
   Textarea,
 } from '../../ui';
 import { fmtDate, fmtMoney } from '../../utils';
+import {
+  diffQuotes,
+  quoteDiffCsv,
+  quoteDiffMarkdown,
+  type QuoteDiff,
+} from '../../quoteDiff';
 
 const STATUS_LABEL: Record<string, string> = {
   draft: '草稿',
@@ -28,6 +35,13 @@ const STATUS_LABEL: Record<string, string> = {
 const KIND_LABEL: Record<string, string> = {
   one_time: '一次性',
   annual_ops: '年运维',
+};
+
+const DIFF_LABEL: Record<string, string> = {
+  added: '新增',
+  removed: '删除',
+  changed: '变更',
+  same: '未变',
 };
 
 const statusTone = (status: string) =>
@@ -62,6 +76,12 @@ export function QuotesTab({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<unknown>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareBaseId, setCompareBaseId] = useState('');
+  const [compareOtherId, setCompareOtherId] = useState('');
+  const [compareDiff, setCompareDiff] = useState<QuoteDiff | null>(null);
+  const [compareError, setCompareError] = useState<unknown>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   const quotes = data?.quotes ?? [];
   const solutions = data?.solutions ?? [];
@@ -69,6 +89,80 @@ export function QuotesTab({
   useEffect(() => {
     if (!selectedId && quotes.length) setSelectedId(quotes[0].id);
   }, [quotes, selectedId]);
+
+  useEffect(() => {
+    if (
+      !compareOpen ||
+      !compareBaseId ||
+      !compareOtherId ||
+      compareBaseId === compareOtherId
+    ) {
+      setCompareDiff(null);
+      return;
+    }
+    let cancelled = false;
+    setCompareLoading(true);
+    setCompareError(null);
+    void Promise.all([api.getQuote(compareBaseId), api.getQuote(compareOtherId)])
+      .then(([before, after]) => {
+        if (!cancelled) setCompareDiff(diffQuotes(before, after));
+      })
+      .catch((err) => {
+        if (!cancelled) setCompareError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setCompareLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compareOpen, compareBaseId, compareOtherId]);
+
+  const openCompare = () => {
+    const base = selectedId ?? quotes[0]?.id ?? '';
+    setCompareBaseId(base);
+    setCompareOtherId(quotes.find((q) => q.id !== base)?.id ?? '');
+    setCompareDiff(null);
+    setCompareError(null);
+    setCompareOpen(true);
+  };
+
+  const downloadCompare = (kind: 'md' | 'csv') => {
+    if (!compareDiff) return;
+    const content =
+      kind === 'md'
+        ? quoteDiffMarkdown(compareDiff)
+        : quoteDiffCsv(compareDiff);
+    const blob = new Blob([content], {
+      type: kind === 'md' ? 'text/markdown;charset=utf-8' : 'text/csv;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `报价对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}.${kind}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
+  const downloadCompareDocx = async () => {
+    if (!compareDiff || !compareBaseId || !compareOtherId) return;
+    setCompareError(null);
+    try {
+      const blob = await api.exportQuoteCompareDocx(compareBaseId, compareOtherId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `报价对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+      setCompareError(err);
+    }
+  };
 
   const create = async () => {
     setCreating(true);
@@ -104,9 +198,18 @@ export function QuotesTab({
           subtitle="项目级版本；金额单位万元。"
           className="opp-list-card"
           actions={
-            <Button variant="primary" size="sm" disabled={creating} onClick={() => void create()}>
-              {creating ? '创建中…' : '+ 新报价'}
-            </Button>
+            <>
+              <Button
+                size="sm"
+                disabled={quotes.length < 2}
+                onClick={openCompare}
+              >
+                对比版本
+              </Button>
+              <Button variant="primary" size="sm" disabled={creating} onClick={() => void create()}>
+                {creating ? '创建中…' : '+ 新报价'}
+              </Button>
+            </>
           }
         >
           {createError ? <ErrorBox error={createError} /> : null}
@@ -150,6 +253,141 @@ export function QuotesTab({
           )}
         </div>
       </div>
+
+      <Modal
+        open={compareOpen}
+        title="报价版本对比"
+        subtitle={
+          compareDiff
+            ? `v${compareDiff.versionBefore} → v${compareDiff.versionAfter}`
+            : '选择两个报价版本查看差异'
+        }
+        onClose={() => setCompareOpen(false)}
+        wide
+        footer={
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!compareDiff}
+              onClick={() => void downloadCompareDocx()}
+            >
+              下载 Word
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!compareDiff}
+              onClick={() => downloadCompare('md')}
+            >
+              下载 Markdown
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!compareDiff}
+              onClick={() => downloadCompare('csv')}
+            >
+              下载 CSV
+            </Button>
+            <Button size="sm" onClick={() => setCompareOpen(false)}>
+              关闭
+            </Button>
+          </>
+        }
+      >
+        <div className="form-grid">
+          <Field label="基准报价">
+            <Select
+              value={compareBaseId}
+              onChange={(e) => setCompareBaseId(e.target.value)}
+            >
+              {quotes.map((q) => (
+                <option key={q.id} value={q.id}>
+                  v{q.version} · {STATUS_LABEL[q.status] ?? q.status}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="对比报价">
+            <Select
+              value={compareOtherId}
+              onChange={(e) => setCompareOtherId(e.target.value)}
+            >
+              {quotes
+                .filter((q) => q.id !== compareBaseId)
+                .map((q) => (
+                  <option key={q.id} value={q.id}>
+                    v{q.version} · {STATUS_LABEL[q.status] ?? q.status}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        </div>
+        {compareLoading ? <Spinner /> : null}
+        {compareError ? <ErrorBox error={compareError} /> : null}
+        {compareDiff ? (
+          <div className="editor-stack">
+            <p className="muted">
+              共 <strong>{compareDiff.changedCount}</strong> 处变化；一次性投入{' '}
+              {fmtMoney(compareDiff.totalsBefore.oneTime)} →{' '}
+              {fmtMoney(compareDiff.totalsAfter.oneTime)}；年运维{' '}
+              {fmtMoney(compareDiff.totalsBefore.annualOps)} →{' '}
+              {fmtMoney(compareDiff.totalsAfter.annualOps)}。
+            </p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>字段</th><th>基准</th><th>对比</th></tr>
+                </thead>
+                <tbody>
+                  {compareDiff.fields.filter((field) => field.changed).length === 0 ? (
+                    <tr><td colSpan={3} className="muted">报价头无变化</td></tr>
+                  ) : (
+                    compareDiff.fields
+                      .filter((field) => field.changed)
+                      .map((field) => (
+                        <tr key={field.key}>
+                          <td>{field.label}</td>
+                          <td className="muted">{field.before || '—'}</td>
+                          <td><strong>{field.after || '—'}</strong></td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>报价行</th><th>变化</th><th>基准</th><th>对比</th></tr>
+                </thead>
+                <tbody>
+                  {compareDiff.items.filter((item) => item.status !== 'same').length === 0 ? (
+                    <tr><td colSpan={4} className="muted">报价行无变化</td></tr>
+                  ) : (
+                    compareDiff.items
+                      .filter((item) => item.status !== 'same')
+                      .map((item) => (
+                        <tr key={item.key}>
+                          <td>
+                            <Badge tone={item.kind === 'one_time' ? 'brand' : 'blue'}>
+                              {KIND_LABEL[item.kind] ?? item.kind}
+                            </Badge>{' '}
+                            {item.description}
+                          </td>
+                          <td>{DIFF_LABEL[item.status] ?? item.status}</td>
+                          <td className="muted">{item.before || '—'}</td>
+                          <td>{item.after || '—'}</td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

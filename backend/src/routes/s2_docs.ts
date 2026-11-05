@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { buildDocx } from '../services/export';
 import { loadQuoteBundle, renderQuoteDoc } from '../services/quote_docs';
+import { renderQuoteCompare } from '../services/quote_diff_docs';
 import {
   generateQuoteDeliverable,
   generateSolutionDeliverable,
@@ -171,6 +172,66 @@ export async function s2DocRoutes(app: FastifyInstance) {
     const org = await requestOrg(req);
     const rendered = await loadCompare(params.id, params.otherId, org, audience);
     if (!rendered || rendered === 'mismatch') return compareFailure(rendered, reply);
+    const buffer = await buildDocx(rendered.markdown, {
+      title: rendered.title,
+      client: rendered.meta.client,
+      project: rendered.meta.project,
+      version: rendered.meta.version,
+    });
+    return reply
+      .header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      .header('content-disposition', disposition(rendered.title, 'docx'))
+      .send(buffer);
+  });
+
+  const quoteCompareParams = z.object({ id: z.uuid(), otherId: z.uuid() });
+
+  async function loadQuoteCompare(id: string, otherId: string, org: string) {
+    const [before, after] = await Promise.all([
+      loadQuoteBundle(id, org),
+      loadQuoteBundle(otherId, org),
+    ]);
+    if (!before || !after) return null;
+    if (before.quote.engagement_id !== after.quote.engagement_id) {
+      return 'mismatch' as const;
+    }
+    return renderQuoteCompare(before, after);
+  }
+
+  function quoteCompareFailure(
+    rendered: Awaited<ReturnType<typeof loadQuoteCompare>>,
+    reply: any,
+  ) {
+    if (rendered === 'mismatch') {
+      return reply
+        .code(422)
+        .send({ error: 'QUOTE_MISMATCH', message: '只能对比同一项目的报价版本' });
+    }
+    return reply.code(404).send({ error: 'NOT_FOUND', message: '报价不存在' });
+  }
+
+  app.get('/api/quotes/:id/compare/:otherId/document', async (req, reply) => {
+    const compare = quoteCompareParams.parse(req.params);
+    const org = await requestOrg(req);
+    const rendered = await loadQuoteCompare(compare.id, compare.otherId, org);
+    if (!rendered || rendered === 'mismatch') {
+      return quoteCompareFailure(rendered, reply);
+    }
+    return reply
+      .header('content-type', 'text/markdown; charset=utf-8')
+      .send(rendered.markdown);
+  });
+
+  app.get('/api/quotes/:id/compare/:otherId/document.docx', async (req, reply) => {
+    const compare = quoteCompareParams.parse(req.params);
+    const org = await requestOrg(req);
+    const rendered = await loadQuoteCompare(compare.id, compare.otherId, org);
+    if (!rendered || rendered === 'mismatch') {
+      return quoteCompareFailure(rendered, reply);
+    }
     const buffer = await buildDocx(rendered.markdown, {
       title: rendered.title,
       client: rendered.meta.client,

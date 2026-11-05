@@ -1613,6 +1613,25 @@ async function main() {
     assert.equal(marginWarn?.outcome, 'warn', '报价低于成本应告警');
     assert.match(String(marginWarn?.message), /v2/);
 
+    const quoteCompareMd = await app.inject({
+      method: 'GET',
+      url: `/api/quotes/${quote.id}/compare/${lowQuote.id}/document`,
+    });
+    assert.equal(quoteCompareMd.statusCode, 200, '报价版本对比 Markdown 应成功');
+    assert.ok(quoteCompareMd.body.includes('报价版本对比'), '对比稿缺少标题');
+    assert.ok(
+      quoteCompareMd.body.includes('一次性投入：50 → 0.1'),
+      '对比稿缺少合计变化',
+    );
+    assert.ok(quoteCompareMd.body.includes('新增'), '对比稿缺少报价行变化');
+
+    const quoteCompareDocx = await app.inject({
+      method: 'GET',
+      url: `/api/quotes/${quote.id}/compare/${lowQuote.id}/document.docx`,
+    });
+    assert.equal(quoteCompareDocx.statusCode, 200, '报价版本对比 Word 应成功');
+    assert.equal(quoteCompareDocx.rawPayload.subarray(0, 2).toString(), 'PK');
+
     ok(
       await req('DELETE', `/api/quotes/${lowQuote.id}`),
       200,

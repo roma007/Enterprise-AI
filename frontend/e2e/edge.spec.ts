@@ -3,7 +3,7 @@ import { expect, test, type Page, type APIRequestContext } from '@playwright/tes
 async function login(
   page: Page,
   request: APIRequestContext,
-): Promise<void> {
+): Promise<{ token: string; user: any }> {
   const res = await request.post('/api/auth/login', {
     data: { email: 'admin@hengzhi.ai', password: 'demo1234' },
   });
@@ -16,6 +16,7 @@ async function login(
     },
     { token, user: JSON.stringify(user) },
   );
+  return { token, user };
 }
 
 test.describe('审计边界场景', () => {
@@ -91,5 +92,65 @@ test.describe('审计边界场景', () => {
     await expect(
       modal.getByText(/没有超过 \d+ 天的导出任务|已清理 \d+ 个导出任务/),
     ).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe('报价版本对比', () => {
+  test('可打开两个报价版本的差异弹窗', async ({ page, request }) => {
+    const { token } = await login(page, request);
+    const headers = { authorization: `Bearer ${token}` };
+    const engagements = await request.get('/api/engagements', { headers });
+    expect(engagements.status()).toBe(200);
+    const engagementId = (await engagements.json()).items[0].id as string;
+
+    const createQuote = async (notes: string) => {
+      const res = await request.post(`/api/engagements/${engagementId}/quotes`, {
+        headers,
+        data: { notes },
+      });
+      expect(res.status()).toBe(201);
+      return (await res.json()).item.id as string;
+    };
+
+    const q1 = await createQuote('e2e 报价对比 v1');
+    const q2 = await createQuote('e2e 报价对比 v2');
+    try {
+      const item1 = await request.post(`/api/quotes/${q1}/items`, {
+        headers,
+        data: {
+          kind: 'one_time',
+          description: 'e2e 实施费',
+          qty: 1,
+          unit_price: 10,
+        },
+      });
+      expect(item1.status()).toBe(201);
+      const item2 = await request.post(`/api/quotes/${q2}/items`, {
+        headers,
+        data: {
+          kind: 'one_time',
+          description: 'e2e 实施费',
+          qty: 1,
+          unit_price: 12,
+        },
+      });
+      expect(item2.status()).toBe(201);
+
+      await page.goto(`/#/engagements/${engagementId}`);
+      await page.getByRole('button', { name: '报价', exact: true }).click();
+      await expect(page.getByText('报价单', { exact: true }).first()).toBeVisible();
+      await page.getByRole('button', { name: '对比版本' }).click();
+      await expect(
+        page.getByRole('heading', { name: '报价版本对比' }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(/一次性投入 \d+ 万 → \d+ 万/),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('e2e 实施费').first()).toBeVisible();
+      await expect(page.getByRole('button', { name: '下载 Word' })).toBeVisible();
+    } finally {
+      await request.delete(`/api/quotes/${q1}`, { headers });
+      await request.delete(`/api/quotes/${q2}`, { headers });
+    }
   });
 });

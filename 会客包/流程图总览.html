@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enterprise AI · 全项目流程图总览</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; background: #f4f6f9; color: #16202a; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: rgba(255,255,255,.94); backdrop-filter: blur(8px); border-bottom: 1px solid #dbe2ea; padding: 18px 28px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  header p { margin: 0; color: #5b6b7c; font-size: 13px; line-height: 1.6; }
+  main { max-width: 1360px; margin: 0 auto; padding: 24px 28px 60px; }
+  section { background: #fff; border: 1px solid #dbe2ea; border-radius: 12px; margin: 22px 0; padding: 20px 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .sub { color: #5b6b7c; font-size: 13px; margin: 0 0 14px; }
+  .diagram { overflow: auto; padding: 10px 4px; }
+  .note { color: #5b6b7c; font-size: 12px; margin-top: 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: #334155; margin-top: 10px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Enterprise AI · 全项目流程图总览</h1>
+  <p>2026-11-05 核验版本 ｜ 8 个 Mermaid 图全部通过语法解析。绿色=已实现，黄色=部分实现，红色=被前置条件阻塞，灰色=输入源/非 AI 或本期范围外。</p>
+  <div class="legend">
+    <span><i class="dot" style="background:#d4f4dd;border:2px solid #2f855a"></i>已实现</span>
+    <span><i class="dot" style="background:#fff4e5;border:2px solid #b7791f"></i>部分实现</span>
+    <span><i class="dot" style="background:#fde8e8;border:2px solid #c53030"></i>被阻塞</span>
+    <span><i class="dot" style="background:#f1f5f9;border:2px solid #94a3b8"></i>输入源/范围外</span>
+  </div>
+</header>
+<main>
+<section><h2>机会全景与依赖图 · 图 1</h2><div class="diagram"><pre class="mermaid">flowchart LR
+  subgraph SRC[数据源]
+    A1[微信/邮件托书&lt;br/&gt;截图·PDF·Excel]
+    A2[GPS/北斗轨迹&lt;br/&gt;司机上报]
+    A3[发票/对账单&lt;br/&gt;结算单]
+    A4[合同价表&lt;br/&gt;历史成交价]
+  end
+
+  subgraph P1[一期 0-3月]
+    B1[B1 托书结构化录入]
+    F1[F1 发票识别+校验]
+  end
+
+  subgraph P2[二期 4-6月]
+    B2[B2 单证核对]
+    B3[B3 客户自助查询]
+    F2[F2 自动对账]
+    F1X[F1+ 三单匹配]
+  end
+
+  subgraph P3[三期 7-12月]
+    B4[B4 异常费用识别]
+    F3[F3 应收账龄+催收]
+    F4[F4 应付结算]
+    F5[F5 成本归集+单车毛利]
+  end
+
+  subgraph P4[四期/暂缓]
+    B5[B5 智能报价]
+    B6[B6 司机端助手]
+    B7[B7 智能调度]
+    F6[F6 费用异常检测]
+  end
+
+  A1 --&gt; B1
+  A3 --&gt; F1
+  B1 --&gt; B2
+  B1 --&gt; B3
+  A2 --&gt; B3
+  B1 --&gt; F1X
+  F1 --&gt; F1X
+  B1 --&gt; F2
+  A3 --&gt; F2
+  F1X --&gt; F2
+  B1 --&gt; B4
+  A2 --&gt; B4
+  F2 --&gt; F3
+  B1 --&gt; F4
+  A4 --&gt; F4
+  F1 --&gt; F5
+  F4 --&gt; F5
+  B1 --&gt; F5
+  A4 --&gt; B5
+  A2 --&gt; B6
+  A2 --&gt; B7
+  A4 --&gt; B7
+  F1 --&gt; F6
+  F4 --&gt; F6
+
+  style B1 fill:#d4f4dd,stroke:#2f855a,stroke-width:2px
+  style F1 fill:#d4f4dd,stroke:#2f855a,stroke-width:2px
+  style B7 fill:#fde2e2,stroke:#c53030</pre></div></section>
+<section><h2>业务与财务流程 · 图 1</h2><div class="diagram"><pre class="mermaid">flowchart TB
+  subgraph J[&quot;① 接单&quot;]
+    A1[&quot;客户下单&lt;br/&gt;微信 / 邮件 / 电话&quot;]
+    A2[&quot;报价与接单&quot;]
+    A3[&quot;托书解析&lt;br/&gt;&lt;b&gt;AI&lt;/b&gt;&quot;]
+    A4[&quot;订单录入 TMS&quot;]
+    A1 --&gt; A2 --&gt; A3 --&gt; A4
+  end
+
+  subgraph D[&quot;② 单证&quot;]
+    B1[&quot;单证核对&lt;br/&gt;箱号 / 封号 / 重量&quot;]
+    B2[&quot;派车与调箱&quot;]
+    B1 --&gt; B2
+  end
+
+  subgraph Z[&quot;③ 执行&quot;]
+    C1[&quot;提空箱 EIR&quot;]
+    C2[&quot;工厂装柜&quot;]
+    C3[&quot;重箱进港&quot;]
+    C4[&quot;报关与放行&quot;]
+    C5[&quot;提单确认&quot;]
+    C6[&quot;在途异常&lt;br/&gt;压车 / 等候 / 改单&quot;]
+    C1 --&gt; C2 --&gt; C3 --&gt; C4 --&gt; C5 --&gt; C6
+  end
+
+  subgraph S[&quot;④ 收尾&quot;]
+    D1[&quot;运单完成&quot;]
+    D2[&quot;结算清单&quot;]
+    D1 --&gt; D2
+  end
+
+  A4 --&gt; B1
+  B2 --&gt; C1
+  C6 --&gt; D1
+
+  classDef done fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  classDef partial fill:#fff4e5,stroke:#b7791f,stroke-width:2px,stroke-dasharray:5 5
+  classDef blocked fill:#fde8e8,stroke:#c53030,stroke-width:2px
+  classDef src fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+
+  class A1 src
+  class A3 done
+  class B1,C6 partial
+  class B2,C1,C2,C3,C4,C5,D1,D2 out</pre></div></section>
+<section><h2>业务与财务流程 · 图 2</h2><div class="diagram"><pre class="mermaid">flowchart TB
+  R1[&quot;运单 / 结算清单&quot;]
+  R2[&quot;客户对账单&lt;br/&gt;&lt;b&gt;人工 2 人 × 5 天/月&lt;/b&gt;&quot;]
+  R3[&quot;开票&quot;]
+  R4[&quot;回款&quot;]
+  R5[&quot;账龄与催收&lt;br/&gt;&lt;b&gt;规则自动化&lt;/b&gt;&quot;]
+
+  R1 --&gt; R2 --&gt; R3 --&gt; R4 --&gt; R5
+
+  classDef done fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+  class R2,R5 done
+  class R3,R4 out</pre></div></section>
+<section><h2>业务与财务流程 · 图 3</h2><div class="diagram"><pre class="mermaid">flowchart TB
+  P1[&quot;外协车队结算&quot;]
+  P2[&quot;司机运费 / 工资&quot;]
+  P3[&quot;油费 / 路桥 / 维修 / 港杂&quot;]
+  P4[&quot;发票收票与认证&lt;br/&gt;&lt;b&gt;AI 已实现识别+校验&lt;/b&gt;&quot;]
+  S1[&quot;成本归集&lt;br/&gt;按车 / 按单&quot;]
+  S2[&quot;单车毛利&lt;br/&gt;&lt;b&gt;现在算不出来&lt;/b&gt;&quot;]
+  S3[&quot;经营分析&quot;]
+
+  P1 --&gt; P4
+  P2 --&gt; P4
+  P3 --&gt; P4
+  P4 --&gt; S1 --&gt; S2 --&gt; S3
+
+  classDef done fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  classDef blocked fill:#fde8e8,stroke:#c53030,stroke-width:2px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+
+  class P1,P4 done
+  class S1,S2 blocked
+  class S3 out</pre></div></section>
+<section><h2>业务与财务流程 · 图 4</h2><div class="diagram"><pre class="mermaid">flowchart TB
+  X1[&quot;托书原文&lt;br/&gt;微信 / 图片 / Excel&quot;]
+  X2[&quot;结构化订单&lt;br/&gt;箱号·客户·截港·费用&quot;]
+  X3[&quot;TMS 运单&quot;]
+  X4[&quot;结算清单&quot;]
+  X5[&quot;客户对账单&quot;]
+  X6[&quot;成本归集&quot;]
+  X7[&quot;对账 · 开票 · 回款&quot;]
+  X8[&quot;单车毛利&quot;]
+  X9[&quot;经营分析&quot;]
+
+  X1 --&gt;|&quot;AI 抽取&quot;| X2
+  X2 --&gt; X3 --&gt; X4
+  X4 --&gt; X5 --&gt; X7 --&gt; X9
+  X4 --&gt; X6 --&gt; X8 --&gt; X9
+
+  classDef src fill:#e2e8f0,stroke:#64748b,stroke-width:2px
+  classDef core fill:#d4f4dd,stroke:#2f855a,stroke-width:4px
+  classDef partial fill:#fff4e5,stroke:#b7791f,stroke-width:2px
+  classDef blocked fill:#fde8e8,stroke:#c53030,stroke-width:2px
+  classDef out fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,stroke-dasharray:3 3
+
+  class X1 src
+  class X2 core
+  class X7 partial
+  class X8 blocked
+  class X9 out</pre></div></section>
+<section><h2>系统边界与部署 · 图 1</h2><div class="diagram"><pre class="mermaid">flowchart LR
+  subgraph V[&quot;供应商侧（我们的电脑/服务器）&quot;]
+    direction TB
+    V1[&quot;交付平台&lt;br/&gt;backend + frontend&quot;]
+    V2[&quot;会客包文档&quot;]
+    V3[&quot;评测与规则设计&quot;]
+  end
+
+  subgraph C[&quot;客户侧（客户内网或我们云上）&quot;]
+    direction TB
+    C1[&quot;AI 应用&lt;br/&gt;ai-copilot&quot;]
+    C2[&quot;企微 / H5 入口&quot;]
+    C3[&quot;单证员 · 财务&quot;]
+  end
+
+  V2 -.-&gt;|面对面| C3
+  V1 -.-&gt;|交付物/报告| C3
+  V3 -.-&gt;|部署与调参| C1
+  C2 --&gt; C1 --&gt; C3
+  C1 -.-&gt;|评测结果、指标回写&lt;br/&gt;**已实现**| V1
+
+  classDef vendor fill:#e8f0fb,stroke:#1f4e79,stroke-width:2px
+  classDef client fill:#d4f4dd,stroke:#2f855a,stroke-width:3px
+  class V1,V2,V3 vendor
+  class C1,C2,C3 client</pre></div></section>
+<section><h2>AI 能力路线图 · 图 1</h2><div class="diagram"><pre class="mermaid">flowchart LR
+  P0[&quot;P0 感知/结构化&lt;br/&gt;托书、发票&quot;] --&gt; P1[&quot;P1 规则自动化 + 生成辅助&lt;br/&gt;对账、账龄、异常解释&quot;]
+  P1 --&gt; P2[&quot;P2 预测&lt;br/&gt;回款、ETA、成本、运力&quot;]
+  P2 --&gt; P3[&quot;P3 优化&lt;br/&gt;派车、路线、信用、定价&quot;]
+  P3 --&gt; P4[&quot;P4 Agent&lt;br/&gt;自动执行 + 审批&quot;]</pre></div></section>
+<section><h2>AI 能力路线图 · 图 2</h2><div class="diagram"><pre class="mermaid">flowchart LR
+  D1[&quot;单据/聊天/图片&quot;] --&gt; D2[&quot;结构化数据&quot;]
+  D2 --&gt; D3[&quot;规则校验与业务系统&quot;]
+  D3 --&gt; D4[&quot;历史数据沉淀&quot;]
+  D4 --&gt; D5[&quot;预测模型&quot;]
+  D5 --&gt; D6[&quot;优化建议&quot;]
+  D6 --&gt; D7[&quot;人工确认/执行&quot;]
+  D7 --&gt; D4</pre></div></section>
+<p class="note">说明：本页只做流程图展示，不把规则/系统功能包装成 AI；真实客户试点、K8s、支付、模型联调等外部项仍未验证。</p>
+</main>
+<script src="../frontend/node_modules/mermaid/dist/mermaid.min.js"></script>
+<script>
+  if (window.mermaid) {
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: 'loose',
+      theme: 'base',
+      themeVariables: { fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif', fontSize: '15px' },
+      flowchart: { useMaxWidth: true, htmlLabels: true, nodeSpacing: 45, rankSpacing: 45, wrappingWidth: 300 }
+    });
+  } else {
+    document.querySelectorAll('.diagram').forEach(function (el) {
+      el.innerHTML = '<p style="color:#b91c1c">Mermaid 资源未加载；请从会客包目录打开，或联网后重试。</p>';
+    });
+  }
+</script>
+</body>
+</html>

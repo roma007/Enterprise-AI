@@ -3996,6 +3996,75 @@
         }
       }
     },
+    "/api/engagements/{id}/insights": {
+      "get": {
+        "summary": "GET /api/engagements/:id/insights",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/engagements/{id}/insights/document": {
+      "get": {
+        "summary": "GET /api/engagements/:id/insights/document",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/engagements/{id}/insights/document.docx": {
+      "get": {
+        "summary": "GET /api/engagements/:id/insights/document.docx",
+        "tags": [
+          "engagements"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/engagements/{id}/value-documents": {
       "post": {
         "summary": "POST /api/engagements/:id/value-documents",

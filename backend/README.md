@@ -362,6 +362,7 @@ curl -s -X POST http://127.0.0.1:8788/api/deliverables/generate \
 | G4 门禁 | `GET /api/engagements/:id/g4-checks`（11 项：计划 / 任务 / 里程碑 / UAT 覆盖 / UAT 通过 / 上线检查 / 培训 / P0P1 / 变更 / 逾期 / 客户签收） |
 | S4 文档 | `POST /api/engagements/:id/delivery-documents`、`GET .../delivery-document(.docx)?type=plan\|uat\|go_live\|training` |
 | S5 运营 | `GET /api/engagements/:id/value-overview`、指标目标/快照、价值记录、使用数据、续约风险 CRUD |
+| 经营洞察 | `GET /api/engagements/:id/insights`、`/insights/document`、`/insights/document.docx`（规则引擎：结论/指标差距/风险/建议） |
 | G5 门禁 | `GET /api/engagements/:id/g5-checks`（9 项：目标 / 完整性 / 快照 / 来源 / 价值覆盖 / 证据 / 差异 / 使用 / 续约） |
 | 指标字典 | `GET/POST /api/metric-definitions`、`PATCH/DELETE /api/metric-definitions/:id` |
 | 分享页 | 客户无需登录，通过 token 只读查看/下载已批准交付物；默认 30 天有效，可撤销/轮换 |

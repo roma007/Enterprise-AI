@@ -96,6 +96,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 | S3 POC 实验/样本/运行/复核/结论/G3 | `verify:write`、e2e POC 页签 | 通过 |
 | S4 计划/UAT/上线检查/培训/问题变更/G4 | `verify:write`、e2e 页签 | 通过 |
 | S5 指标/快照/价值/使用/续约/G5 | `verify:write`、e2e 页签 | 通过 |
+| S5 经营洞察：结论/指标差距/建议动作 | `verify:write`、e2e、Markdown/Word | 通过（规则引擎，可追溯） |
 | R6 知识库/AI 草稿/人工确认 | `verify:write`、e2e | 通过（规则回退可跑） |
 | 多租户注册、登录、角色、RLS、平台租户 | `verify:write`、DB 核验、e2e | 通过 |
 | 试用/配额/账单/模拟支付/回调/续费 | `verify:write` | 通过（真实支付未接） |

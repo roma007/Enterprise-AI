@@ -44,6 +44,7 @@ const TAB_LOADERS: Record<string, () => Promise<any>> = {
   poc: () => import('./tabs/PocTab'),
   delivery: () => import('./tabs/DeliveryTab'),
   value: () => import('./tabs/ValueTab'),
+  insights: () => import('./tabs/InsightsTab'),
   ai: () => import('./tabs/AiTab'),
   members: () => import('./tabs/MembersTab'),
   risks: () => import('./tabs/RisksTab'),
@@ -70,6 +71,7 @@ const QuotesTab = lazyTab('quotes', 'QuotesTab');
 const PocTab = lazyTab('poc', 'PocTab');
 const DeliveryTab = lazyTab('delivery', 'DeliveryTab');
 const ValueTab = lazyTab('value', 'ValueTab');
+const InsightsTab = lazyTab('insights', 'InsightsTab');
 const AiTab = lazyTab('ai', 'AiTab');
 const MembersTab = lazyTab('members', 'MembersTab');
 
@@ -85,6 +87,7 @@ type TabKey =
   | 'poc'
   | 'delivery'
   | 'value'
+  | 'insights'
   | 'ai'
   | 'members'
   | 'risks'
@@ -103,6 +106,7 @@ const TAB_KEYS: TabKey[] = [
   'poc',
   'delivery',
   'value',
+  'insights',
   'ai',
   'members',
   'risks',
@@ -241,6 +245,7 @@ export function EngagementPage({
           { key: 'poc', label: 'POC 验证' },
           { key: 'delivery', label: '交付' },
           { key: 'value', label: '运营' },
+          { key: 'insights', label: '洞察' },
           { key: 'ai', label: 'AI 助手' },
           { key: 'members', label: '成员' },
           { key: 'risks', label: '风险与局限', count: data.counts.limitations },
@@ -310,6 +315,7 @@ export function EngagementPage({
           onGoReports={() => setTab('reports')}
         />
       )}
+      {tab === 'insights' && <InsightsTab engagementId={id} />}
       {tab === 'ai' && (
         <AiTab engagementId={id} detail={data} onChanged={() => void reload()} />
       )}

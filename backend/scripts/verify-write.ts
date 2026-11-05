@@ -2312,6 +2312,30 @@ async function main() {
       '再次生成价值报告',
     ).item;
     assert.equal(valueV2.version, 2);
+
+    const insights = ok(
+      await req('GET', `/api/engagements/${engagementId}/insights`),
+      200,
+      '经营洞察',
+    );
+    assert.ok(insights.summary.length > 0, '洞察缺少结论');
+    assert.ok(insights.metrics.length >= 2, '洞察缺少指标对比');
+    assert.ok(insights.insights.length > 0, '洞察缺少风险/结论');
+
+    const insightsMd = await app.inject({
+      method: 'GET',
+      url: `/api/engagements/${engagementId}/insights/document`,
+    });
+    assert.equal(insightsMd.statusCode, 200, '洞察 Markdown 失败');
+    assert.ok(insightsMd.body.includes('经营洞察'), '洞察 Markdown 缺少标题');
+    assert.ok(insightsMd.body.includes('指标'), '洞察 Markdown 缺少指标');
+
+    const insightsDocx = await app.inject({
+      method: 'GET',
+      url: `/api/engagements/${engagementId}/insights/document.docx`,
+    });
+    assert.equal(insightsDocx.statusCode, 200, '洞察 Word 失败');
+    assert.equal(insightsDocx.rawPayload.subarray(0, 2).toString(), 'PK');
   });
 
   await check('R6 知识库与 AI 草稿：检索、相似推荐、生成与人工确认', async () => {

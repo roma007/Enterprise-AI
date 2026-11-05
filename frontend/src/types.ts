@@ -549,6 +549,40 @@ export interface QuoteDetail {
   totals: { oneTime: number; annualOps: number };
 }
 
+export type InsightLevel = 'positive' | 'warning' | 'critical' | 'info';
+
+export interface InsightItem {
+  code: string;
+  level: InsightLevel;
+  title: string;
+  detail: string;
+  action?: string;
+  evidence?: unknown;
+}
+
+export interface InsightMetric {
+  key: string;
+  name: string;
+  unit: string;
+  direction: 'higher_better' | 'lower_better';
+  baseline: number | null;
+  target: number | null;
+  latest: number | null;
+  period: string | null;
+  status: 'achieved' | 'behind' | 'unknown';
+  gap_pct: number | null;
+}
+
+export interface InsightReport {
+  generated_at: string;
+  engagement: { id: string; name: string; client_name: string; stage: string };
+  summary: string[];
+  metrics: InsightMetric[];
+  insights: InsightItem[];
+  recommendations: string[];
+  evidence: Record<string, number>;
+}
+
 export interface ReadinessCheck {
   level: 'PASS' | 'WARN' | 'FAIL';
   name: string;

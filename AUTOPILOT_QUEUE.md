@@ -43,6 +43,7 @@
 | T16 | 平台管理员就绪看板 | 后端 + 前端 | `backend/src/services/readiness.ts`（新）、`backend/src/routes/platform.ts`、`backend/scripts/pilot-readiness.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/api.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | done | T15 已 done；完成记录见执行日志 |
 | T17 | 报价对比与就绪看板 e2e | 测试 | `frontend/e2e/edge.spec.ts`、`frontend/e2e/smoke.spec.ts` | `PW_CHANNEL=msedge npx playwright test` | done | T14/T16 已 done；完成记录见执行日志 |
 | T18 | 合成演示数据：S2–S5 页面与 G2–G5 门禁 | 后端 + 数据 | `backend/scripts/seed-demo-s2s5.ts`（新）、`backend/package.json`、`DEMO_DATA.md`（新）、`DEV.md`、`TODO.md`、`06_实施计划.md` | `npm run typecheck`；`npm run demo:seed`；G2/G3/G4/G5 API；`verify:write`；全量 e2e | done | 无；完成记录见执行日志；数据仅用于演示 |
+| T19 | 经营洞察：结论/指标差距/建议动作 | 后端 + 前端 | `backend/src/services/insights.ts`（新）、`backend/src/routes/insights.ts`（新）、`backend/src/app.ts`、`backend/scripts/verify-write.ts`、`frontend/src/pages/tabs/InsightsTab.tsx`（新）、`frontend/src/pages/EngagementPage.tsx`、`frontend/src/api.ts`、`frontend/src/types.ts`、`frontend/src/styles.css`、`frontend/e2e/smoke.spec.ts` | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | done | T18 已 done；数据为合成演示 |
 
 ### 1.1 建议波次（文件所有权不重叠）
 
@@ -584,6 +585,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 2026-11-05 18:45 | T16 | main（人工协调者执行） | pending → done | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | verify:write 51 项通过（管理员可读/非管理员 403）；单测 13/13；build OK；e2e 24/24 | 就绪检查抽到 service，CLI 与平台接口共用；租户管理页展示 PASS/WARN/FAIL 明细；未改真实外部项状态。 |
 | 2026-11-05 19:00 | T17 | main（人工协调者执行） | pending → done | e2e 全量 | e2e **25/25** 通过 | 新增报价对比弹窗用例（API 建两版报价→UI 对比→清理）并扩展平台就绪看板断言；未改产品代码。 |
 | 2026-11-05 21:10 | T18 | main（人工协调者执行） | pending → done | `npm run typecheck`；`npm run demo:seed`；G2–G5 API；`verify:write`；全量 e2e | G2 12/12、G3 8/8、G4 11/11、G5 9/9；verify:write 51 项通过；e2e 25/25 | 新增可重复执行的合成演示数据；所有记录带 `【合成演示】` 标记，不改变真实客户/外部项状态。 |
+| 2026-11-05 21:35 | T19 | main（人工协调者执行） | pending → done | 后端 `typecheck` / `verify:write`；前端 `typecheck` / `build`；全量 e2e；`npm run openapi` | verify:write 51 项通过（含洞察 API/Markdown/Word）；e2e 25/25；G2–G5 全绿 | 新增规则引擎洞察与「洞察」页签；结论可追到指标/方案/POC/交付/风险；不调用外部模型。 |
 
 ### 日志填写要求
 

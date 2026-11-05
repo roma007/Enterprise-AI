@@ -14,6 +14,7 @@ import { s2Routes } from './routes/s2';
 import { s3Routes } from './routes/s3';
 import { s4Routes } from './routes/s4';
 import { s5Routes } from './routes/s5';
+import { insightsRoutes } from './routes/insights';
 import { r6Routes } from './routes/r6';
 import { memberRoutes } from './routes/members';
 import { publicRoutes } from './routes/public';
@@ -1227,6 +1228,7 @@ app.get('/api/opportunities/:id/roi', async (req, reply) => {
   app.register(s4Routes);
   app.register(s4DocRoutes);
   app.register(s5Routes);
+  app.register(insightsRoutes);
   app.register(s5DocRoutes);
   app.register(r6Routes);
   app.register(memberRoutes);

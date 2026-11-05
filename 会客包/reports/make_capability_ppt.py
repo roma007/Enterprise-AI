@@ -128,7 +128,7 @@ def add_header(slide, eyebrow, title, subtitle=None):
     add_line(slide, 0.7, 1.82 if subtitle else 1.52, 1.15, ORANGE, 0.045)
 
 
-def add_footer(slide, index=None, total=18):
+def add_footer(slide, index=None, total=19):
     page = len(prs.slides)
     add_text(slide, "Enterprise AI · 客户能力说明", 0.7, 7.12, 5.5, 0.22, 9, False, GRAY)
     add_text(slide, f"{page:02d} / {total:02d}", 12.0, 7.12, 0.65, 0.22, 9, False, GRAY, PP_ALIGN.RIGHT)
@@ -375,6 +375,22 @@ add_text(s, "以上为合成演示数据，不代表真实客户结果", 0.9, 6.
 add_text(s, "截图：内部演示项目；客户不安装交付平台。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
 add_footer(s, 10)
 add_notes(s, "管理侧不是空页面：G2 12 项、G3 8 项、G4 11 项、G5 9 项门禁在合成演示数据上全部通过。强调这是演示数据，不是真实客户结果。")
+
+
+# ---------------------------------------------------------------- 12 界面：经营洞察
+s = prs.slides.add_slide(prs.slide_layouts[6])
+add_header(s, "系统界面 ④ / 经营洞察", "从数据到结论：3–5 句话 + 指标差距 + 建议动作", "规则引擎生成；每条结论可追到指标、方案、POC、交付与风险记录。")
+add_image_fit(s, "ui-platform-insights.png", 4.55, 1.9, 8.2, 5.05)
+add_bullets(s, [
+    ("结论", "4 个机会点、POC 96%、1/4 指标达标"),
+    ("差距", "录入耗时、对账工时、回款天数"),
+    ("动作", "逐项复盘差异，明确责任人与下月目标"),
+], 0.7, 2.0, 3.55, 2.2, 11, BLACK, TEAL, 10)
+add_rect(s, 0.7, 4.35, 3.55, 2.0, LIGHT, LIGHT_2)
+add_text(s, "洞察不是“再做一个大屏”，而是把指标差距翻译成下一步动作。", 0.95, 4.6, 3.05, 1.5, 11.5, True, NAVY, line_spacing=1.35)
+add_text(s, "截图：合成演示数据；真实客户需按客户口径重跑。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
+add_footer(s, 12)
+add_notes(s, "这页是整套系统的“分析出口”：结论 3–5 句话、指标 1/4 达标、3 项差距、每条有建议动作。强调规则引擎生成、可追溯，不是大模型拍脑袋。")
 
 # ---------------------------------------------------------------- 09 证据
 s = prs.slides.add_slide(prs.slide_layouts[6])

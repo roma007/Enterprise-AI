@@ -49,6 +49,10 @@ test.describe('关键路径冒烟', () => {
     await page.getByRole('button', { name: '运营' }).click();
     await expect(page.getByText('G5 价值实现门禁')).toBeVisible();
 
+    await page.getByRole('button', { name: '洞察', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '经营洞察' })).toBeVisible();
+    await expect(page.getByText('指标对比')).toBeVisible();
+
     await page.getByRole('button', { name: 'POC 验证' }).click();
     await expect(page.getByText('G3 验证门禁')).toBeVisible();
     await expect(page.getByText('ai-copilot 对账复核记录')).toBeVisible();

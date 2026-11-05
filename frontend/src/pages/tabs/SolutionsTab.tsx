@@ -16,6 +16,7 @@ import {
   ErrorBox,
   Field,
   Input,
+  Modal,
   Notice,
   Select,
   Spinner,
@@ -23,6 +24,11 @@ import {
   Textarea,
 } from '../../ui';
 import { fmtMoney } from '../../utils';
+import {
+  diffSolutionDetails,
+  type NamedDiff,
+  type SolutionDiff,
+} from '../../solutionDiff';
 
 const SOLUTION_STATUS: Record<string, string> = {
   draft: '草稿',
@@ -99,6 +105,11 @@ export function SolutionsTab({
   const [selectedSolutionId, setSelectedSolutionId] = useState<string | null>(null);
 
   const solutions = data?.solutions ?? [];
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareWith, setCompareWith] = useState('');
+  const [compareDiff, setCompareDiff] = useState<SolutionDiff | null>(null);
+  const [compareError, setCompareError] = useState<unknown>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
   const users = data?.users ?? [];
   const selectedOpp = detail.opportunities.find((o) => o.id === selectedOppId);
   const oppSolutions = useMemo(
@@ -118,6 +129,30 @@ export function SolutionsTab({
       setSelectedSolutionId(oppSolutions[0].id);
     }
   }, [oppSolutions, selectedSolutionId]);
+
+  const activeSolutionId = selectedSolutionId ?? oppSolutions[0]?.id ?? '';
+  useEffect(() => {
+    if (!compareOpen || !activeSolutionId || !compareWith) return;
+    let active = true;
+    setCompareLoading(true);
+    setCompareError(null);
+    Promise.all([
+      api.getSolution(activeSolutionId),
+      api.getSolution(compareWith),
+    ])
+      .then(([before, after]) => {
+        if (active) setCompareDiff(diffSolutionDetails(before, after));
+      })
+      .catch((err) => {
+        if (active) setCompareError(err);
+      })
+      .finally(() => {
+        if (active) setCompareLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [compareOpen, activeSolutionId, compareWith]);
 
   const afterChange = async () => {
     await reload();
@@ -222,16 +257,33 @@ export function SolutionsTab({
                 title={`${selectedOpp.code} · ${selectedOpp.title}`}
                 subtitle={`${oppSolutions.length} 个方案版本`}
                 actions={
-                  <Select
-                    value={selectedSolutionId ?? oppSolutions[0].id}
-                    onChange={(e) => setSelectedSolutionId(e.target.value)}
-                  >
-                    {oppSolutions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        v{s.version} · {SOLUTION_STATUS[s.status] ?? s.status}
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="row">
+                    <Select
+                      value={selectedSolutionId ?? oppSolutions[0].id}
+                      onChange={(e) => setSelectedSolutionId(e.target.value)}
+                    >
+                      {oppSolutions.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          v{s.version} · {SOLUTION_STATUS[s.status] ?? s.status}
+                        </option>
+                      ))}
+                    </Select>
+                    {oppSolutions.length > 1 ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const current = selectedSolutionId ?? oppSolutions[0].id;
+                          const other = oppSolutions.find((s) => s.id !== current);
+                          setCompareWith(other?.id ?? '');
+                          setCompareDiff(null);
+                          setCompareOpen(true);
+                        }}
+                      >
+                        对比版本
+                      </Button>
+                    ) : null}
+                  </div>
                 }
               >
                 <div className="inline-stats">
@@ -250,6 +302,121 @@ export function SolutionsTab({
           )}
         </div>
       </div>
+
+      <Modal
+        open={compareOpen}
+        title="版本对比"
+        subtitle={
+          compareDiff
+            ? `v${compareDiff.versionBefore} → v${compareDiff.versionAfter}`
+            : '选择两个方案版本查看差异'
+        }
+        onClose={() => setCompareOpen(false)}
+        wide
+        footer={
+          <Button size="sm" onClick={() => setCompareOpen(false)}>
+            关闭
+          </Button>
+        }
+      >
+        <Field label="对比基准">
+          <Select
+            value={compareWith}
+            onChange={(e) => {
+              setCompareDiff(null);
+              setCompareWith(e.target.value);
+            }}
+          >
+            {oppSolutions
+              .filter((s) => s.id !== activeSolutionId)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  v{s.version} · {SOLUTION_STATUS[s.status] ?? s.status}
+                </option>
+              ))}
+          </Select>
+        </Field>
+        {compareLoading ? <Spinner /> : null}
+        {compareError ? <ErrorBox error={compareError} /> : null}
+        {compareDiff ? (
+          <div className="editor-stack">
+            <p className="muted">
+              共 <strong>{compareDiff.changedCount}</strong> 处变化；工作量{' '}
+              {compareDiff.workloadBefore} → {compareDiff.workloadAfter} 人天。
+            </p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>字段</th>
+                    <th>基准</th>
+                    <th>对比</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compareDiff.fields
+                    .filter((field) => field.changed)
+                    .map((field) => (
+                      <tr key={field.key}>
+                        <td>{field.label}</td>
+                        <td className="muted">{field.before || '—'}</td>
+                        <td>{field.after || '—'}</td>
+                      </tr>
+                    ))}
+                  {compareDiff.fields.every((field) => !field.changed) ? (
+                    <tr>
+                      <td colSpan={3} className="muted">
+                        概要字段无变化
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            {(
+              [
+                { label: '组件', items: compareDiff.components },
+                { label: '集成', items: compareDiff.integrations },
+                { label: '验收标准', items: compareDiff.acceptance },
+              ] as Array<{ label: string; items: NamedDiff[] }>
+            ).map(({ label, items }) => {
+              const changed = items.filter((item) => item.status !== 'same');
+              return (
+                <div key={label}>
+                  <h4>{label}</h4>
+                  {changed.length ? (
+                    <ul className="diff-list">
+                      {changed.map((item) => (
+                        <li key={item.name}>
+                          <Badge
+                            tone={
+                              item.status === 'added'
+                                ? 'green'
+                                : item.status === 'removed'
+                                  ? 'red'
+                                  : 'amber'
+                            }
+                          >
+                            {item.status === 'added'
+                              ? '新增'
+                              : item.status === 'removed'
+                                ? '删除'
+                                : '变更'}
+                          </Badge>{' '}
+                          <strong>{item.name}</strong>
+                          <span className="muted small"> {item.detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted small">无变化</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

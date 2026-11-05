@@ -1,0 +1,405 @@
+# AUTOPILOT 队列
+
+> 更新时间：2026-11-05
+> 规则：见 `AUTOPILOT.md`。
+> 状态：`pending` / `in_progress` / `blocked` / `done` / `failed`。
+> 本文件只列**代码侧可立即做、不依赖外部环境**的任务；外部依赖项单独列在第四节。
+> 注意：本文件创建时未执行测试。文中的数量是静态核对或用户给定目标值，最终以实际命令输出为准。
+
+---
+
+## 1. 可立即执行队列（优先级从高到低）
+
+| ID | 任务 | 类型 | 涉及文件 | 验证 | 状态 | 依赖 |
+|---|---|---|---|---|---|---|
+| T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | pending | 无 |
+| T02 | 历史 CSV 导出清理：手动 dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | pending | 无 |
+| T03 | 审计视图导入 JSON 版本兼容与错误提示 | 后端 + 前端 | `backend/src/routes/system.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T02（同文件） |
+| T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T03（同文件） |
+| T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | pending | 无 |
+| T06 | 更多边界 e2e（导出清理、视图版本、日期范围等） | 测试 | `frontend/e2e/edge.spec.ts`（新）、`frontend/e2e/helpers.ts`（可选新） | `PW_CHANNEL=msedge npm run e2e -- --grep "边界"`；协调者串行跑全量 e2e | pending | T02、T03 |
+
+### 1.1 建议波次（文件所有权不重叠）
+
+| 波次 | Worker A | Worker B | 说明 |
+|---|---|---|---|
+| 第 1 波 | T01 文档 | T02 导出清理 | 文档与代码文件不重叠 |
+| 第 2 波 | T03 视图版本 | T05 单测基础设施 | T03 改审计文件；T05 只改前端测试/依赖 |
+| 第 3 波 | T04 组织用量 | T06 边界 e2e | T04 改平台页；T06 只改 e2e |
+
+> T02→T03→T04 共用 `backend/scripts/verify-write.ts`，必须串行合并。
+> T06 依赖 T02/T03 的 UI 与错误码；不要在它们合并前写死预期文案。
+
+---
+
+## 2. 任务详情与验收
+
+### T01 · 文档同步
+
+**目标**
+
+- 把过时数字改成当前值：Playwright 冒烟 **20 条**、迁移 **58 个**、表 **86 张**、启用 RLS **81 张**。
+- 更新 `TODO.md` 的“13 条”与 `06_实施计划.md` 的“13 条 / 43 项”。
+- `verify:write` 当前是 **51 项**；如果其他任务增加了检查，以合并后实际输出为准，不沿用旧值。
+- `08_本轮变更说明_2026-11-04.md` 是历史快照，**不改写**；如需说明，只在 06/TODO 指向最新状态。
+
+**涉及文件**
+
+- `TODO.md`
+- `企业AI化项目管理系统/06_实施计划.md`
+- `企业AI化项目管理系统/README.md`
+- `backend/README.md`
+
+**验收命令**
+
+```bash
+# 1) e2e 数量（只列用例，不启动服务）
+cd frontend && npx playwright test --list
+
+# 2) 迁移数量
+ls backend/db/migrations | wc -l
+# 预期：58
+
+# 3) 表 / RLS 数量（只读；必须指向本地/测试库，禁止生产库）
+psql "$DATABASE_URL" -Atc \
+  "select count(*) from information_schema.tables where table_schema='public';"
+psql "$DATABASE_URL" -Atc \
+  "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public' and c.relkind='r' and c.relrowsecurity;"
+# 预期：86 / 81
+
+# 4) 过时数字不应再出现在已更新文档
+grep -RInE "13 条|16 条|16/16|54 个迁移|82 张表|78 张|43 项" \
+  TODO.md 企业AI化项目管理系统/06_实施计划.md \
+  企业AI化项目管理系统/README.md backend/README.md || true
+```
+
+**完成标准**
+
+- 四份文档的数字一致；没有把历史快照 08 改写成“当前状态”。
+- `verify:write` 项数如果未实际运行，写“以实际输出为准”，不猜。
+
+**回滚**
+
+- `git revert` 文档提交即可；不涉及代码和数据。
+
+---
+
+### T02 · 历史 CSV 导出清理
+
+**背景**
+
+- 审计异步导出任务与文件已有自动清理：`cleanupAuditExportJobs()` 按组织保留期删除，服务端定时执行。
+- 缺的是**手动入口**：管理员无法在页面上 dry-run 预览、确认清理，也没有 CLI 便于运维演练。
+- 本任务只清理 `audit_export_jobs` 及其对象存储文件，不动审计日志、不动业务数据。
+
+**目标**
+
+1. 服务层支持候选查询与 dry-run，返回候选数量/任务 ID/保留期，不删除。
+2. 新增管理员接口 `POST /api/audit-exports/cleanup`：
+   - 默认 `dry_run: true`；
+   - 确认执行必须显式传 `dry_run: false` 与 `confirm: "CLEANUP"`；
+   - 支持 `days`（1–365）与 `limit`（1–500）。
+3. 新增 CLI：`npm run audit:exports:cleanup -- --dry-run`，支持 `--days=N`、`--limit=N`、`--yes`。
+4. 审计页“导出任务”弹窗增加“清理过期导出”按钮：先预览，再二次确认执行。
+5. 清理动作继续写 `audit_logs`（`CLEANUP audit-exports`），保留现有口径。
+
+**涉及文件**
+
+- `backend/src/services/audit_exports.ts`
+- `backend/src/routes/system.ts`
+- `backend/scripts/cleanup-audit-exports.ts`（新）
+- `backend/package.json`
+- `backend/scripts/verify-write.ts`
+- `frontend/src/api.ts`
+- `frontend/src/pages/AuditPage.tsx`
+- `OPERATIONS.md`
+
+**验收命令**
+
+```bash
+cd backend && npm run typecheck
+
+# dry-run：必须不删除；记录执行前后 audit_export_jobs 计数
+cd backend && npm run audit:exports:cleanup -- --dry-run
+
+# 协调者串行执行；Worker 不得跑共享数据库测试
+cd backend && npm run verify:write
+
+cd frontend && npm run typecheck
+```
+
+**完成标准**
+
+- dry-run 前后任务数一致；确认执行后只减少过期任务。
+- 未带 `confirm=CLEANUP` 的执行请求返回 422。
+- 非管理员/总监调用返回 403（与审计页权限一致）。
+- `verify:write` 新增覆盖：dry-run、确认缺失、成功清理、清理日志。
+- 不修改历史迁移，不新增表。
+
+**回滚**
+
+- revert 本任务提交；已删除的测试导出文件不可恢复，因此只允许在测试组织/测试数据上执行确认清理。
+- 生产环境默认只使用 dry-run，确认执行需用户单独批准。
+
+---
+
+### T03 · 审计视图导入 JSON 版本兼容
+
+**背景**
+
+- 导出 JSON 当前带 `version: 1`；导入端用 `z.literal(1).optional()`，前端又硬编码 `version: 1`。
+- 旧文件可能没有 `version`；未来版本可能带更高版本号。当前行为是静默接受任何缺失版本、对未知版本报 zod 通用错误，提示不清晰。
+- 目标不是支持未来格式，而是**明确兼容边界**：无版本/版本 1 可导入，更高版本明确拒绝，不误读。
+
+**目标**
+
+1. 后端定义导入版本常量与 `kind`（如 `audit-filter-views`），导出时写入。
+2. 导入接受：`version` 缺失或 `1`；拒绝 `> 1`，返回 422 `UNSUPPORTED_VIEW_VERSION`，消息说明“请用当前版本重新导出”。
+3. 前端不再硬编码 `version: 1`；使用文件中的版本或默认 1，并把后端错误原样展示。
+4. 无法识别的视图字段继续由 zod 校验；不静默丢弃必填字段。
+
+**涉及文件**
+
+- `backend/src/routes/system.ts`
+- `backend/scripts/verify-write.ts`
+- `frontend/src/api.ts`
+- `frontend/src/pages/AuditPage.tsx`
+
+**验收命令**
+
+```bash
+cd backend && npm run typecheck
+
+# 协调者串行执行
+cd backend && npm run verify:write
+
+cd frontend && npm run typecheck
+```
+
+**完成标准**
+
+- `verify:write` 覆盖：无 `version` 导入成功；`version: 1` 成功；`version: 999` 返回 422；`views` 缺失仍返回 422。
+- 导出文件仍能被旧版本读取（保持 `version: 1` 与平铺字段）。
+- 前端导入失败时显示可读错误，不出现未捕获异常。
+
+**回滚**
+
+- revert 本任务提交；不涉及数据库变更。
+
+---
+
+### T04 · 按组织统计导出任务用量
+
+**背景**
+
+- 平台租户列表已有用户/客户/项目计数，但没有“审计导出任务”用量。
+- `audit_export_jobs` 只有按用户和创建时间的索引；本任务只做只读统计，不新增索引、不新增迁移。
+- 目标是让平台管理员看到每个组织近 30 天的导出任务数与导出行数，辅助发现异常用量。
+
+**目标**
+
+1. 在 `TENANT_FIELDS` 增加近 30 天统计：
+   - `audit_export_jobs_30d`：任务数；
+   - `audit_export_rows_30d`：已完成任务的 `row_count` 合计；
+   - `audit_export_failed_30d`：失败任务数。
+2. `GET /api/platform/tenants` 返回上述字段；只对平台管理员开放（沿用现有校验）。
+3. 平台租户表增加“导出任务/导出行数/失败”列；空值显示 `0` 或 `—`。
+4. 不改变租户暂停/恢复、导出、删除行为。
+
+**涉及文件**
+
+- `backend/src/routes/platform.ts`
+- `backend/scripts/verify-write.ts`
+- `frontend/src/types.ts`
+- `frontend/src/pages/PlatformTenantsPage.tsx`
+
+**验收命令**
+
+```bash
+cd backend && npm run typecheck
+
+# 协调者串行执行
+cd backend && npm run verify:write
+
+cd frontend && npm run typecheck
+```
+
+**完成标准**
+
+- 平台租户接口返回三个新字段，非平台管理员仍为 403。
+- 新增/完成/失败导出任务后，统计口径与 SQL 抽查一致。
+- 不新增迁移；如后续数据量证明需要索引，另开任务并走迁移评审。
+
+**回滚**
+
+- revert 本任务提交；字段为计算结果，不涉及数据回填。
+
+---
+
+### T05 · 组件级单测基础设施
+
+**背景**
+
+- 前端目前只有 Playwright e2e，没有组件级单测；`08` 已把“组件级单测”列为缺口。
+- 目标不是追求覆盖率数字，而是给纯展示/交互组件一条快速、无数据库的反馈通道。
+
+**目标**
+
+1. 引入 Vitest + jsdom + Testing Library（版本需兼容 React 19 / Vite 8）。
+2. 增加 `npm run test:unit`，默认 `run` 模式，CI 友好。
+3. 增加 `frontend/vitest.config.ts` 与 `frontend/src/test/setup.ts`。
+4. 至少 1 个组件级测试文件（如 `ui.test.tsx`），覆盖：
+   - `Badge` 的 tone 类名；
+   - `Button` 的 variant/size/disabled；
+   - `Modal` 的 open/close 与 Escape 关闭。
+5. CI 的 frontend job 增加单测步骤；不改变现有 typecheck/build 顺序。
+
+**涉及文件**
+
+- `frontend/package.json`
+- `frontend/package-lock.json`
+- `frontend/tsconfig.json`
+- `frontend/vitest.config.ts`（新）
+- `frontend/src/test/setup.ts`（新）
+- `frontend/src/ui.test.tsx`（新）
+- `.github/workflows/ci.yml`
+
+**验收命令**
+
+```bash
+cd frontend && npm run test:unit
+cd frontend && npm run typecheck
+cd frontend && npm run build
+```
+
+**完成标准**
+
+- 单测在无后端、无数据库的情况下通过。
+- `npm run build` 不把测试文件打进产物。
+- 不引入 jest 与 vitest 两套并存；不修改现有 e2e 配置。
+- `package-lock.json` 与 `package.json` 同步提交。
+
+**回滚**
+
+- revert 本任务提交，或恢复 `package.json` / `package-lock.json` 后执行 `npm ci`。
+- 若新依赖导致构建问题，优先回滚依赖，不保留半套配置。
+
+---
+
+### T06 · 更多边界 e2e
+
+**背景**
+
+- 现有 20 条冒烟覆盖主路径；`08` 明确“e2e 只覆盖关键路径”。
+- 只加**稳定、可判定、无外部依赖**的边界用例；不加真实客户、真实模型、真实支付场景。
+
+**目标**
+
+新增 `frontend/e2e/edge.spec.ts`，优先覆盖：
+
+1. 审计导出日期范围非法（`from > to`）→ 页面/接口明确报错，不产生任务。
+2. 审计视图导入无版本 / 高版本（依赖 T03）→ 成功或明确 422 提示。
+3. 审计导出清理 dry-run 预览与确认（依赖 T02）→ 预览不删除，确认后列表变化。
+4. 只读角色访问管理入口被收敛（如 viewer 看不到用户管理/审计操作）→ 不出现 500 或空白页。
+5. 列表分页/“加载更多”边界（空页、最后一页、筛选后重置）→ 不重复、不丢数据。
+
+**涉及文件**
+
+- `frontend/e2e/edge.spec.ts`（新）
+- `frontend/e2e/helpers.ts`（可选新；仅在确实需要复用登录/建数据时）
+
+**验收命令**
+
+```bash
+# 本机无 Chromium 时用 Edge；需要后端 + 测试库已 seed
+cd frontend && PW_CHANNEL=msedge npm run e2e -- --grep "边界"
+
+# 协调者在合并后串行跑全量
+cd frontend && PW_CHANNEL=msedge npm run e2e
+```
+
+**完成标准**
+
+- 新用例不依赖真实外部服务；失败时能定位是产品缺陷还是测试数据问题。
+- 不修改现有 `smoke.spec.ts` 的断言来“让新用例好写”。
+- 全量 e2e 串行通过；如果未跑，状态不能标 `done`。
+
+**回滚**
+
+- revert 新增 spec/helper 提交；不影响产品代码。
+
+---
+
+## 3. 可直接执行的命令速查
+
+> 以下命令供协调者使用；Worker 只允许 typecheck 与无数据库单测。
+
+```bash
+# 后端
+cd backend && npm run typecheck
+cd backend && npm run verify
+cd backend && npm run verify:report
+cd backend && npm run verify:write
+
+# 前端
+cd frontend && npm run typecheck
+cd frontend && npm run build
+cd frontend && npm run test:unit        # T05 完成后
+
+# e2e（本机无 Chromium 时）
+cd frontend && PW_CHANNEL=msedge npm run e2e
+```
+
+---
+
+## 4. 外部依赖阻塞（不要用代码 mock 冒充完成）
+
+| ID | 任务 | 类型 | 代码侧现状 | 必须拿到的真实验证 | 状态 | 解除条件 |
+|---|---|---|---|---|---|---|
+| X01 | K8s 预发集群真实滚动发布 | 部署 | 已有 K8s 清单、迁移 Job、PDB；本地 `drill:rollout` 演练 | 真实集群滚动发布 + 回滚，readiness/PDB 生效，业务无中断 | blocked | 提供 kubeconfig、命名空间、镜像仓库与预发环境 |
+| X02 | Alertmanager 真实触发与值班复盘 | 运维 | 已有 `ops/alerts.yml`、`drill:alerts` 17 条告警/9 场景 | 真实告警从 Prometheus→Alertmanager→接收端触发，抑制与值班确认有记录 | blocked | 提供 Alertmanager 地址、接收端、值班表 |
+| X03 | 真实 S3 / MinIO | 存储 | 已有 local/S3 抽象、`drill:s3`（本地 S3 兼容） | 真实桶 PUT/GET/DELETE、权限、跨进程 PDF 缓存、失败重试 | blocked | 提供桶、endpoint、AK/SK 与网络访问 |
+| X04 | 真实支付 / 发票 / 自动扣费 | 计费 | 已有账单、模拟支付、HMAC 回调、自动续费任务（不扣款） | 支付厂商沙箱/生产回调、签名验签、发票、扣费失败重试与对账 | blocked | 提供商户号、沙箱密钥、公网回调地址、发票资质 |
+| X05 | 真实客户 POC / 试点上线 / 运营数据 | 业务 | S3/S4/S5 功能与样例闭环已完成 | 真实客户样本、UAT、上线签收、运营指标与价值报告 | blocked | 客户授权、数据处理协议、真实样本/接口人/试点排期 |
+| X06 | 真实模型联调与提示词评测 | AI | 已有 OpenAI 兼容接入与 `rule-based-v1` 回退、人工确认留痕 | 真实模型延迟/成本/质量、标注集评测、脱敏与合规确认 | blocked | 提供合规模型账号/内网 endpoint、评测集与数据出境结论 |
+
+> 外部依赖项只允许标 `blocked`。代码侧可以继续做“接入点、错误处理、降级、文档”，但**不能**把 mock/演练/样例写成真实联调完成。
+
+---
+
+## 5. 明确不做项
+
+以下事项不在本队列，也不应由 AUTOPILOT 自行开工：
+
+| 不做项 | 原因 |
+|---|---|
+| 客户侧登录门户 / 在线批注 | 已决策不做；客户通过交付物和确认单协作 |
+| 复杂 SSO / OAuth 提供商 | 当前账号体系够用，投入产出低 |
+| 对外开放 API 计费 | 当前是内部交付平台，不对外售卖 API |
+| 多供应商比价 | 不是当前产品主线 |
+| 自动生成合同 / 法务条款 | 需法务与商务判断，系统只做方案与报价 |
+| 生产级 MLOps / 自动训练 / 自动标注平台 | 超出交付平台边界；POC 只做实验与证据 |
+| 智能调度 / 司机端 | 依赖货源池与司机意愿，不是 AI 单独能解决 |
+| 多区域高可用 | 当前单区域 + 多副本足够；需业务量支撑 |
+| 完整合规认证（等保等） | 是组织/流程工作，不是代码任务 |
+| 邮件 / Webhook 通知 | 当前站内通知满足试点；需要时另立需求 |
+| 自动合并到 `main` / 自动 push | 违反本规则；必须用户确认 |
+| 为“清列表”做无验收的重构 | 不产生可验证价值，风险大于收益 |
+| 修改历史迁移 | 破坏可追溯性；变更一律新增迁移 |
+| 用 mock 完成外部依赖任务 | 会制造虚假交付结论 |
+
+---
+
+## 6. 执行日志（由协调者追加）
+
+| 时间 | 任务 | 分支 | 状态 | 命令 | 结果 | 备注 |
+|---|---|---|---|---|---|---|
+| 2026-11-05 | — | — | — | — | 队列创建，未执行任何测试 | 等待协调者派单 |
+
+### 日志填写要求
+
+- 一行一个状态变化；不要覆盖历史行。
+- “结果”写实际输出摘要：`exit 0 / 51 项通过`、`exit 1 / 2 项失败`、`未执行`。
+- 失败必须写最后一条命令与错误摘要；阻塞必须写解除条件。
+- 没有证据的“完成”不允许写 `done`。

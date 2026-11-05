@@ -699,6 +699,7 @@ function SolutionEditor({
     assumptions: '',
     exclusions: '',
     status: 'draft',
+    owner_id: '',
   });
   const [component, setComponent] = useState({
     name: '',
@@ -745,6 +746,7 @@ function SolutionEditor({
       assumptions: s.assumptions ?? '',
       exclusions: s.exclusions ?? '',
       status: s.status,
+      owner_id: s.owner_id ?? '',
     });
     setWorkload(
       data.workload.map((w) => ({
@@ -794,6 +796,7 @@ function SolutionEditor({
         security: basic.security || null,
         assumptions: basic.assumptions || null,
         exclusions: basic.exclusions || null,
+        owner_id: basic.owner_id || null,
       }),
     );
 
@@ -930,6 +933,17 @@ function SolutionEditor({
               <Select value={basic.status} onChange={(e) => setBasic({ ...basic, status: e.target.value })}>
                 {Object.entries(SOLUTION_STATUS).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="负责人">
+              <Select
+                value={basic.owner_id}
+                onChange={(e) => setBasic({ ...basic, owner_id: e.target.value })}
+              >
+                <option value="">未指定</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </Select>
             </Field>

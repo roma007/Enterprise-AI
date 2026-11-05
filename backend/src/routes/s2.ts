@@ -18,6 +18,7 @@ const solutionCreate = z.object({
   exclusions: z.string().nullish(),
   status: z.enum(['draft', 'in_review', 'approved', 'rejected', 'archived']).default('draft'),
   created_by: uuid.nullish(),
+  owner_id: uuid.nullish(),
 });
 
 const solutionPatch = z.object({
@@ -29,6 +30,7 @@ const solutionPatch = z.object({
   assumptions: z.string().nullish(),
   exclusions: z.string().nullish(),
   status: z.enum(['draft', 'in_review', 'approved', 'rejected', 'archived']).optional(),
+  owner_id: uuid.nullish(),
 });
 
 const componentBody = z.object({
@@ -193,6 +195,7 @@ export async function s2Routes(app: FastifyInstance) {
       query(
         `SELECT DISTINCT ON (s.opportunity_id)
                 s.id, s.opportunity_id, s.version, s.status, s.scope,
+                s.owner_id, u.name AS owner_name,
                 o.code AS opportunity_code, o.title AS opportunity_title,
                 o.has_tech_blocker, o.blocker_owner,
                 (SELECT count(*) FROM solution_components c WHERE c.solution_id = s.id) AS component_count,
@@ -209,6 +212,7 @@ export async function s2Routes(app: FastifyInstance) {
                   ORDER BY reviewed_at DESC LIMIT 1) AS latest_review
            FROM solutions s
            JOIN opportunities o ON o.id = s.opportunity_id
+           LEFT JOIN users u ON u.id = s.owner_id
           WHERE o.engagement_id = $1 AND s.status <> 'archived'
           ORDER BY s.opportunity_id, s.version DESC`,
         [id],
@@ -242,6 +246,7 @@ export async function s2Routes(app: FastifyInstance) {
     const { id } = z.object({ id: uuid }).parse(req.params);
     const items = await query(
       `SELECT s.*, o.code AS opportunity_code, o.title AS opportunity_title,
+              u.name AS owner_name,
               (SELECT count(*) FROM solution_components c WHERE c.solution_id = s.id) AS component_count,
               (SELECT COALESCE(sum(w.cost), 0) FROM workload_estimates w WHERE w.solution_id = s.id) AS workload_cost,
               (SELECT count(*) FROM acceptance_criteria a WHERE a.solution_id = s.id) AS criteria_count,
@@ -257,6 +262,7 @@ export async function s2Routes(app: FastifyInstance) {
                   AND q.status NOT IN ('expired','rejected')) AS quote_annual_ops
          FROM solutions s
          JOIN opportunities o ON o.id = s.opportunity_id
+         LEFT JOIN users u ON u.id = s.owner_id
         WHERE o.engagement_id = $1
         ORDER BY o.code, s.version DESC`,
       [id],
@@ -280,8 +286,8 @@ export async function s2Routes(app: FastifyInstance) {
       const row = await client.query(
         `INSERT INTO solutions
            (opportunity_id, version, status, scope, approach, architecture, deployment,
-            security, assumptions, exclusions, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+            security, assumptions, exclusions, created_by, owner_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
         [
           id,
           v.rows[0].v,
@@ -294,6 +300,7 @@ export async function s2Routes(app: FastifyInstance) {
           body.assumptions ?? null,
           body.exclusions ?? null,
           body.created_by ?? null,
+          body.owner_id ?? null,
         ],
       );
       return row.rows[0];
@@ -306,10 +313,11 @@ export async function s2Routes(app: FastifyInstance) {
     const { id } = z.object({ id: uuid }).parse(req.params);
     const item = await one(
       `SELECT s.*, o.code AS opportunity_code, o.title AS opportunity_title,
-              o.engagement_id, e.name AS engagement_name
+              o.engagement_id, e.name AS engagement_name, u.name AS owner_name
          FROM solutions s
          JOIN opportunities o ON o.id = s.opportunity_id
          JOIN engagements e ON e.id = o.engagement_id
+         LEFT JOIN users u ON u.id = s.owner_id
         WHERE s.id = $1`,
       [id],
     );
@@ -357,7 +365,7 @@ export async function s2Routes(app: FastifyInstance) {
         body,
         [
           'scope', 'approach', 'architecture', 'deployment', 'security',
-          'assumptions', 'exclusions', 'status',
+          'assumptions', 'exclusions', 'status', 'owner_id',
         ],
         true,
       ),

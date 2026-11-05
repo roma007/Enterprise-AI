@@ -1350,6 +1350,7 @@ async function main() {
         security: '数据不出内网，日志脱敏',
         assumptions: '托书 95% 字段可结构化',
         exclusions: '不覆盖手写体托书',
+        owner_id: userId,
       }),
       201,
       '创建方案',
@@ -1360,6 +1361,7 @@ async function main() {
     const solutionV2 = ok(
       await req('POST', `/api/opportunities/${opps[0].id}/solutions`, {
         scope: '第二版方案（回归测试）',
+        owner_id: userId,
       }),
       201,
       '创建方案 v2',
@@ -1473,6 +1475,8 @@ async function main() {
     assert.equal(detail.integrations.length, 1);
     assert.equal(detail.workload.length, 2);
     assert.equal(detail.workloadTotal, 2.1);
+    assert.equal(detail.item.owner_id, userId, '方案负责人应保存');
+    assert.ok(detail.item.owner_name, '方案负责人应返回姓名');
     assert.equal(detail.acceptanceCriteria.length, 1);
     assert.equal(detail.reviews.length, 1);
     assert.equal(detail.item.status, 'approved');
@@ -1697,6 +1701,7 @@ async function main() {
         await req('POST', `/api/opportunities/${o.id}/solutions`, {
           scope: `G2 回归方案：${o.title}`,
           approach: '标准方案',
+          owner_id: userId,
         }),
         201,
         `创建 G2 补齐方案 ${o.code}`,
@@ -1744,7 +1749,12 @@ async function main() {
     );
     assert.equal(after.blocked, false, `G2 仍有 block：${JSON.stringify(after.summary)}`);
     assert.equal(after.summary.block, 0);
-    assert.equal(after.summary.pass, 10, `G2 pass 数 ${after.summary.pass}`);
+    assert.equal(after.summary.pass, 11, `G2 pass 数 ${after.summary.pass}`);
+    assert.equal(
+      (after.checks as any[]).find((c) => c.code === 'G2-11')?.outcome,
+      'pass',
+      '补齐负责人后 G2-11 应通过',
+    );
   });
 
   await check('S3 POC：实验、样本、运行、复核、结论与 G3', async () => {

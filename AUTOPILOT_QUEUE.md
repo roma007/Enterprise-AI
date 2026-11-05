@@ -36,6 +36,7 @@
 | T09 | 方案列表报价覆盖率/负毛利提示 | 前端 | `frontend/src/solutionDiff.ts`、`frontend/src/solutionDiff.test.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx` | `npm run test:unit`；`npm run typecheck`；`npm run build`；全量 e2e | done | T07 已 done |
 | T10 | 文档同步：版本对比客户版、G2-10、报价覆盖率提示 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | 只读 grep 核对功能描述与测试数量；不改历史快照 | done | T07/T08/T09 已 done；完成记录见执行日志 |
 | T11 | 依赖审计风险记录（不升级 breaking 依赖） | 文档/运维 | `SECURITY.md`（新）、`OPERATIONS.md` | `cd backend && npm audit --omit=dev`；`cd frontend && npm audit --omit=dev`；`git diff --stat` 确认只改文档 | done | 无；完成记录见执行日志 |
+| T12 | 方案负责人字段 + G2-11 提示 | 后端 + 前端 | `backend/db/migrations/0059_solution_owner.sql`（新）、`backend/src/routes/s2.ts`、`backend/src/rules/g2.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx` | 后端 `typecheck` / `verify:write`；前端 `typecheck` / `build`；全量 e2e | done | 无；完成记录见执行日志 |
 
 ### 1.1 建议波次（文件所有权不重叠）
 
@@ -570,6 +571,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 2026-11-05 16:19 | T09 | main（人工协调者执行） | pending → done | 串行：`npm run typecheck`；`npm run test:unit`；`npm run build`；全量 e2e | typecheck 0；单测 **10/10**；build OK；e2e 24/24 | 新增 `quoteCoverage()` 纯函数与列表提示；未改后端、未改 e2e 断言。 |
 | 2026-11-05 17:05 | T10 | main（人工协调者执行） | pending → done | 只读：`npx playwright test --list`；`grep -c "\- \[x\]"`；文档校对 | 24 tests / 2 files；TODO 105 项、06 计划 60 项已勾选，06 剩余 9 项均依赖真实客户/外部环境 | 更新执行状态、R1/R2/R3 门禁与 backlog 勾选；新增“完成即勾选”约定。历史快照 08 未改写。 |
 | 2026-11-05 17:20 | T11 | main（人工协调者执行） | pending → done | 只读：`cd backend && npm audit --omit=dev`；`npm audit`；`cd frontend && npm audit --omit=dev` | 后端生产 5 moderate；含开发依赖 9（6 moderate、3 high，s3rver 工具链）；前端 0 | 新增 `SECURITY.md` 记录影响面/非破坏性修复路径/禁止 `--force`；`OPERATIONS.md` 安全清单加入链接；未改依赖与锁文件。 |
+| 2026-11-05 17:40 | T12 | main（人工协调者执行） | pending → done | 迁移 0059；后端 `typecheck` / `verify:write`；前端 `typecheck` / `build`；全量 e2e | 迁移执行 1 个；verify:write 51 项通过（含 owner 保存/返回、G2-11 pass）；build OK；e2e 24/24 | 新增 `solutions.owner_id` 与负责人下拉；G2-11 未指定负责人时 warn；未改历史迁移、未放宽断言。 |
 
 ### 日志填写要求
 

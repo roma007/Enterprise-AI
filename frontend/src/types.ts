@@ -433,6 +433,8 @@ export interface Solution {
   security: string | null;
   assumptions: string | null;
   exclusions: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
   created_at: string;
   updated_at: string;
   opportunity_code?: string;

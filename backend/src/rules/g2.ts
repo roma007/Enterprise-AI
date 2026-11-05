@@ -191,6 +191,19 @@ export function runG2Checks(data: G2Data): G2Result {
     );
   }
 
+  // G2-11 方案负责人
+  {
+    const missing = solutions.filter((s) => !s.owner_id);
+    checks.push(
+      missing.length
+        ? warn('G2-11', '方案必须指定负责人', 'warn',
+            `${missing.map((s) => `${s.opportunity_code} v${s.version}`).join('、')} 未指定负责人`,
+            missing.map((s) => ({ code: s.opportunity_code, version: s.version })))
+        : ok('G2-11', '方案必须指定负责人', 'warn',
+            `${solutions.length} 个方案均已指定负责人`),
+    );
+  }
+
   const summary = { pass: 0, warn: 0, block: 0 };
   for (const c of checks) summary[c.outcome] += 1;
   return { summary, blocked: summary.block > 0, checks };

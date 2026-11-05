@@ -96,9 +96,9 @@ def format_result(draft, run_id: str = "") -> str:
 
 def format_help() -> str:
     return (
-        "把托书直接发给我就行：\n"
+        "把托书发给我：\n"
         "· 文字直接粘贴\n"
-        "· 图片直接拍照发送\n"
-        "· Excel/PDF 直接拖进来\n\n"
+        "· 图片/PDF 请打开 H5 拍照上传，或用批量导入\n"
+        "· 企业微信图片消息暂未接入，先用 H5/批量导入\n\n"
         "我会返回结构化结果，你点确认后入库。"
     )

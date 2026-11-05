@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import time
 from pathlib import Path
@@ -654,6 +655,43 @@ def wecom_verify(msg_signature: str = "", timestamp: str = "", nonce: str = "",
     return echostr
 
 
+_WECOM_DRAFTS: dict[str, dict] = {}
+_WECOM_DRAFT_TTL = 30 * 60
+
+
+def _draft_get(user: str) -> dict | None:
+    item = _WECOM_DRAFTS.get(user)
+    if not item:
+        return None
+    if time.time() - item["updated"] > _WECOM_DRAFT_TTL:
+        _WECOM_DRAFTS.pop(user, None)
+        return None
+    return item
+
+
+def _draft_put(user: str, text: str) -> dict:
+    item = _WECOM_DRAFTS.get(user) or {"text": "", "parts": 0, "updated": time.time()}
+    if item["text"]:
+        item["text"] += "\n"
+    item["text"] += text
+    item["parts"] += 1
+    item["updated"] = time.time()
+    _WECOM_DRAFTS[user] = item
+    return item
+
+
+def _looks_complete(text: str) -> bool:
+    try:
+        draft = extract(text, allow_llm=False)
+    except Exception:
+        return False
+    values = {k: (v.value or "").strip() for k, v in draft.fields.items()}
+    keys = ("client", "booking_no", "bl_no", "container_no", "container_type",
+            "closing_time", "pickup_addr", "delivery_addr")
+    hit = sum(1 for k in keys if values.get(k))
+    return hit >= 3 and bool(values.get("booking_no") or values.get("container_no") or values.get("client"))
+
+
 @app.post("/api/wecom/callback", response_class=PlainTextResponse)
 async def wecom_message(request: Request, msg_signature: str = "", timestamp: str = "",
                         nonce: str = "", signature: str = ""):
@@ -695,6 +733,9 @@ async def wecom_message(request: Request, msg_signature: str = "", timestamp: st
         inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], wecom.format_help())
         return _wecom_reply(inner, encrypted)
 
+    user = msg.get("from_user") or "wecom"
+    draft_state = _draft_get(user)
+
     if content in {"确认", "确认入库", "确认并记录"}:
         pending = latest_unconfirmed_run(actor) or latest_unconfirmed_run("wecom")
         if not pending:
@@ -705,6 +746,49 @@ async def wecom_message(request: Request, msg_signature: str = "", timestamp: st
                 actor=actor,
             )
             reply = f"已确认入库。\n单号：{pending['id']}"
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
+    if content in {"取消", "清空", "不发了"}:
+        _WECOM_DRAFTS.pop(user, None)
+        reply = "已取消当前草稿。"
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
+    if content in {"完成", "生成", "出单", "好了"}:
+        state = _draft_get(user)
+        if not state:
+            reply = "当前没有待完成的草稿。请先发送托书内容。"
+        else:
+            _WECOM_DRAFTS.pop(user, None)
+            record_inbound(state["text"], source="wecom")
+            draft = extract(state["text"])
+            run_id = save_run(state["text"], draft, actor=actor)
+            reply = wecom.format_result(draft, run_id)
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
+    if content in {"分条", "开始", "新建", "新建托书"}:
+        _WECOM_DRAFTS[user] = {"text": "", "parts": 0, "updated": time.time()}
+        reply = "已进入分条录入。请一条条发托书内容，发完回复「完成」；回复「取消」清空。"
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
+    if content in {"查看草稿", "查看"} and draft_state:
+        reply = f"当前草稿（{draft_state['parts']} 条，共 {len(draft_state['text'])} 字）：\n" + draft_state["text"][:800]
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
+    if draft_state:
+        # 已在分条模式：后续消息继续追加，直到「完成」
+        state = _draft_put(user, content)
+        reply = f"已收到，当前 {state['parts']} 条（{len(state['text'])} 字）。\n继续发剩余内容，发完回复「完成」；回复「取消」清空。"
+        inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
+        return _wecom_reply(inner, encrypted)
+
+    if not _looks_complete(content):
+        state = _draft_put(user, content)
+        reply = f"这条信息不完整，已先记入草稿（{state['parts']} 条）。\n继续发剩余字段，发完回复「完成」；回复「取消」清空。"
         inner = wecom.build_text_reply(msg["from_user"], msg["to_user"], reply)
         return _wecom_reply(inner, encrypted)
 

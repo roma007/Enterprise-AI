@@ -27,3 +27,6 @@ autopilot/.run.lock/
 
 # devctl 本地进程与日志
 .run/
+
+# 试点值班表含真实联系人，不提交
+ops/oncall.yml

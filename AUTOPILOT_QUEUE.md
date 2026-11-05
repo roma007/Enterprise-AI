@@ -39,6 +39,7 @@
 | T12 | 方案负责人字段 + G2-11 提示 | 后端 + 前端 | `backend/db/migrations/0059_solution_owner.sql`（新）、`backend/src/routes/s2.ts`、`backend/src/rules/g2.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/tabs/SolutionsTab.tsx` | 后端 `typecheck` / `verify:write`；前端 `typecheck` / `build`；全量 e2e | done | 无；完成记录见执行日志 |
 | T13 | G2-12 组件人天与角色估算一致性提示 | 后端 | `backend/src/routes/s2.ts`、`backend/src/rules/g2.ts`、`backend/scripts/verify-write.ts` | `npm run typecheck`；`npm run verify:write` | done | T12 已 done；示例数据 v2 组件 1 / 角色 2 人天触发 warn |
 | T14 | 报价版本对比（报价头/报价行/合计；Markdown/CSV/Word） | 后端 + 前端 | `backend/src/services/quote_diff_docs.ts`（新）、`backend/src/routes/s2_docs.ts`、`backend/scripts/verify-write.ts`、`frontend/src/quoteDiff.ts`（新）、`frontend/src/quoteDiff.test.ts`（新）、`frontend/src/api.ts`、`frontend/src/pages/tabs/QuotesTab.tsx` | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | done | 无；完成记录见执行日志 |
+| T15 | 试点就绪检查脚本 + 值班模板 | 后端 + 运维 | `backend/scripts/pilot-readiness.ts`（新）、`backend/package.json`、`ops/oncall.example.yml`（新）、`.gitignore`、`OPERATIONS.md`、`企业AI化项目管理系统/09_试点启动包.md`（新） | `npm run typecheck`；`npm run readiness:check -- --report-only` | done | 无；完成记录见执行日志；不勾选真实外部项 |
 
 ### 1.1 建议波次（文件所有权不重叠）
 
@@ -576,6 +577,7 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 | 2026-11-05 17:40 | T12 | main（人工协调者执行） | pending → done | 迁移 0059；后端 `typecheck` / `verify:write`；前端 `typecheck` / `build`；全量 e2e | 迁移执行 1 个；verify:write 51 项通过（含 owner 保存/返回、G2-11 pass）；build OK；e2e 24/24 | 新增 `solutions.owner_id` 与负责人下拉；G2-11 未指定负责人时 warn；未改历史迁移、未放宽断言。 |
 | 2026-11-05 17:55 | T13 | main（人工协调者执行） | pending → done | 后端 `typecheck`；`verify:write` | typecheck 0；verify:write 51 项通过（G2-12 warn 与证据断言） | 新增组件人天/角色人天对比；warn 不阻断；未改历史迁移、未放宽其他断言。 |
 | 2026-11-05 18:10 | T14 | main（人工协调者执行） | pending → done | 后端 `typecheck` / `verify:write`；前端 `test:unit` / `typecheck` / `build`；全量 e2e；`npm run openapi` | verify:write 51 项通过（含对比 Markdown 合计/新增与 Word PK）；单测 13/13；build OK；e2e 24/24 | 新增报价对比服务/端点/纯函数/弹窗；报价对比不改内部成本口径。 |
+| 2026-11-05 18:35 | T15 | main（人工协调者执行） | pending → done | `npm run typecheck`；`npm run readiness:check -- --report-only` | typecheck 0；检查输出 PASS 13 / WARN 5 / FAIL 3（本地未配 AUTH_REQUIRED/AUTH_SECRET/METRICS_TOKEN） | 新增就绪检查、值班模板与试点启动包；真实客户/K8s/支付/模型/Alertmanager 项仍未勾选。 |
 
 ### 日志填写要求
 

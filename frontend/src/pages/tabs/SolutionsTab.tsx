@@ -26,6 +26,8 @@ import {
 import { fmtMoney } from '../../utils';
 import {
   diffSolutionDetails,
+  solutionDiffCsv,
+  solutionDiffMarkdown,
   type NamedDiff,
   type SolutionDiff,
 } from '../../solutionDiff';
@@ -314,9 +316,53 @@ export function SolutionsTab({
         onClose={() => setCompareOpen(false)}
         wide
         footer={
-          <Button size="sm" onClick={() => setCompareOpen(false)}>
-            关闭
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!compareDiff}
+              onClick={() => {
+                if (!compareDiff) return;
+                const blob = new Blob([solutionDiffMarkdown(compareDiff)], {
+                  type: 'text/markdown;charset=utf-8',
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `方案对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}.md`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+              }}
+            >
+              下载 Markdown
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!compareDiff}
+              onClick={() => {
+                if (!compareDiff) return;
+                const blob = new Blob([solutionDiffCsv(compareDiff)], {
+                  type: 'text/csv;charset=utf-8',
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `方案对比-v${compareDiff.versionBefore}-v${compareDiff.versionAfter}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+              }}
+            >
+              下载 CSV
+            </Button>
+            <Button size="sm" onClick={() => setCompareOpen(false)}>
+              关闭
+            </Button>
+          </>
         }
       >
         <Field label="对比基准">

@@ -114,3 +114,84 @@ export function diffSolutionDetails(
     changedCount,
   };
 }
+const STATUS_LABEL: Record<NamedDiff['status'], string> = {
+  added: '新增',
+  removed: '删除',
+  changed: '变更',
+  same: '未变',
+};
+
+/** 版本对比 Markdown，便于贴到评审纪要/邮件。 */
+export function solutionDiffMarkdown(diff: SolutionDiff): string {
+  const lines: string[] = [
+    `# 方案版本对比：v${diff.versionBefore} → v${diff.versionAfter}`,
+    '',
+    `- 变化点：${diff.changedCount}`,
+    `- 工作量：${diff.workloadBefore} → ${diff.workloadAfter} 人天`,
+    '',
+    '## 概要字段',
+    '',
+    '| 字段 | 基准 | 对比 |',
+    '|---|---|---|',
+  ];
+  const changedFields = diff.fields.filter((field) => field.changed);
+  if (!changedFields.length) lines.push('| — | 无变化 | — |');
+  for (const field of changedFields) {
+    lines.push(`| ${field.label} | ${field.before || '—'} | ${field.after || '—'} |`);
+  }
+  const sections: Array<[string, NamedDiff[]]> = [
+    ['组件', diff.components],
+    ['集成', diff.integrations],
+    ['验收标准', diff.acceptance],
+  ];
+  for (const [label, items] of sections) {
+    lines.push('', `## ${label}`, '');
+    const changed = items.filter((item) => item.status !== 'same');
+    if (!changed.length) {
+      lines.push('- 无变化');
+      continue;
+    }
+    for (const item of changed) {
+      lines.push(
+        `- ${STATUS_LABEL[item.status]}：${item.name}${item.detail ? `（${item.detail}）` : ''}`,
+      );
+    }
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+/** 版本对比 CSV（含概要字段与三类明细）。 */
+export function solutionDiffCsv(diff: SolutionDiff): string {
+  const cell = (value: unknown) => {
+    let text = value == null ? '' : String(value);
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+  const lines = [
+    ['类型', '名称', '变化', '基准', '对比'].map(cell).join(','),
+  ];
+  for (const field of diff.fields.filter((item) => item.changed)) {
+    lines.push(
+      [cell('概要'), cell(field.label), cell('变更'), cell(field.before), cell(field.after)].join(','),
+    );
+  }
+  for (const item of diff.components.filter((item) => item.status !== 'same')) {
+    lines.push([cell('组件'), cell(item.name), cell(STATUS_LABEL[item.status]), cell(''), cell(item.detail)].join(','));
+  }
+  for (const item of diff.integrations.filter((item) => item.status !== 'same')) {
+    lines.push([cell('集成'), cell(item.name), cell(STATUS_LABEL[item.status]), cell(''), cell(item.detail)].join(','));
+  }
+  for (const item of diff.acceptance.filter((item) => item.status !== 'same')) {
+    lines.push([cell('验收标准'), cell(item.name), cell(STATUS_LABEL[item.status]), cell(''), cell(item.detail)].join(','));
+  }
+  if (diff.workloadBefore !== diff.workloadAfter) {
+    lines.push([
+      cell('工作量'),
+      cell('合计人天'),
+      cell('变更'),
+      cell(diff.workloadBefore),
+      cell(diff.workloadAfter),
+    ].join(','));
+  }
+  return `\uFEFF${lines.join('\r\n')}`;
+}

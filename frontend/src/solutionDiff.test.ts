@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SolutionDetail } from './types';
-import { diffSolutionDetails } from './solutionDiff';
+import {
+  diffSolutionDetails,
+  solutionDiffCsv,
+  solutionDiffMarkdown,
+} from './solutionDiff';
 
 const base = (version: number): SolutionDetail =>
   ({
@@ -111,5 +115,22 @@ describe('diffSolutionDetails', () => {
     expect(diff.workloadBefore).toBe(3);
     expect(diff.workloadAfter).toBe(7);
     expect(diff.changedCount).toBeGreaterThanOrEqual(6);
+  });
+
+  it('Markdown/CSV 导出包含变化点与表头', () => {
+    const before = base(1);
+    const after = base(2);
+    after.item.scope = '二期推广';
+    after.workloadTotal = 5;
+    const diff = diffSolutionDetails(before, after);
+    const markdown = solutionDiffMarkdown(diff);
+    expect(markdown).toContain('# 方案版本对比：v1 → v2');
+    expect(markdown).toContain('二期推广');
+    expect(markdown).toContain('## 组件');
+    const csv = solutionDiffCsv(diff);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('"类型","名称","变化","基准","对比"');
+    expect(csv).toContain('"工作量"');
+    expect(csv).toContain('"5"');
   });
 });

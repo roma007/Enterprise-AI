@@ -188,6 +188,13 @@ export function AuditPage() {
   const [exporting, setExporting] = useState(false);
   const [exportJobsOpen, setExportJobsOpen] = useState(false);
   const [exportJobs, setExportJobs] = useState<AuditExportJob[]>([]);
+  const [exportCleanups, setExportCleanups] = useState<
+    Array<{
+      id: string;
+      detail: { retention_days?: number; deleted?: number };
+      created_at: string;
+    }>
+  >([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobError, setJobError] = useState<unknown>(null);
   const [columnPicker, setColumnPicker] = useState(false);
@@ -492,8 +499,12 @@ export function AuditPage() {
     setJobsLoading(true);
     setJobError(null);
     try {
-      const res = await api.listAuditExportJobs();
-      setExportJobs(res.items);
+      const [jobs, cleanups] = await Promise.all([
+        api.listAuditExportJobs(),
+        api.listAuditExportCleanups(),
+      ]);
+      setExportJobs(jobs.items);
+      setExportCleanups(cleanups.items);
     } catch (err) {
       setJobError(err);
     } finally {
@@ -1277,6 +1288,33 @@ export function AuditPage() {
             </table>
           </div>
         ) : null}
+        <h3 style={{ marginTop: 16 }}>最近清理</h3>
+        {exportCleanups.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>保留天数</th>
+                  <th>删除任务</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exportCleanups.map((item) => (
+                  <tr key={item.id}>
+                    <td className="muted nowrap">
+                      {fmtDateTime(item.created_at)}
+                    </td>
+                    <td>{item.detail.retention_days ?? '—'}</td>
+                    <td>{item.detail.deleted ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="hint">暂无清理记录。</p>
+        )}
         <p className="hint">
           单次最多导出 10 万行；文件存放在本地缓存或对象存储，默认保留 7 天。
         </p>

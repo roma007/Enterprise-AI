@@ -1001,6 +1001,14 @@ export const api = {
     ),
   listAuditExportJobs: () =>
     request<{ items: AuditExportJob[] }>('/api/audit-exports'),
+  listAuditExportCleanups: () =>
+    request<{
+      items: Array<{
+        id: string;
+        detail: { retention_days?: number; deleted?: number };
+        created_at: string;
+      }>;
+    }>('/api/audit-export-cleanups'),
   downloadAuditExportJob: (id: string) =>
     requestBlob(`/api/audit-exports/${id}/download`),
   retryAuditExportJob: (id: string) =>

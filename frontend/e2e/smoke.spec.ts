@@ -342,6 +342,7 @@ test.describe('关键路径冒烟', () => {
     await expect(
       modal.getByRole('heading', { name: '导出任务' }),
     ).toBeVisible();
+    await expect(modal.getByRole('heading', { name: '最近清理' })).toBeVisible();
     await modal.getByRole('button', { name: '新建当前筛选任务' }).click();
 
     const doneRow = modal.locator('tr').filter({ hasText: '可下载' }).first();

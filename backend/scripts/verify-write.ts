@@ -5836,6 +5836,20 @@ async function main() {
     assert.ok((cleanupLog!.detail.deleted ?? 0) >= 1);
     assert.equal(cleanupLog!.detail.retention_days, 7);
 
+    const cleanupHistory = ok(
+      await auditCall('GET', '/api/audit-export-cleanups'),
+      200,
+      '清理历史',
+    );
+    assert.ok(
+      (cleanupHistory.items as any[]).some(
+        (item) =>
+          item.detail.retention_days === 7 &&
+          (item.detail.deleted ?? 0) >= 1,
+      ),
+      '清理历史应包含本次清理',
+    );
+
     const failedJob = await one<{ id: string }>(
       `INSERT INTO audit_export_jobs
          (org_id, user_id, scope, filters, columns, status, error)

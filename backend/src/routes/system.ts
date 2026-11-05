@@ -398,6 +398,25 @@ export async function systemRoutes(app: FastifyInstance) {
     return reply.code(202).send({ item: job });
   });
 
+  app.get('/api/audit-export-cleanups', async (req) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const { limit } = z
+      .object({ limit: z.coerce.number().int().min(1).max(100).default(20) })
+      .parse(req.query);
+    const items = await query(
+      `SELECT id, detail, created_at
+         FROM audit_logs
+        WHERE org_id = $1 AND action = 'CLEANUP audit-exports'
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [auth.org_id, limit],
+    );
+    return { items };
+  });
+
   app.get('/api/audit-exports', async (req) => {
     const auth = (req as any).authUser;
     if (!auth?.sub || !auth.org_id) {

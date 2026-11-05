@@ -238,6 +238,14 @@ test.describe('关键路径冒烟', () => {
     await expect(
       page.getByRole('button', { name: '导出用量 CSV' }),
     ).toBeVisible();
+
+    await expect(page.getByRole('heading', { name: '试点就绪' })).toBeVisible();
+    await expect(page.getByText(/^PASS \d+$/)).toBeVisible();
+    await expect(page.getByText(/^FAIL \d+$/)).toBeVisible();
+    await page.getByText('查看检查明细').click();
+    await expect(
+      page.getByRole('cell', { name: 'AUTH_REQUIRED', exact: true }),
+    ).toBeVisible();
   });
 
   test('组织设置展示套餐与用量', async ({ page, request }) => {

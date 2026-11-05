@@ -417,6 +417,66 @@ export async function systemRoutes(app: FastifyInstance) {
     return { items };
   });
 
+  /** 导出当前组织的审计导出清理历史（最多 5000 条）。 */
+  app.get('/api/audit-export-cleanups/export.csv', async (req, reply) => {
+    const auth = (req as any).authUser;
+    if (!auth?.sub || !auth.org_id) {
+      throw httpError(401, 'UNAUTHORIZED', '请先登录');
+    }
+    const rows = await query<any>(
+      `SELECT detail, created_at
+         FROM audit_logs
+        WHERE org_id = $1 AND action = 'CLEANUP audit-exports'
+        ORDER BY created_at DESC
+        LIMIT 5000`,
+      [auth.org_id],
+    );
+
+    const cell = (value: unknown) => {
+      let text = value == null ? '' : String(value);
+      // 防止 Excel/Sheets 把单元格当公式执行
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const header = ['时间', '保留天数', '删除任务数'].map(cell).join(',');
+    const lines = [header];
+    for (const row of rows) {
+      lines.push(
+        [
+          cell(row.created_at ? new Date(row.created_at).toISOString() : ''),
+          cell(row.detail?.retention_days),
+          cell(row.detail?.deleted),
+        ].join(','),
+      );
+    }
+    const csv = `\uFEFF${lines.join('\r\n')}`;
+
+    try {
+      await query(
+        `INSERT INTO audit_logs
+           (org_id, user_id, action, object_type, status_code, ip, user_agent, detail)
+         VALUES ($1,$2,'EXPORT audit-export-cleanups','audit_export_cleanup',200,$3,$4,$5::jsonb)`,
+        [
+          auth.org_id,
+          auth.sub,
+          req.ip ?? null,
+          req.headers['user-agent'] ?? null,
+          JSON.stringify({ exported: rows.length }),
+        ],
+      );
+    } catch (err) {
+      req.log?.warn?.({ err }, 'audit export cleanup log failed');
+    }
+
+    const filename = `audit-export-cleanups-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${filename}"`)
+      .send(csv);
+  });
+
   app.get('/api/audit-exports', async (req) => {
     const auth = (req as any).authUser;
     if (!auth?.sub || !auth.org_id) {

@@ -1009,6 +1009,8 @@ export const api = {
         created_at: string;
       }>;
     }>('/api/audit-export-cleanups'),
+  exportAuditExportCleanupsCsv: () =>
+    requestBlob('/api/audit-export-cleanups/export.csv'),
   downloadAuditExportJob: (id: string) =>
     requestBlob(`/api/audit-exports/${id}/download`),
   retryAuditExportJob: (id: string) =>

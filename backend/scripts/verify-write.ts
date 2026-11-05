@@ -5599,7 +5599,7 @@ async function main() {
       } catch {
         body = res.body;
       }
-      return { status: res.statusCode, body };
+      return { status: res.statusCode, body, headers: res.headers };
     };
     const eng = await one<{ org_id: string }>(
       `SELECT org_id FROM engagements WHERE id = $1`,
@@ -5848,6 +5848,43 @@ async function main() {
           (item.detail.deleted ?? 0) >= 1,
       ),
       '清理历史应包含本次清理',
+    );
+
+    const cleanupCsv = await auditCall(
+      'GET',
+      '/api/audit-export-cleanups/export.csv',
+    );
+    assert.equal(cleanupCsv.status, 200, '清理 CSV 导出应成功');
+    assert.match(
+      String(cleanupCsv.headers['content-type']),
+      /text\/csv/,
+      '清理 CSV 应返回 CSV 类型',
+    );
+    const cleanupCsvLines = String(cleanupCsv.body)
+      .replace(/^\uFEFF/, '')
+      .split('\r\n');
+    assert.equal(
+      cleanupCsvLines[0],
+      '"时间","保留天数","删除任务数"',
+      '清理 CSV 表头应包含时间、保留天数、删除任务数',
+    );
+    assert.ok(cleanupCsvLines.length >= 2, '清理 CSV 应至少包含一行数据');
+    assert.ok(
+      cleanupCsvLines.slice(1).some((line) => line.includes('"7"')),
+      '清理 CSV 应包含本次保留 7 天的清理记录',
+    );
+    const cleanupExportLog = await one<{ detail: any }>(
+      `SELECT detail FROM audit_logs
+        WHERE action = 'EXPORT audit-export-cleanups' AND org_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [eng!.org_id],
+    );
+    assert.ok(cleanupExportLog, '清理 CSV 导出应写审计日志');
+    assert.equal(
+      cleanupExportLog!.detail.exported,
+      cleanupCsvLines.length - 1,
+      '清理 CSV 审计日志应记录导出条数',
     );
 
     const failedJob = await one<{ id: string }>(

@@ -578,6 +578,23 @@ export function AuditPage() {
     }
   };
 
+  const exportCleanupsCsv = async () => {
+    setJobError(null);
+    try {
+      const blob = await api.exportAuditExportCleanupsCsv();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `审计导出清理-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err) {
+      setJobError(err);
+    }
+  };
+
   useEffect(() => {
     if (!exportJobsOpen) return;
     const active = exportJobs.some(
@@ -1288,7 +1305,23 @@ export function AuditPage() {
             </table>
           </div>
         ) : null}
-        <h3 style={{ marginTop: 16 }}>最近清理</h3>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 16,
+          }}
+        >
+          <h3 style={{ margin: 0 }}>最近清理</h3>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void exportCleanupsCsv()}
+          >
+            导出清理 CSV
+          </Button>
+        </div>
         {exportCleanups.length ? (
           <div className="table-wrap">
             <table>

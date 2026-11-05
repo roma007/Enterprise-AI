@@ -8,12 +8,16 @@
 
 ---
 
+## 0. 最近完成
+
+- 2026-11-05 `GET /api/audit-export-cleanups/export.csv`：清理历史 CSV 导出 + 审计页按钮 + verify 断言（51 项）；待协调者合并。
+
 ## 1. 可立即执行队列（优先级从高到低）
 
 | ID | 任务 | 类型 | 涉及文件 | 验证 | 状态 | 依赖 |
 |---|---|---|---|---|---|---|
 | T01 | 文档同步：当前测试/迁移/表/RLS 数量与状态 | 文档 | `TODO.md`、`企业AI化项目管理系统/06_实施计划.md`、`企业AI化项目管理系统/README.md`、`backend/README.md` | `npx playwright test --list`；`ls backend/db/migrations`；只读 SQL 核对表/RLS | pending | 无 |
-| T02 | 历史 CSV 导出清理：手动 dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | pending | 无 |
+| T02 | 导出任务手动清理：dry-run + 确认清理 + CLI | 后端 + 前端 + 运维 | `backend/src/services/audit_exports.ts`、`backend/src/routes/system.ts`、`backend/scripts/cleanup-audit-exports.ts`（新）、`backend/package.json`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx`、`OPERATIONS.md` | `npm run typecheck`；`npm run audit:exports:cleanup -- --dry-run`；`npm run verify:write` | pending | 无 |
 | T03 | 审计视图导入 JSON 版本兼容与错误提示 | 后端 + 前端 | `backend/src/routes/system.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T02（同文件） |
 | T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | pending | T03（同文件） |
 | T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | pending | 无 |

@@ -754,6 +754,9 @@ export function AuditPage() {
 
       {data ? (
         <>
+          {error ? (
+            <ErrorBox error={error} onRetry={() => void reload()} />
+          ) : null}
           <div className="stat-grid">
             <Stat
               label={mode === 'archive' ? '归档总数' : '审计总数'}

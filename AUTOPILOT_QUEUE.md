@@ -21,7 +21,7 @@
 | T03 | 审计视图导入 JSON 版本兼容与错误提示 | 后端 + 前端 | `backend/src/routes/system.ts`、`backend/scripts/verify-write.ts`、`frontend/src/api.ts`、`frontend/src/pages/AuditPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | done | T02 已 done；完成证据见执行日志与 autopilot/logs/20261105-144214-T03-run.md |
 | T04 | 按组织统计导出任务用量（近 30 天） | 后端 + 前端 | `backend/src/routes/platform.ts`、`backend/scripts/verify-write.ts`、`frontend/src/types.ts`、`frontend/src/pages/PlatformTenantsPage.tsx` | `npm run typecheck`（前后端）；`npm run verify:write` | done | T03 已 done；完成证据见执行日志与 autopilot/logs/20261105-144917-T04-run.md |
 | T05 | 组件级单测基础设施（Vitest + Testing Library） | 前端工程 | `frontend/package.json`、`frontend/package-lock.json`、`frontend/tsconfig.json`、`frontend/vitest.config.ts`（新）、`frontend/src/test/setup.ts`（新）、`frontend/src/ui.test.tsx`（新）、`.github/workflows/ci.yml` | `npm run test:unit`；`npm run typecheck`；`npm run build` | done | 无（npm 安装已授权，见 `autopilot/APPROVALS.md`；完成记录见 §2 T05 完成说明） |
-| T06 | 更多边界 e2e（导出清理、视图版本、日期范围等） | 测试 | `frontend/e2e/edge.spec.ts`（新）、`frontend/e2e/helpers.ts`（可选新） | `PW_CHANNEL=msedge npm run e2e -- --grep "边界"`；协调者串行跑全量 e2e | pending | T02、T03 |
+| T06 | 更多边界 e2e（导出清理、视图版本、日期范围等） | 测试 | `frontend/e2e/edge.spec.ts`（新）、`frontend/e2e/helpers.ts`（可选新） | `PW_CHANNEL=msedge npm run e2e -- --grep "边界"`；协调者串行跑全量 e2e | done | T02/T03 已 done；完成记录见 §2 T06 完成说明 |
 
 ### 1.1 建议波次（文件所有权不重叠）
 
@@ -42,7 +42,7 @@
 
 **目标**
 
-- 把过时数字改成当前值：Playwright 冒烟 **20 条**、迁移 **58 个**、表 **86 张**、启用 RLS **81 张**。
+- 把过时数字改成当前值：Playwright 冒烟 **24 条**、迁移 **58 个**、表 **86 张**、启用 RLS **81 张**。
 - 更新 `TODO.md` 的“13 条”与 `06_实施计划.md` 的“13 条 / 43 项”。
 - `verify:write` 当前是 **51 项**；如果其他任务增加了检查，以合并后实际输出为准，不沿用旧值。
 - `08_本轮变更说明_2026-11-04.md` 是历史快照，**不改写**；如需说明，只在 06/TODO 指向最新状态。
@@ -382,6 +382,12 @@ cd frontend && PW_CHANNEL=msedge npm run e2e
 **回滚**
 
 - revert 新增 spec/helper 提交；不影响产品代码。
+
+#### T06 完成说明（2026-11-05）
+
+- 新增 `frontend/e2e/edge.spec.ts` 4 条：视图高版本、缺少 views、日期范围倒置、导出清理入口。
+- 日期范围用例暴露审计页在已有数据时不展示请求错误；已补 `ErrorBox`，现在能看到“开始日期不能晚于结束日期”。
+- 全量 e2e 24/24 通过；现有 20 条冒烟断言未修改。
 
 ---
 

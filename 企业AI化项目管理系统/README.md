@@ -18,7 +18,7 @@
 | [06_实施计划.md](./06_实施计划.md) | **全系统分阶段实施计划**：S1 生产化 → S2 方案 → S3 POC → S4 交付 → S5 运营，含数据/API/页面/门禁/排期/风险/最近 6 周 backlog |
 | [DEPLOY.md](../DEPLOY.md) | Docker Compose 部署、备份恢复、生产检查清单 |
 | [prototype/index.html](./prototype/index.html) | 可点击 HTML 原型，浏览器直接打开 |
-| [../backend/](../backend/) | **可运行后端**：PostgreSQL 86 张表（58 个迁移） + 增量迁移 + Fastify API + 登录骨架 + OpenAPI/Swagger + S1 录入写接口 + 17 项数据库规则断言 + 14 项一致性校验 + 11 项报告回归 + 51 项录入闭环回归 + 20 条 Playwright 冒烟（`npm run demo` / `verify:report` / `verify:write`） |
+| [../backend/](../backend/) | **可运行后端**：PostgreSQL 86 张表（58 个迁移） + 增量迁移 + Fastify API + 登录骨架 + OpenAPI/Swagger + S1 录入写接口 + 17 项数据库规则断言 + 14 项一致性校验 + 11 项报告回归 + 51 项录入闭环回归 + 24 条 Playwright 冒烟（`npm run demo` / `verify:report` / `verify:write`） |
 | [../frontend/](../frontend/) | **内部工作台**：Vite + React + TS，项目列表、诊断录入、机会点/ROI 编辑、报告预览与生成（`npm run dev` → `http://127.0.0.1:5173`） |
 | [../港口集卡运输AI可行性评估.md](../港口集卡运输AI可行性评估.md) | 阶段一的**真实样例产出**（集卡运输行业），可视为系统应能自动生成的交付物范本 |
 | [../会客包/13_AI能力路线图.md](../会客包/13_AI能力路线图.md) | **AI 能力路线图**：感知/预测/优化/生成/Agent 五层、节点机会地图、分期与数据门槛 |

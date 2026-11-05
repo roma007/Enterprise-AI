@@ -124,7 +124,7 @@ def add_header(slide, eyebrow, title, subtitle=None):
     add_line(slide, 0.7, 1.82 if subtitle else 1.52, 1.15, ORANGE, 0.045)
 
 
-def add_footer(slide, total=14):
+def add_footer(slide, total=13):
     page = len(prs.slides)
     add_text(slide, "Enterprise AI · 客户价值说明", 0.7, 7.12, 5.5, 0.22, 9, False, GRAY)
     add_text(slide, f"{page:02d} / {total:02d}", 12.0, 7.12, 0.65, 0.22, 9, False, GRAY, PP_ALIGN.RIGHT)
@@ -302,50 +302,39 @@ add_notes(s, "这页讲路径：不要一上来卖经营分析大屏；先把托
 
 # ---------------------------------------------------------------- 09 三周试点
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "怎么做", "3 周试点：先跑一份用你们数据的结果", "不先谈大合同；先证明一票货、一张对账单能跑通。")
+add_header(s, "怎么做", "3 周试点：第 1 周拿样本，第 2 周跑对账，第 3 周出报告", "先证明一张对账单能跑通，再谈扩大。")
 steps = [
     ("第 1 周", "样本与基线", "200 份托书 / 对账单\n确定字段、口径、验收人"),
-    ("第 2 周", "跑评测 + 调规则", "规则/模型双通道\n差异解释 + 人工复核"),
-    ("第 3 周", "出报告 + 决策", "字段准确率、工时、错误率\nGo / No-Go"),
+    ("第 2 周", "跑对账 + 人工复核", "差异分类 + 解释\n低置信转人工"),
+    ("第 3 周", "出报告 + 决策", "准确率、工时、错误率\nGo / No-Go"),
 ]
 for i, (week, title, detail) in enumerate(steps):
-    x = 0.8 + i * 4.1
-    add_rect(s, x, 1.95, 3.55, 2.4, NAVY if i == 2 else LIGHT, NAVY if i == 2 else LIGHT_2)
-    add_text(s, week, x + 0.3, 2.13, 2.8, 0.3, 11, True, ORANGE if i < 2 else RGBColor(0xF5, 0xB4, 0x5A))
-    add_text(s, title, x + 0.3, 2.5, 2.95, 0.4, 17, True, WHITE if i == 2 else NAVY)
-    add_text(s, detail, x + 0.3, 3.05, 2.95, 1.0, 11.5, False, RGBColor(0xD7, 0xE3, 0xEF) if i == 2 else GRAY, line_spacing=1.35)
-    if i < 2:
-        add_text(s, "→", x + 3.62, 2.9, 0.4, 0.4, 20, True, ORANGE)
-add_rect(s, 0.8, 4.8, 11.95, 1.35, LIGHT, LIGHT_2)
-add_text(s, "试点结束必须交付", 1.05, 4.97, 3.0, 0.3, 12, True, ORANGE)
-add_text(s, "一份可复核的评测报告：字段准确率、整单正确率、人工修正耗时、错误类型分布，以及下一期建议。", 1.05, 5.3, 11.2, 0.55, 12.5, False, NAVY)
-add_footer(s)
-add_notes(s, "老板最怕“做三个月看不到结果”。3 周试点是最小闭环：给样本、跑评测、出报告、做 Go/No-Go。")
-
-
-# ---------------------------------------------------------------- 10 试点一
-s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "怎么做", "试点一：对账单抽取与差异解释（2 周可验收）", "选财务最痛、但数据最容易拿到的一刀。")
-cols = [
-    ("客户给什么", ["对账单 / 结算单（PDF / Excel）", "对应运单或台账", "1 名财务验收人"], TEAL),
-    ("系统产出什么", ["结构化对账数据", "差异分类 + 解释", "需人工确认的异常清单"], ORANGE),
-    ("怎么算通过", ["字段准确率 ≥ 95%", "差异解释采纳率 ≥ 70%", "人工复核耗时下降 ≥ 50%"], GREEN),
-]
-for i, (title, items, color) in enumerate(cols):
     x = 0.7 + i * 4.12
-    add_rect(s, x, 1.95, 3.82, 3.35, LIGHT, LIGHT_2)
-    add_line(s, x + 0.28, 2.15, 0.55, color, 0.05)
-    add_text(s, title, x + 0.28, 2.35, 3.25, 0.35, 14.5, True, NAVY)
-    add_bullets(s, items, x + 0.28, 2.87, 3.1, 2.1, 11.5, BLACK, color, 8)
-add_rect(s, 0.7, 5.6, 11.95, 0.85, NAVY, NAVY)
-add_text(s, "先做“对账差异解释”，不先做“自动付款/自动开票”——合规风险更低，价值更快被看见。", 1.0, 5.83, 11.35, 0.4, 12.5, True, WHITE, PP_ALIGN.CENTER)
+    add_rect(s, x, 1.95, 3.82, 1.85, NAVY if i == 2 else LIGHT, NAVY if i == 2 else LIGHT_2)
+    add_text(s, week, x + 0.3, 2.1, 2.8, 0.3, 11, True, ORANGE if i < 2 else RGBColor(0xF5, 0xB4, 0x5A))
+    add_text(s, title, x + 0.3, 2.45, 3.2, 0.4, 15.5, True, WHITE if i == 2 else NAVY)
+    add_text(s, detail, x + 0.3, 2.95, 3.2, 0.7, 10.5, False, RGBColor(0xD7, 0xE3, 0xEF) if i == 2 else GRAY, line_spacing=1.3)
+    if i < 2:
+        add_text(s, "→", x + 3.62, 2.65, 0.4, 0.4, 18, True, ORANGE)
+add_rect(s, 0.7, 4.05, 11.95, 2.25, LIGHT, LIGHT_2)
+add_text(s, "第一刀：对账差异解释（第 1–2 周）", 0.95, 4.22, 5.0, 0.35, 15, True, NAVY)
+cols = [
+    ("客户给什么", "对账单 / 结算单\n对应运单或台账"),
+    ("系统产出什么", "差异分类 + 解释\n需确认的异常清单"),
+    ("怎么算通过", "字段准确率 ≥95%\n解释采纳率 ≥70%\n复核工时下降 ≥50%"),
+]
+for i, (title, detail) in enumerate(cols):
+    x = 0.95 + i * 3.9
+    add_text(s, title, x, 4.62, 3.4, 0.3, 11, True, TEAL if i < 2 else GREEN)
+    add_text(s, detail, x, 4.95, 3.45, 0.85, 10.5, False, BLACK, line_spacing=1.3)
+add_text(s, "第 3 周把结果写成可复核的报告：字段准确率、差异解释采纳率、人工耗时与错误类型。", 0.95, 5.9, 11.4, 0.3, 10.5, True, GRAY)
 add_footer(s)
-add_notes(s, "试点一选对账，不选开票/付款：数据拿得到、风险低、财务痛感强。验收指标写成可测量的数字。")
+add_notes(s, "3 周试点合并了“试点一”：第 1 周拿样本，第 2 周跑对账差异解释，第 3 周出报告做 Go/No-Go。第一刀只做对账，不碰付款/开票。")
 
 
-# ---------------------------------------------------------------- 11 需要配合
+# ---------------------------------------------------------------- 10 谁参与
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "需要什么", "不需要客户换系统，需要三样东西 + 一个配合机制", "我们做 AI 应用，客户不用装交付管理平台。")
+add_header(s, "需要什么", "老板给三样东西，再指定四个人", "不需要客户换系统；老板只参加两次会。")
 asks = [
     ("200 份", "真实托书 / 对账单", "覆盖主要格式与异常"),
     ("1 名", "内部 owner", "能拍板、能协调数据"),
@@ -353,19 +342,37 @@ asks = [
 ]
 for i, (num, title, detail) in enumerate(asks):
     x = 0.7 + i * 4.12
-    add_rect(s, x, 1.95, 3.82, 2.35, LIGHT, LIGHT_2)
-    add_text(s, num, x + 0.28, 2.12, 3.2, 0.45, 24, True, ORANGE)
-    add_text(s, title, x + 0.28, 2.65, 3.2, 0.35, 14, True, NAVY)
-    add_text(s, detail, x + 0.28, 3.05, 3.2, 0.5, 10.5, False, GRAY)
-add_rect(s, 0.7, 4.6, 5.85, 1.55, NAVY, NAVY)
-add_text(s, "部署与配合", 0.95, 4.75, 3.0, 0.3, 12, True, RGBColor(0xF5, 0xB4, 0x5A))
-add_text(s, "客户内网 / 客户云部署；单租户、单实例；不替换 TMS/财务系统，只做上层增强。", 0.95, 5.05, 5.35, 0.9, 10.5, False, WHITE, line_spacing=1.3)
-add_rect(s, 6.78, 4.6, 5.85, 1.55, LIGHT, LIGHT_2)
-add_text(s, "客户侧配合", 7.02, 4.75, 3.0, 0.3, 12, True, ORANGE)
-add_text(s, "1 名业务 owner + 1 名 IT 接口人；每周 30 分钟复盘；样本脱敏后提供。", 7.02, 5.05, 5.35, 0.9, 10.5, False, NAVY, line_spacing=1.3)
-add_text(s, "客户只装 ai-copilot；交付管理平台是我们内部工具，不进入客户环境。", 0.7, 6.45, 11.95, 0.3, 11.5, True, NAVY)
+    add_rect(s, x, 1.9, 3.82, 1.25, LIGHT, LIGHT_2)
+    add_text(s, num, x + 0.28, 2.02, 2.0, 0.4, 22, True, ORANGE)
+    add_text(s, title, x + 1.35, 2.05, 2.25, 0.3, 12, True, NAVY)
+    add_text(s, detail, x + 1.35, 2.38, 2.25, 0.5, 9.5, False, GRAY)
+roles = [
+    ("业务 owner", "单证 / 财务主管", "每周 30 分钟", "拍板范围、验收口径、协调样本"),
+    ("单证 / 财务骨干", "一线操作人员", "首周 2 小时 + 试用", "解释单据、反馈异常、参与验收"),
+    ("IT 接口人", "客户 IT", "首周 2–3 小时", "环境、账号、接口与网络"),
+    ("数据 / 安全", "安全或法务", "1 次评审", "脱敏规则、数据边界确认"),
+    ("老板", "您", "2 次会", "Kickoff 定目标；Go/No-Go 拍板"),
+]
+table_shape = s.shapes.add_table(len(roles) + 1, 4, Inches(0.7), Inches(3.35), Inches(11.95), Inches(3.0))
+table = table_shape.table
+for i, w in enumerate([2.2, 2.5, 2.4, 4.85]):
+    table.columns[i].width = Inches(w)
+for j, h in enumerate(["角色", "谁", "投入", "负责什么"]):
+    cell = table.cell(0, j); cell.text = h
+    cell.fill.solid(); cell.fill.fore_color.rgb = NAVY
+    for p in cell.text_frame.paragraphs:
+        for r in p.runs: set_font(r, 10.5, True, WHITE)
+    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+for i, row in enumerate(roles, start=1):
+    for j, val in enumerate(row):
+        cell = table.cell(i, j); cell.text = val
+        cell.fill.solid(); cell.fill.fore_color.rgb = WHITE if i % 2 else LIGHT
+        for p in cell.text_frame.paragraphs:
+            for r in p.runs: set_font(r, 9.8, j == 0, NAVY if j == 0 else BLACK)
+        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+add_text(s, "不替换 TMS / 财务系统；客户只装 ai-copilot。", 0.7, 6.55, 9.0, 0.3, 11, True, NAVY)
 add_footer(s)
-add_notes(s, "这一页把“需要什么”讲清楚：样本、owner、验收口径，再加一个每周复盘机制。客户不用换 TMS/财务系统。")
+add_notes(s, "老板只需要给三样东西：样本、owner、验收口径；再指定四个人：业务 owner、单证/财务骨干、IT 接口人、数据/安全。老板本人只参加 kickoff 和 Go/No-Go 两次会。")
 
 
 # ---------------------------------------------------------------- 12 价值测算
@@ -406,24 +413,26 @@ add_footer(s)
 add_notes(s, "这页的关键不是数字，是口径。不要承诺裁人，承诺用客户真实数据测出区间。老板更信“可复核”。")
 
 
-# ---------------------------------------------------------------- 13 数据与安全
+# ---------------------------------------------------------------- 12 让老板放心
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "信任条件", "先讲清数据边界，再谈 AI 能力", "老板最关心的不是模型参数，是数据会不会出去、出错谁负责。")
-items = [
-    ("数据不出境", "默认私有化/内网部署；模型调用需单独确认合规与脱敏方案。", TEAL),
-    ("权限与审计", "角色权限、项目成员、操作留痕；谁改了什么可追溯。", ORANGE),
-    ("人工确认", "AI 只出草稿；确认后才进入业务，可撤销、可回滚。", GREEN),
-    ("备份与恢复", "数据库备份、时间点恢复演练；故障有处置手册。", TEAL),
+add_header(s, "让老板放心", "四不承诺、四条底线、两次拍板", "先小范围、可回滚；达不到验收就停，不扩大。")
+cards = [
+    ("不换系统", "不替换 TMS / 财务系统，只做上层增强，业务照常跑。", TEAL),
+    ("不替人做决定", "AI 只出草稿；人工确认后才进入业务，可撤销、可回滚。", GREEN),
+    ("不拿数据冒险", "默认客户内网/客户云；数据不出边界，外部模型调用单独确认。", ORANGE),
+    ("不一次性投入", "3 周试点先验证；准确率不达标就停，不进入下一阶段。", RED),
 ]
-for i, (title, detail, color) in enumerate(items):
+for i, (title, detail, color) in enumerate(cards):
     x = 0.7 + (i % 2) * 6.05
-    y = 1.95 + (i // 2) * 1.95
-    add_rect(s, x, y, 5.75, 1.65, LIGHT, LIGHT_2)
-    add_text(s, title, x + 0.28, y + 0.2, 5.0, 0.35, 14, True, NAVY)
-    add_text(s, detail, x + 0.28, y + 0.65, 5.15, 0.8, 11, False, GRAY, line_spacing=1.3)
-add_text(s, "原则：客户数据默认不出客户边界；任何外部模型/云服务调用，单独做合规确认，不默认开启。", 0.7, 6.0, 11.95, 0.4, 12.5, True, NAVY, PP_ALIGN.CENTER)
+    y = 1.95 + (i // 2) * 1.55
+    add_rect(s, x, y, 5.75, 1.3, LIGHT, LIGHT_2)
+    add_text(s, title, x + 0.28, y + 0.17, 2.6, 0.35, 14, True, color)
+    add_text(s, detail, x + 2.7, y + 0.18, 2.8, 0.95, 10.3, False, NAVY, line_spacing=1.3)
+add_rect(s, 0.7, 5.25, 11.95, 0.9, NAVY, NAVY)
+add_text(s, "老板只需要做两件事：指定一名 owner；参加 Kickoff 和 Go/No-Go 两次会。", 0.95, 5.48, 11.45, 0.4, 13, True, WHITE, PP_ALIGN.CENTER)
+add_text(s, "不承诺裁人，不承诺“省几个人”；只承诺用你们的单据和工时，给出可复核的节省区间。", 0.7, 6.35, 11.95, 0.3, 11, True, NAVY, PP_ALIGN.CENTER)
 add_footer(s)
-add_notes(s, "安全这页不要讲技术细节，讲四个老板能听懂的承诺：数据不出境、权限可追、人工确认、能恢复。")
+add_notes(s, "老板最关心的是风险。四不：不换系统、不替人做决定、不拿数据冒险、不一次性投入。老板本人只做两件事：指定 owner，参加两次会。")
 
 
 # ---------------------------------------------------------------- 14 下一步

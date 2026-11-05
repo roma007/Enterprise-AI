@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SolutionDetail } from './types';
 import {
   diffSolutionDetails,
+  quoteCoverage,
   solutionDiffCsv,
   solutionDiffMarkdown,
 } from './solutionDiff';
@@ -132,6 +133,28 @@ describe('diffSolutionDetails', () => {
     expect(csv).toContain('"类型","名称","变化","基准","对比"');
     expect(csv).toContain('"工作量成本"');
     expect(csv).toContain('"5"');
+  });
+
+  it('报价覆盖分档：未估算/未报价/负毛利/覆盖', () => {
+    expect(quoteCoverage(undefined, undefined)).toEqual({
+      level: 'unknown',
+      ratio: null,
+      margin: 0,
+    });
+    expect(quoteCoverage(undefined, 2)).toEqual({
+      level: 'missing',
+      ratio: 0,
+      margin: -2,
+    });
+    const under = quoteCoverage(0.1, 0.2);
+    expect(under.level).toBe('under');
+    expect(under.ratio).toBeCloseTo(0.5);
+    expect(under.margin).toBeCloseTo(-0.1);
+    const ok = quoteCoverage(3, 2);
+    expect(ok.level).toBe('ok');
+    expect(ok.ratio).toBeCloseTo(1.5);
+    expect(ok.margin).toBeCloseTo(1);
+    expect(quoteCoverage(1, 1).level).toBe('ok');
   });
 
   it('客户版 Markdown/CSV 隐藏内部工作量成本', () => {

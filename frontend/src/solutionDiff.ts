@@ -26,6 +26,33 @@ export interface SolutionDiff {
   changedCount: number;
 }
 
+export type QuoteCoverageLevel = 'unknown' | 'missing' | 'under' | 'ok';
+
+export interface QuoteCoverage {
+  level: QuoteCoverageLevel;
+  /** 一次性报价 / 工作量成本；成本未估算时为 null。 */
+  ratio: number | null;
+  /** 报价减成本（万元）；负值表示毛利为负。 */
+  margin: number;
+}
+
+/** 报价覆盖率：仅用于提示，不替代商务判断。 */
+export function quoteCoverage(
+  quoteOneTime?: number,
+  workloadCost?: number,
+): QuoteCoverage {
+  const rawQuote = Number(quoteOneTime ?? 0);
+  const rawCost = Number(workloadCost ?? 0);
+  const quote = Number.isFinite(rawQuote) ? Math.max(0, rawQuote) : 0;
+  const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : 0;
+  if (cost <= 0) return { level: 'unknown', ratio: null, margin: 0 };
+  if (quote <= 0) return { level: 'missing', ratio: 0, margin: -cost };
+  const ratio = quote / cost;
+  return quote + 1e-9 < cost
+    ? { level: 'under', ratio, margin: quote - cost }
+    : { level: 'ok', ratio, margin: quote - cost };
+}
+
 const FIELD_LABELS: Array<[keyof SolutionDetail['item'], string]> = [
   ['status', '状态'],
   ['scope', '范围'],

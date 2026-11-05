@@ -26,6 +26,7 @@ import {
 import { fmtMoney } from '../../utils';
 import {
   diffSolutionDetails,
+  quoteCoverage,
   solutionDiffCsv,
   solutionDiffMarkdown,
   type NamedDiff,
@@ -52,6 +53,30 @@ const DIRECTION: Record<string, string> = {
   outbound: '出站',
   bidirectional: '双向',
 };
+
+function QuoteCoverageBadge({
+  quote,
+  cost,
+}: {
+  quote?: number;
+  cost?: number;
+}) {
+  const coverage = quoteCoverage(quote, cost);
+  if (coverage.level === 'unknown') {
+    return <Badge tone="gray">未估算成本</Badge>;
+  }
+  if (coverage.level === 'missing') {
+    return <Badge tone="amber">未关联报价</Badge>;
+  }
+  if (coverage.level === 'under') {
+    return <Badge tone="red">负毛利 {fmtMoney(coverage.margin)}</Badge>;
+  }
+  return (
+    <Badge tone="green">
+      报价覆盖 {Math.round((coverage.ratio ?? 0) * 100)}%
+    </Badge>
+  );
+}
 
 const REVIEW_DECISION: Record<string, string> = {
   approved: '通过',
@@ -265,11 +290,24 @@ export function SolutionsTab({
                       value={selectedSolutionId ?? oppSolutions[0].id}
                       onChange={(e) => setSelectedSolutionId(e.target.value)}
                     >
-                      {oppSolutions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          v{s.version} · {SOLUTION_STATUS[s.status] ?? s.status}
-                        </option>
-                      ))}
+                      {oppSolutions.map((s) => {
+                        const coverage = quoteCoverage(
+                          s.quote_one_time,
+                          s.workload_cost,
+                        );
+                        const suffix =
+                          coverage.level === 'under'
+                            ? ' · 负毛利'
+                            : coverage.level === 'missing'
+                              ? ' · 未关联报价'
+                              : '';
+                        return (
+                          <option key={s.id} value={s.id}>
+                            v{s.version} · {SOLUTION_STATUS[s.status] ?? s.status}
+                            {suffix}
+                          </option>
+                        );
+                      })}
                     </Select>
                     {oppSolutions.length > 1 ? (
                       <Button
@@ -292,6 +330,16 @@ export function SolutionsTab({
               >
                 <div className="inline-stats">
                   <span>版本 <strong>v{oppSolutions.find((s) => s.id === selectedSolutionId)?.version ?? oppSolutions[0].version}</strong></span>
+                  <QuoteCoverageBadge
+                    quote={
+                      (oppSolutions.find((s) => s.id === selectedSolutionId) ??
+                        oppSolutions[0])?.quote_one_time
+                    }
+                    cost={
+                      (oppSolutions.find((s) => s.id === selectedSolutionId) ??
+                        oppSolutions[0])?.workload_cost
+                    }
+                  />
                   <span className="muted">方案详情在下方编辑</span>
                 </div>
               </Card>

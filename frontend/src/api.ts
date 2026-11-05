@@ -1195,6 +1195,8 @@ export const api = {
     request<{ item: OrganizationSummary }>('/api/org', json('PATCH', payload)),
   listPlatformTenants: () =>
     request<{ items: OrganizationSummary[] }>('/api/platform/tenants'),
+  exportPlatformTenantUsageCsv: () =>
+    requestBlob('/api/platform/tenants/export.csv'),
   listPlatformPlans: () =>
     request<{ items: PlanDefinition[] }>('/api/platform/plans'),
   listHolidays: (opts: { year?: number; effective?: boolean } = {}) => {

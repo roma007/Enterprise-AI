@@ -61,6 +61,66 @@ export async function platformRoutes(app: FastifyInstance) {
     return { items };
   });
 
+  /** 平台租户用量 CSV（近 30 天审计导出统计）。 */
+  app.get('/api/platform/tenants/export.csv', async (req, reply) => {
+    const auth = assertPlatformAdmin(req);
+    const rows = await query<any>(
+      `SELECT ${TENANT_FIELDS}
+         FROM organizations o
+         LEFT JOIN tenant_plans p ON p.code = o.plan
+        ORDER BY o.created_at`,
+    );
+    const cell = (value: unknown) => {
+      let text = value == null ? '' : String(value);
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const header = [
+      '组织',
+      '标识',
+      '套餐',
+      '状态',
+      '用户',
+      '客户',
+      '项目',
+      '导出任务30d',
+      '导出行数30d',
+      '失败30d',
+      '创建时间',
+    ];
+    const lines = [header.map(cell).join(',')];
+    for (const row of rows) {
+      lines.push(
+        [
+          cell(row.name),
+          cell(row.slug),
+          cell(row.plan),
+          cell(row.status),
+          cell(row.user_count),
+          cell(row.client_count),
+          cell(row.engagement_count),
+          cell(row.audit_export_jobs_30d),
+          cell(row.audit_export_rows_30d),
+          cell(row.audit_export_failed_30d),
+          cell(row.created_at ? new Date(row.created_at).toISOString() : ''),
+        ].join(','),
+      );
+    }
+    await query(
+      `INSERT INTO audit_logs
+         (org_id, user_id, action, object_type, status_code, detail)
+       VALUES (NULL,$1,'EXPORT platform-tenants','organization',200,$2::jsonb)`,
+      [auth.sub ?? null, JSON.stringify({ exported: rows.length })],
+    ).catch(() => undefined);
+    const filename = `platform-tenants-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${filename}"`)
+      .send(`\uFEFF${lines.join('\r\n')}`);
+  });
+
   app.get('/api/platform/plans', async (req) => {
     assertPlatformAdmin(req);
     return { items: await listPlans() };

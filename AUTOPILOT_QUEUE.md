@@ -10,6 +10,9 @@
 
 ## 0. 最近完成
 
+- 2026-11-05 平台租户用量 CSV：`GET /api/platform/tenants/export.csv`，含近 30 天导出任务/行数/失败；平台页新增「导出用量 CSV」。
+
+
 - 2026-11-05 `GET /api/audit-export-cleanups/export.csv`：清理历史 CSV 导出 + 审计页按钮 + verify 断言（51 项）；待协调者合并。
 
 ## 1. 可立即执行队列（优先级从高到低）

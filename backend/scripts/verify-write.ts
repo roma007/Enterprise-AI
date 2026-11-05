@@ -3003,6 +3003,24 @@ async function main() {
       [inserted.map((row: { id: string }) => row.id)],
     );
 
+    const usageCsv = await app.inject({
+      method: 'GET',
+      url: '/api/platform/tenants/export.csv',
+      headers: adminHeaders,
+    });
+    assert.equal(usageCsv.statusCode, 200, '租户用量 CSV 应成功');
+    assert.match(String(usageCsv.headers['content-type']), /text\/csv/);
+    const usageLines = usageCsv.body.replace(/^\uFEFF/, '').split('\r\n');
+    assert.match(usageLines[0], /"导出任务30d"/);
+    assert.ok(usageCsv.body.includes('"hengzhi"'), 'CSV 应包含当前租户');
+    const usageExportLog = await one<{ detail: any }>(
+      `SELECT detail FROM audit_logs
+        WHERE action = 'EXPORT platform-tenants'
+        ORDER BY created_at DESC LIMIT 1`,
+    );
+    assert.ok(usageExportLog, '租户用量导出应写审计日志');
+    assert.ok((usageExportLog!.detail.exported ?? 0) >= 1);
+
     const storage = await app.inject({
       method: 'GET',
       url: '/api/system/storage',

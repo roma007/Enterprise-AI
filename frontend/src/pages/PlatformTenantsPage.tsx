@@ -47,6 +47,25 @@ export function PlatformTenantsPage() {
   const invoices = data?.invoices ?? [];
   const active = items.filter((t) => t.status === 'active').length;
 
+  const exportUsage = async () => {
+    setOpError(null);
+    setNotice(null);
+    try {
+      const blob = await api.exportPlatformTenantUsageCsv();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `平台租户用量-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setNotice('已导出平台租户用量 CSV。');
+    } catch (err) {
+      setOpError(err);
+    }
+  };
+
   const exportTenant = async (t: OrganizationSummary) => {
     setBusy(t.id);
     setOpError(null);
@@ -185,7 +204,16 @@ export function PlatformTenantsPage() {
         eyebrow="平台运营"
         title="租户管理"
         subtitle="供应商租户列表；暂停后无法登录，现有会话立即失效。"
-        actions={<Button onClick={() => void reload()} disabled={loading}>刷新</Button>}
+        actions={
+          <div className="row">
+            <Button size="sm" variant="ghost" onClick={() => void exportUsage()}>
+              导出用量 CSV
+            </Button>
+            <Button onClick={() => void reload()} disabled={loading}>
+              刷新
+            </Button>
+          </div>
+        }
       />
 
       {loading && !data ? <Spinner /> : null}

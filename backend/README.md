@@ -75,7 +75,7 @@ npm run dev          # http://127.0.0.1:8788
 
 **PostgreSQL RLS**：迁移 `0029_rls.sql` 创建受限角色 `ai_delivery_app`、`app_org_id()`/`app_platform_admin()`，并为全部租户表启用 RLS。请求通过 `@fastify/request-context` 注入 `org_id`/平台管理员标记；每个 API 请求复用一条数据库连接并设置会话级 `SET ROLE ai_delivery_app + app.org_id`，请求结束释放并清理上下文。登录、公开分享、健康检查等使用服务角色绕过 RLS。`/api/system/db-context` 可验证当前数据库角色、org 与请求内连接复用。`benchmarks` / `metric_definitions` 为平台字典，仅平台管理员可改。连接池上限 `PG_POOL_MAX` 默认 20。
 
-**平台运营**：`users.is_platform_admin` 标记平台管理员（seed 的 `admin@hengzhi.ai`）。`GET /api/platform/tenants` 列表、`PATCH /api/platform/tenants/:id` 暂停/恢复/套餐/试用到期/账单邮箱；暂停立即撤销该组织全部会话并阻止登录。`GET/PATCH /api/org` 供租户管理员维护组织名称与账单邮箱。
+**平台运营**：`users.is_platform_admin` 标记平台管理员（seed 的 `admin@hengzhi.ai`）。`GET /api/platform/tenants` 列表（含近 30 天导出任务/行数/失败统计）、`GET /api/platform/tenants/export.csv` 用量 CSV、`PATCH /api/platform/tenants/:id` 暂停/恢复/套餐/试用到期/账单邮箱；暂停立即撤销该组织全部会话并阻止登录。`GET/PATCH /api/org` 供租户管理员维护组织名称与账单邮箱。
 
 **节假日日历**：`holiday_calendar` 支持平台级（`org_id IS NULL`）与组织级节假日，按 `region` 区分；`GET/POST /api/holidays`、`DELETE /api/holidays/:id`，仅管理员/总监可维护。组织在 `settings.region` 配置 SLA 地区（默认 `CN`）；`GET /api/holidays?effective=1` 只返回该地区（或 `ALL`）的节假日。SLA 计算默认跳过周末，并跳过生效地区的已启用节假日。当前未预置法定节假日，需平台或客户自行维护。
 

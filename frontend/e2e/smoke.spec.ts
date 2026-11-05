@@ -235,6 +235,9 @@ test.describe('关键路径冒烟', () => {
     await expect(page.getByRole('heading', { name: '租户管理' })).toBeVisible();
     await expect(page.getByRole('table').getByText('恒智 AI')).toBeVisible();
     await expect(page.getByText('hengzhi')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '导出用量 CSV' }),
+    ).toBeVisible();
   });
 
   test('组织设置展示套餐与用量', async ({ page, request }) => {

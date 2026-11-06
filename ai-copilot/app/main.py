@@ -34,7 +34,7 @@ from .store import (
     AlreadyConfirmed, audit, audit_csv, count_users, create_session, create_user,
     dump_feedback, find_amend_candidates, find_by_booking_no, get_user,
     get_user_by_email, init_db, ignore_item, label_item, latest_unconfirmed_run, learn_export,
-    learn_item, learn_queue, learn_stats, list_users,
+    learn_filter_options, learn_item, learn_queue, learn_stats, list_users,
     metrics, queue, recent, record_inbound, report_md, revoke_session,
     revoke_user_sessions, risk_sim, save_feedback, save_run, session_valid,
     set_password, stats, touch_login, update_user,
@@ -912,13 +912,20 @@ def api_goldset_eval(req: dict):
 
 
 @app.get("/api/learn/stats")
-def api_learn_stats():
-    return learn_stats()
+def api_learn_stats(source: str = "", batch_id: str = ""):
+    return learn_stats(source=source, batch_id=batch_id)
+
+
+@app.get("/api/learn/filters")
+def api_learn_filters():
+    """标注台筛选选项：按来源（企微/H5/批量/网页）与批次。"""
+    return learn_filter_options()
 
 
 @app.get("/api/learn/queue")
-def api_learn_queue(status: str = "pending", limit: int = 100):
-    return {"items": learn_queue(status, limit)}
+def api_learn_queue(status: str = "pending", limit: int = 100,
+                    source: str = "", batch_id: str = ""):
+    return {"items": learn_queue(status, limit, source=source, batch_id=batch_id)}
 
 
 @app.get("/api/learn/export.jsonl", response_class=PlainTextResponse)

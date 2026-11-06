@@ -785,7 +785,12 @@ def learn_item(run_id: str) -> dict | None:
             "SELECT q.id, q.run_id, q.ts, q.reason, q.status, q.gold_json,"
             " q.labeled_at, q.corrected, q.labeled_by,"
             " r.raw_text, r.fields_json, r.kind, r.review_level, r.confirmed,"
-            " r.errors, r.warns, u.name AS labeler_name, u.email AS labeler_email"
+            " r.errors, r.warns, u.name AS labeler_name, u.email AS labeler_email,"
+            " COALESCE((SELECT i.source FROM inbound i WHERE i.run_id=q.run_id"
+            " ORDER BY i.ts DESC LIMIT 1),'') AS source,"
+            " COALESCE((SELECT b.name FROM batch_items bi"
+            " JOIN batches b ON b.id=bi.batch_id"
+            " WHERE bi.run_id=q.run_id LIMIT 1),'') AS batch_name"
             " FROM learn_queue q JOIN runs r ON r.id = q.run_id"
             " LEFT JOIN users u ON u.id = q.labeled_by WHERE q.id=?",
             (run_id,),
@@ -868,25 +873,63 @@ def ignore_item(run_id: str, actor: str = "", note: str = "") -> dict:
     return {"ok": True, "id": run_id, "status": "ignored"}
 
 
-def learn_queue(status: str = "pending", limit: int = 100) -> list[dict]:
+def _learn_filter_sql(source: str = "", batch_id: str = "") -> tuple[str, list]:
+    """学习队列/统计的公共筛选条件。
+
+    - source: 按 inbound.source 过滤；`__none__` 表示没有来单记录的单
+    - batch_id: 按批次过滤（通过 batch_items.run_id 关联）
+    """
+    where = ""
+    args: list = []
+    if source == "__none__":
+        where += " AND NOT EXISTS (SELECT 1 FROM inbound i WHERE i.run_id=q.run_id)"
+    elif source:
+        where += (
+            " AND EXISTS (SELECT 1 FROM inbound i"
+            " WHERE i.run_id=q.run_id AND i.source=?)"
+        )
+        args.append(source)
+    if batch_id:
+        where += (
+            " AND EXISTS (SELECT 1 FROM batch_items bi"
+            " WHERE bi.run_id=q.run_id AND bi.batch_id=?)"
+        )
+        args.append(batch_id)
+    return where, args
+
+
+def learn_queue(status: str = "pending", limit: int = 100,
+                source: str = "", batch_id: str = "") -> list[dict]:
+    extra, fargs = _learn_filter_sql(source, batch_id)
+    sql = (
+        "SELECT q.id, q.run_id, q.ts, q.reason, q.status, q.gold_json,"
+        " q.corrected, q.labeled_by, u.name AS labeler_name,"
+        " r.kind, r.review_level, r.engine, substr(r.raw_text,1,80) AS preview,"
+        " COALESCE((SELECT i.source FROM inbound i WHERE i.run_id=q.run_id"
+        " ORDER BY i.ts DESC LIMIT 1),'') AS source,"
+        " COALESCE((SELECT bi.batch_id FROM batch_items bi"
+        " WHERE bi.run_id=q.run_id LIMIT 1),'') AS batch_id,"
+        " COALESCE((SELECT b.name FROM batch_items bi"
+        " JOIN batches b ON b.id=bi.batch_id"
+        " WHERE bi.run_id=q.run_id LIMIT 1),'') AS batch_name"
+        " FROM learn_queue q LEFT JOIN runs r ON r.id = q.run_id"
+        " LEFT JOIN users u ON u.id = q.labeled_by"
+        " WHERE q.status = ?" + extra +
+        " ORDER BY q.ts DESC LIMIT ?"
+    )
     with _conn() as conn:
-        rows = conn.execute(
-            "SELECT q.id, q.run_id, q.ts, q.reason, q.status, q.gold_json,"
-            " q.corrected, q.labeled_by, u.name AS labeler_name,"
-            " r.kind, r.review_level, r.engine, substr(r.raw_text,1,80) AS preview"
-            " FROM learn_queue q LEFT JOIN runs r ON r.id = q.run_id"
-            " LEFT JOIN users u ON u.id = q.labeled_by"
-            " WHERE q.status = ? ORDER BY q.ts DESC LIMIT ?",
-            (status, limit),
-        ).fetchall()
+        rows = conn.execute(sql, [status] + fargs + [limit]).fetchall()
     return [dict(r) for r in rows]
 
 
-def learn_stats() -> dict:
+def learn_stats(source: str = "", batch_id: str = "") -> dict:
+    extra, fargs = _learn_filter_sql(source, batch_id)
     with _conn() as conn:
         rows = conn.execute(
             "SELECT status, reason, COUNT(*) n, COALESCE(SUM(corrected),0) c"
-            " FROM learn_queue GROUP BY status, reason"
+            " FROM learn_queue q WHERE 1=1" + extra +
+            " GROUP BY status, reason",
+            fargs,
         ).fetchall()
     out = {"pending": 0, "labeled": 0, "ignored": 0, "corrected": 0, "by_reason": {}}
     for r in rows:
@@ -896,6 +939,26 @@ def learn_stats() -> dict:
             out["corrected"] += r["c"] or 0
     out["total"] = out.get("pending", 0) + out.get("labeled", 0) + out.get("ignored", 0)
     return out
+
+
+def learn_filter_options() -> dict:
+    """标注台的筛选选项：来源与批次，附带当前队列条数。"""
+    with _conn() as conn:
+        src_rows = conn.execute(
+            "SELECT COALESCE(i.source,'') AS source, COUNT(DISTINCT q.id) AS n"
+            " FROM learn_queue q LEFT JOIN inbound i ON i.run_id = q.run_id"
+            " GROUP BY COALESCE(i.source,'') ORDER BY n DESC"
+        ).fetchall()
+        batch_rows = conn.execute(
+            "SELECT bi.batch_id AS id, b.name AS name, COUNT(DISTINCT q.id) AS n"
+            " FROM learn_queue q JOIN batch_items bi ON bi.run_id = q.run_id"
+            " JOIN batches b ON b.id = bi.batch_id"
+            " GROUP BY bi.batch_id, b.name ORDER BY n DESC"
+        ).fetchall()
+    return {
+        "sources": [dict(r) for r in src_rows],
+        "batches": [dict(r) for r in batch_rows],
+    }
 
 
 def learn_export(limit: int = 2000) -> str:

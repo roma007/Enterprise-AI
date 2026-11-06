@@ -23,6 +23,10 @@
   .tab{padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px}
   .tab.on{background:var(--brand);border-color:var(--brand);color:#fff}
   .bar .sp{margin-left:auto}
+  .bar label.sel{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .bar select{max-width:230px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;
+              background:#fff;color:var(--ink);font:inherit;font-size:12px;outline:none}
+  .bar select:focus{border-color:var(--brand)}
   button{font:inherit;font-size:13px;padding:8px 15px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
   button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
   button:disabled{opacity:.5;cursor:not-allowed}
@@ -75,6 +79,13 @@
     <button class="tab on" data-status="pending">待标注</button>
     <button class="tab" data-status="labeled">已标注</button>
     <button class="tab" data-status="ignored">已跳过</button>
+    <label class="sel">来源
+      <select id="fSource"><option value="">全部来源</option></select>
+    </label>
+    <label class="sel">批次
+      <select id="fBatch"><option value="">全部批次</option></select>
+    </label>
+    <button class="tab" id="fClear" style="display:none">清除筛选</button>
     <span class="sp"></span>
     <a class="tab" href="/api/learn/export.jsonl" download="learn.jsonl">导出 JSONL</a>
   </div>
@@ -110,11 +121,39 @@ const REASON = {
   blocked:'有阻断项', fuzzy_match:'容错抽取值', low_confidence:'低置信',
   multi_ticket:'多票切分', confirmed:'人工确认'
 };
+const SRC = {
+  '':'无来源', '__none__':'无来源',
+  wecom:'企业微信', web:'网页粘贴', h5:'H5 文本',
+  'h5-upload':'H5 拍照/上传', 'web-upload':'网页上传',
+  'batch-booking':'批量托书', 'batch-invoice':'批量发票', upload:'上传'
+};
 
 let ME = null, STATUS = 'pending', ITEMS = [], CUR = null;
+let SOURCE = '', BATCH = '';
+
+function filterQS(){
+  const p = new URLSearchParams();
+  if(SOURCE) p.set('source', SOURCE);
+  if(BATCH) p.set('batch_id', BATCH);
+  return p.toString();
+}
+
+async function loadFilters(){
+  const d = await j('/api/learn/filters');
+  const s = $('#fSource'), b = $('#fBatch');
+  s.innerHTML = '<option value="">全部来源</option>' + d.sources.map(x => {
+    const val = x.source || '__none__';
+    return `<option value="${esc(val)}">${esc(SRC[x.source] || x.source || '无来源')}（${x.n}）</option>`;
+  }).join('');
+  b.innerHTML = '<option value="">全部批次</option>' + d.batches.map(x =>
+    `<option value="${esc(x.id)}">${esc(x.name)}（${x.n}）</option>`).join('');
+  s.value = SOURCE; b.value = BATCH;
+  $('#fClear').style.display = (SOURCE || BATCH) ? '' : 'none';
+}
 
 async function loadStats(){
-  const s = await j('/api/learn/stats');
+  const q = filterQS();
+  const s = await j('/api/learn/stats' + (q ? '?' + q : ''));
   $('#stats').innerHTML = `
     <div class="stat ${s.pending?'hot':''}"><b>${s.pending}</b><span>待标注</span></div>
     <div class="stat"><b>${s.labeled}</b><span>已标注</span></div>
@@ -122,13 +161,17 @@ async function loadStats(){
     <div class="stat"><b>${s.ignored}</b><span>已跳过</span></div>`;
   $('#exportHint').innerHTML = `已标注 ${s.labeled} 条，其中难例 ${s.corrected} 条。
     导出后追加到 <code>samples/bookings.jsonl</code>，再跑
-    <code>PYTHONPATH=. .venv/bin/python scripts/run_eval.py</code> 即可看到变化。`;
+    <code>make eval</code> 即可看到变化。`;
 }
 
 async function loadList(){
-  const d = await j('/api/learn/queue?status=' + STATUS + '&limit=200');
+  const q = filterQS();
+  const d = await j('/api/learn/queue?status=' + STATUS + '&limit=200' + (q ? '&' + q : ''));
   ITEMS = d.items;
-  $('#listTitle').textContent = ({pending:'待标注', labeled:'已标注', ignored:'已跳过'}[STATUS] || STATUS) + `（${ITEMS.length}）`;
+  const filt = [SOURCE ? (SRC[SOURCE] || SOURCE) : '', BATCH ? '指定批次' : '']
+    .filter(Boolean).join(' · ');
+  $('#listTitle').textContent = ({pending:'待标注', labeled:'已标注', ignored:'已跳过'}[STATUS] || STATUS)
+    + `（${ITEMS.length}）` + (filt ? ' · ' + filt : '');
   if(!ITEMS.length){
     $('#list').innerHTML = `<div class="empty">${STATUS === 'pending' ? '队列空了。解析新托书或标注历史单据后会出现在这里。' : '没有记录。'}</div>`;
     return;
@@ -138,9 +181,11 @@ async function loadList(){
       <div class="t">
         <span class="tag ${esc(it.review_level||'')}">${esc(LV[it.review_level] || it.review_level || '')}</span>
         <span>${esc(REASON[it.reason] || it.reason)}</span>
+        <span class="tag">${esc(SRC[it.source] || it.source || '无来源')}</span>
         <span style="margin-left:auto">${esc((it.ts||'').replace('T',' ').slice(5,16))}</span>
       </div>
       <div class="p">${esc(it.preview || '')}</div>
+      ${it.batch_name ? `<div class="t" style="margin-top:4px"><span class="tag">批次：${esc(it.batch_name)}</span></div>` : ''}
       ${it.status === 'labeled' ? `<div class="t" style="margin-top:4px">
         ${it.corrected ? '<span class="tag" style="background:#fde8e8;color:#c53030">难例</span>' : '<span class="tag">原样确认</span>'}
         <span>${esc(it.labeler_name || '')}</span></div>` : ''}
@@ -169,6 +214,7 @@ async function openItem(id){
   const editable = !(ME && ME.role === 'viewer');
   $('#editor').innerHTML = `
     <h2>${esc(it.run_id)} · ${esc(LV[it.review_level] || it.review_level || '')} · ${esc(REASON[it.reason] || it.reason)}
+      · ${esc(SRC[it.source] || it.source || '无来源')}${it.batch_name ? ' · 批次：' + esc(it.batch_name) : ''}
       ${it.status === 'labeled' ? ' · 已标注' : ''}</h2>
     <pre class="raw">${esc(it.raw_text || '')}</pre>
     <div class="fields">
@@ -244,6 +290,26 @@ async function ignoreItem(){
   }catch(e){ toast('操作失败：' + e.message); }
 }
 
+async function applyLearnFilters(){
+  SOURCE = $('#fSource').value;
+  BATCH = $('#fBatch').value;
+  CUR = null;
+  $('#editor').innerHTML = '<div class="empty">从左侧选一条开始标注。</div>';
+  $('#fClear').style.display = (SOURCE || BATCH) ? '' : 'none';
+  try{
+    await loadStats();
+    await loadList();
+  }catch(e){ toast('筛选失败：' + e.message); }
+}
+
+$('#fSource').onchange = applyLearnFilters;
+$('#fBatch').onchange = applyLearnFilters;
+$('#fClear').onclick = () => {
+  $('#fSource').value = '';
+  $('#fBatch').value = '';
+  applyLearnFilters();
+};
+
 document.querySelectorAll('.tab[data-status]').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab[data-status]').forEach(x => x.classList.toggle('on', x === t));
   STATUS = t.dataset.status;
@@ -255,6 +321,7 @@ document.querySelectorAll('.tab[data-status]').forEach(t => t.onclick = () => {
 (async () => {
   try{
     ME = await j('/api/me');
+    await loadFilters();
     await loadStats();
     await loadList();
   }catch(e){ $('#list').innerHTML = `<div class="empty" style="color:#c53030">${esc(e.message)}</div>`; }

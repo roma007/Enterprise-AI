@@ -1,6 +1,6 @@
 # 全项目核验报告
 
-> 核验日期：2026-11-06
+> 核验日期：2026-11-07
 > 基线提交：`c1a3c0c` + 本轮 CI/种子数据修正
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
@@ -196,6 +196,22 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 网页粘贴 8 行托书 → `web` inbound 关联 run；点样例后 inbound 数量不变。
   - 批量 2 个文件（PNG + PDF）→ 2 条 `batch-booking` inbound，均关联 run。
   - 访问 `/api/audit/<run_id>` 可查批量字段；ai-copilot smoke **15/15 通过**。
+
+### 5.6 学习队列按来源/批次筛选（新增）
+
+- 背景：`/learn` 只按状态（待标注/已标注/已跳过）分页，测试单与正式单据混在一起；标注员无法只处理某次批量导入或某个入口的样本。
+- 改动：
+  - 后端新增 `_learn_filter_sql`，`learn_queue` / `learn_stats` 支持 `source`、`batch_id`；来源按 `inbound.source` 关联，批次按 `batch_items.run_id` 关联。
+  - 新增 `GET /api/learn/filters`，返回当前队列里出现过的来源与批次及条数；无来源用 `__none__` 表示。
+  - `learn_queue` 每行附带 `source`、`batch_id`、`batch_name`；`learn_item` 也附来源与批次。
+  - `/learn` 增加来源/批次下拉、「清除筛选」；统计卡随筛选同步变化，列表与编辑区显示来源和批次名。
+  - 页面底部失效的 `scripts/run_eval.py` 提示改为 `make eval`；`docs/运维手册.md` 同步。
+- 复验（本机 SQLite + 实测批次 `f1301151a584`「筛选验证-20261107」）：
+  - `filters` 返回：无来源 74、`wecom` 3、`h5-upload` 1、`batch-booking` 1；批次 1 个。
+  - `stats?source=wecom` → 待标注 2、已标注 1；`stats?batch_id=...` → 待标注 1。
+  - `queue?status=pending&batch_id=...` 精确返回该批次的 `27c7921880ac`（`blocked / batch-booking`）。
+  - 页面切换「来源=企业微信」后列表变为 2 条、统计卡同步为 2/1/0/0；切换批次后变为 1 条。
+  - ai-copilot smoke **15/15 通过**。
 
 ---
 

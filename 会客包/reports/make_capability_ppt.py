@@ -156,6 +156,14 @@ def add_arrow(slide, left, top, width=0.45, height=0.3, color=ORANGE):
     return shape
 
 
+def add_down_arrow(slide, left, top, width=0.28, height=0.22, color=ORANGE):
+    shape = slide.shapes.add_shape(MSO_SHAPE.DOWN_ARROW, Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.fill.solid(); shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+    shape.shadow.inherit = False
+    return shape
+
+
 def add_header(slide, eyebrow, title, subtitle=None):
     add_text(slide, eyebrow, 0.7, 0.45, 7.0, 0.3, 11, True, TEAL)
     add_text(slide, title, 0.7, 0.78, 11.9, 0.55, 27, True, NAVY)
@@ -256,24 +264,36 @@ add_notes(s, "按客户今天在做的活讲，不按技术模块讲。每个场
 
 # ---------------------------------------------------------------- 04 表现：托书
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "怎样表现 ①", "托书从企业微信/H5/批量导入进来，右侧直接变成结构化草稿",
+add_header(s, "怎样表现 ①", "托书从企业微信/H5/批量导入进来，直接变成结构化草稿",
            "企微文字可直接发、支持分条；字段带置信度，规则先挑错，低置信转人工。")
-add_image_fit(s, "ui-copilot-index.png", 4.55, 1.9, 8.2, 5.05)
+add_image_fit(s, "wecom-chat-demo.png", 4.55, 1.95, 3.95, 4.9)
 add_entry_card(s, 0.7, 2.0, 1.7, 0.66, "企业微信文字", "直接发、可分条",
                GREEN, RGBColor(0xE8, 0xF8, 0xEE), RGBColor(0x9F, 0xD8, 0xB0))
 add_entry_card(s, 2.55, 2.0, 1.7, 0.66, "H5 拍照 / 上传", "手机拍托书")
 add_entry_card(s, 0.7, 2.78, 1.7, 0.66, "批量导入", "一次几十份")
 add_entry_card(s, 2.55, 2.78, 1.7, 0.66, "网页粘贴", "临时试单")
 add_bullets(s, [
-    ("逐字段置信度", "客户、箱号、截港、费用都有分数"),
-    ("规则先挑错", "箱号校验位、截港、地址冲突"),
-    ("人确认才入业务", "确认与修正全部留痕"),
+    ("少抄", "客户、箱号、截港等字段自动带出"),
+    ("少错", "箱号校验位、截港、地址冲突先提示"),
+    ("可追溯", "人工确认与修正全部留痕"),
 ], 0.7, 3.7, 3.55, 1.25, 10.5, BLACK, TEAL, 7)
 add_rect(s, 0.7, 5.05, 3.55, 1.55, LIGHT, LIGHT_2)
 add_text(s, "老板看到的不是“模型多强”，而是“单证员少抄多少、错单少多少”。", 0.95, 5.3, 3.05, 1.0, 11.5, True, NAVY, line_spacing=1.35)
-add_text(s, "截图：网页端演示数据；企微文字已跑通，图片暂走 H5 / 批量导入；真实客户需用样本复测。", 4.55, 7.0, 8.2, 0.2, 8.5, False, GRAY)
+# 右侧：企微对话截图 + 三步流程
+flow = [
+    ("① 发", "文字直接发，分几条也行"),
+    ("② 看", "字段、置信度、规则提示"),
+    ("③ 确认", "回复「确认」入库"),
+]
+for i, (title, detail) in enumerate(flow):
+    y = 2.0 + i * 1.45
+    add_box(s, 8.85, y, 3.9, 1.15, title, detail, LIGHT, LIGHT_2, TEAL)
+    if i < 2:
+        add_down_arrow(s, 10.66, y + 1.17, 0.28, 0.22)
+add_text(s, "企微图片暂走 H5 / 批量导入；确认后才入业务。", 8.85, 6.35, 3.9, 0.45, 8.5, False, GRAY, line_spacing=1.25)
+add_text(s, "截图：企业微信真实对话；内容为【合成演示】数据。", 4.55, 6.9, 3.95, 0.2, 8, False, GRAY)
 add_footer(s)
-add_notes(s, "先讲入口变化：以前要在网页里粘贴或上传，现在客户/单证可以直接在企业微信里发文字，分几条发也行，系统合并成一张；H5 和批量导入解决图片、扫描件。入口不同，后面是同一套解析、规则校验和人工确认。注意边界：企微图片消息还没接，图片先走 H5 或批量导入。")
+add_notes(s, "这张是企业微信里的真实对话截图，内容是合成演示数据，不是客户真实托书。客户或单证把托书文字直接发给应用，系统返回结构化字段和逐字段置信度；回复「确认」后入库。入口不同，后面是同一套解析、规则校验和人工确认。边界要讲清：企微图片消息还没接，图片先走 H5 或批量导入。")
 
 
 # ---------------------------------------------------------------- 05 表现：对账

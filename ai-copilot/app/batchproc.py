@@ -35,7 +35,7 @@ from .masking import MaskMap, fingerprint, mask_fields, mask_text
 from .store import (
     _conn, add_batch_items, batch_cancel_requested, batch_items, claim_job,
     create_batch, enqueue_job, finish_job, get_batch, get_job, job_active,
-    renew_job, save_run, set_batch_status, update_item,
+    record_inbound, renew_job, save_run, set_batch_status, update_item,
 )
 
 BATCH_DIR = ROOT / "data" / "batches"
@@ -159,6 +159,9 @@ def _process(job: dict) -> None:
                         fv.value = masked_fields.get(k) or fv.value
                     mm.save()
 
+                # 先落 inbound 再存 run：save_run 按文本哈希回填 inbound.run_id，
+                # 顺序反了就会留下一条永远关联不上单据的 inbound。
+                record_inbound(store_text, source=f"batch-{kind}")
                 run_id = save_run(store_text, draft, kind=kind, actor=actor)
                 update_item(item["id"], "extracted", run_id=run_id,
                             note=f"指纹 {fingerprint(res.text)}")

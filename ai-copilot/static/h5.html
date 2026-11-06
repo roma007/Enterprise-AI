@@ -75,7 +75,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let LAST = null, T0 = 0, META = null;
+let LAST = null, T0 = 0, META = null, INBOUND_TEXT = '';
 
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
@@ -88,12 +88,15 @@ async function boot(){
 async function upload(f){
   if(!f) return;
   const fd = new FormData(); fd.append('file', f); fd.append('use_llm', 'true');
+  fd.append('source', 'h5-upload');
   $('#upLabel').textContent = '识别中…';
   try{
     const r = await fetch('/api/extract/upload', {method:'POST', body:fd});
     if(!r.ok){ toast('识别失败：' + (await r.text()).slice(0,60)); return; }
     const d = await r.json();
     if(d.raw_text) $('#raw').value = d.raw_text;
+    // 上传入口已在服务端记过 inbound，避免再点“解析”时重复计数。
+    INBOUND_TEXT = (d.raw_text || '').trim();
     render(d);
   } finally { $('#upLabel').textContent = '拍照 / 上传'; $('#file').value=''; }
 }
@@ -104,8 +107,11 @@ async function parse(){
   $('#btnParse').disabled = true; $('#btnParse').textContent='解析中…';
   try{
     // 入口唯一化：先落 inbound，再解析。绕过率靠这一步成立。
-    await fetch('/api/inbound', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text, source:'h5'})});
+    if(text !== INBOUND_TEXT){
+      await fetch('/api/inbound', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text, source:'h5'})});
+      INBOUND_TEXT = text;
+    }
     const r = await fetch('/api/extract', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({text, use_llm:true})});
     render(await r.json());

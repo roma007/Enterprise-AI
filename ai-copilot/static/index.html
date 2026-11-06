@@ -166,6 +166,8 @@
 <script>
 const $ = s => document.querySelector(s);
 let META = null, LAST = null, ROWS = [], HANDLE_START = 0, ME = null;
+// 样例只用于演示，不计入 inbound；上传/粘贴才是真实来单。
+let FROM_SAMPLE = false, INBOUND_TEXT = '';
 
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -215,8 +217,10 @@ async function boot(){
     const c = e.target.closest('.chip'); if(!c) return;
     const item = s.samples.find(x=>x.id===c.dataset.id);
     $('#raw').value = item.raw;
+    FROM_SAMPLE = true;
     parse();
   };
+  $('#raw').addEventListener('input', ()=>{ FROM_SAMPLE = false; });
 }
 
 async function parse(){
@@ -225,6 +229,16 @@ async function parse(){
   $('#btnParse').disabled = true;
   $('#btnParse').textContent = '解析中…';
   try{
+    // 入口唯一化：真实粘贴先落 inbound，样例和同一段文字重复解析不重复计数。
+    if(!FROM_SAMPLE && text !== INBOUND_TEXT){
+      try{
+        const ir = await fetch('/api/inbound', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({text, source:'web'})
+        });
+        if(ir.ok) INBOUND_TEXT = text;
+      }catch(e){ /* 入口统计失败不阻断解析 */ }
+    }
     const res = await fetch('/api/extract', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({text, use_llm: $('#useLlm').checked})
@@ -247,6 +261,7 @@ async function uploadFile(file){
     const fd = new FormData();
     fd.append('file', file);
     fd.append('use_llm', $('#useLlm') ? $('#useLlm').checked : true);
+    fd.append('source', 'web-upload');
     const res = await fetch('/api/extract/upload', { method:'POST', body: fd });
     if(!res.ok){
       let msg = await res.text();
@@ -256,6 +271,9 @@ async function uploadFile(file){
     }
     const d = await res.json();
     if(d.raw_text) $('#raw').value = d.raw_text;
+    // 上传入口已在服务端记过 inbound，避免用户再点“解析”时重复计数。
+    INBOUND_TEXT = (d.raw_text || '').trim();
+    FROM_SAMPLE = false;
     LAST = d;
     render(d);
     toast(`已识别 · ${d.ocr ? d.ocr.note : ''}`);

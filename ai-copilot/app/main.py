@@ -12,7 +12,7 @@ import secrets
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 
 from fastapi.responses import (
     FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
@@ -532,7 +532,12 @@ def api_split(req: ExtractReq, request: Request):
 
 
 @app.post("/api/extract/upload")
-async def api_upload(request: Request, file: UploadFile = File(...), use_llm: bool = True):
+async def api_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    use_llm: bool = Form(True),
+    source: str = Form("h5-upload"),
+):
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="文件为空")
@@ -547,9 +552,10 @@ async def api_upload(request: Request, file: UploadFile = File(...), use_llm: bo
     if not res.text.strip():
         raise HTTPException(status_code=422, detail="未能从文件中识别出文字，请检查清晰度或改用粘贴文本")
 
+    src = source if source in {"h5-upload", "web-upload"} else "upload"
     stored = storage.save(data, file.filename or "", "booking")
-    # 上传也是入口：先落 inbound，再解析，保证「绕过率」分母不漏掉 H5 拍照/上传。
-    record_inbound(res.text, source="h5-upload")
+    # 上传也是入口：先落 inbound，再解析，保证「绕过率」分母不漏掉拍照/上传。
+    record_inbound(res.text, source=src)
     draft = extract(res.text, allow_llm=use_llm)
     run_id = save_run(res.text, draft, actor=_uid(request), source_file=stored)
     return _draft_response(draft, run_id, {

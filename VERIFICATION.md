@@ -56,6 +56,8 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 | `test_address` / `test_fees` / `test_metrics` / `test_delivery` / `test_hardening` / `test_wecom_crypto` / `test_storage` | 全部通过 |
 | `make smoke` | **15/15 通过** |
 | H5 拍照/上传（本机实测） | **通过**：上传 `samples/fixtures/booking_sample.png`，OCR + 规则抽出 17 个字段，`review_level=single`，带逐字段置信度与截港预警 |
+| 网站粘贴（本机实测） | **通过**：粘贴 8 行托书，抽出 8 个字段、`review_level=single`；生成 `source=web` 的 inbound 并关联 run；点内置样例不计入 inbound |
+| 批量导入（本机实测） | **通过**：2 个文件（PNG + PDF）100% 识别，各生成 `source=batch-booking` 的 inbound 并关联 run；默认规则 + 脱敏 |
 | 规则评测（tuned，20 样本） | 字段 100%，整单 100%，阻断 100% |
 | 规则评测（holdout，8 样本） | 字段 98.7%，整单 87.5%，阻断 96.88% |
 
@@ -178,11 +180,22 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 升级后复验：run #117（`d6351db`）**4 个 job 全部通过**（backend 1m27s、frontend 23s、e2e 1m35s、docker 1m21s）；Node.js 20 弃用 annotation 已消失，仅剩 runner 镜像 `ubuntu-latest → Ubuntu 26` 的提示。
 - 注意：e2e 在 CI 使用 `CI=true`，失败会重试 1 次；本地复验未开重试，结果更严格。
 
-### 5.5 H5 上传入口补齐（已修复）
+### 5.5 四种入口的 inbound 统计补齐（已修复）
 
-- 现象：H5 `/api/extract/upload` 只写 `runs`，不写 `inbound`，导致拍照/上传不在「绕过率」分母里。
-- 修复：OCR 成功后先 `record_inbound(res.text, source="h5-upload")` 再解析；`save_run` 按文本哈希自动回填 `run_id`。
-- 复验：上传 `booking_sample.png` 生成 `h5-upload` inbound 并关联 run；ai-copilot smoke **15/15 通过**。
+- 现象一：H5 `/api/extract/upload` 只写 `runs`，不写 `inbound`，导致拍照/上传不在「绕过率」分母里。
+- 现象二：网页「粘贴 + 解析」只调 `/api/extract`，没有写 `inbound`，网站粘贴也没进分母。
+- 现象三：批量处理把 `record_inbound` 放在 `save_run` 之后，inbound 行无法回填 `run_id`。
+- 现象四：`/api/extract/upload` 的 `use_llm` 被声明成查询参数，前端用表单发的值被忽略，实际一直允许模型。
+- 修复：
+  - 上传接口先 `record_inbound` 再解析，并按表单 `source` 区分 `h5-upload` / `web-upload`（白名单，其他值记为 `upload`）。
+  - 网页粘贴在 `/api/extract` 前写 `source=web`；内置样例和同一段文字重复解析不重复计数。
+  - 批量处理改为先 `record_inbound(..., source=batch-{kind})` 再 `save_run`，保证 `run_id` 回填。
+  - `use_llm` / `source` 改为表单参数（`Form`）。
+- 复验：
+  - H5 上传 `booking_sample.png` → `h5-upload` inbound 关联 run。
+  - 网页粘贴 8 行托书 → `web` inbound 关联 run；点样例后 inbound 数量不变。
+  - 批量 2 个文件（PNG + PDF）→ 2 条 `batch-booking` inbound，均关联 run。
+  - 访问 `/api/audit/<run_id>` 可查批量字段；ai-copilot smoke **15/15 通过**。
 
 ---
 

@@ -16,6 +16,7 @@
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
 | ai-copilot | **通过（内部样例）**：7 个专项测试 + 15 项 smoke 通过；规则评测通过 |
+| CI | **通过**：GitHub Actions 4 个 job 全部通过（`a88e58e`，run #115） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
 | 计划状态 | **65 项已完成 / 7 项未完成**；未完成项全部是真实客户/外部环境 |
@@ -171,7 +172,8 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 原因二：e2e 在全新 seed 库上跑时，平台就绪看板出现两条同名 `AUTH_REQUIRED`（服务端重复检查），触发 Playwright strict mode；已合并为一条。
 - 原因三：`POC 页签可打开对账复核并查看差异` 依赖本地历史数据；已在 `003_seed.sql` 增加一条带 `【合成演示】` 标记的对账复核样例，保证全新环境也有数据可看。
 - 复验：在本机新建空库 → `db:reset` → 后端连该库 → e2e **25/25 通过**；`verify` 17/17、`verify:write` 51/51 通过。
-- 真实 CI 结果以推送后的 Actions 运行状态为准；本机无 Docker，docker job 只能按 compose 配置修正，未本地实跑。
+- 真实 CI：推送后 run #115（`a88e58e`）**4 个 job 全部通过**（backend 1m08s、frontend 30s、e2e 10m18s、docker 1m27s）。本机无 Docker，docker job 未本地实跑，以 Actions 结果为准。
+- 注意：e2e 在 CI 使用 `CI=true`，失败会重试 1 次；本地复验未开重试，结果更严格。
 
 ---
 

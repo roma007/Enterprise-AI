@@ -16,7 +16,7 @@
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
 | ai-copilot | **通过（内部样例）**：7 个专项测试 + 15 项 smoke 通过；规则评测通过 |
-| CI | **通过**：GitHub Actions 4 个 job 全部通过（`a88e58e`，run #115） |
+| CI | **通过**：GitHub Actions 4 个 job 全部通过（`d6351db`，run #117；已升级 Node 24 Actions） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
 | 计划状态 | **65 项已完成 / 7 项未完成**；未完成项全部是真实客户/外部环境 |
@@ -173,6 +173,8 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 原因三：`POC 页签可打开对账复核并查看差异` 依赖本地历史数据；已在 `003_seed.sql` 增加一条带 `【合成演示】` 标记的对账复核样例，保证全新环境也有数据可看。
 - 复验：在本机新建空库 → `db:reset` → 后端连该库 → e2e **25/25 通过**；`verify` 17/17、`verify:write` 51/51 通过。
 - 真实 CI：推送后 run #115（`a88e58e`）**4 个 job 全部通过**（backend 1m08s、frontend 30s、e2e 10m18s、docker 1m27s）。本机无 Docker，docker job 未本地实跑，以 Actions 结果为准。
+- Actions 运行时升级：`checkout@v4→v7`（4 处）、`setup-node@v4→v7`（3 处）、`upload-artifact@v4→v7`（2 处）。v7 均使用 `node24`，输入与本项目用法兼容。
+- 升级后复验：run #117（`d6351db`）**4 个 job 全部通过**（backend 1m27s、frontend 23s、e2e 1m35s、docker 1m21s）；Node.js 20 弃用 annotation 已消失，仅剩 runner 镜像 `ubuntu-latest → Ubuntu 26` 的提示。
 - 注意：e2e 在 CI 使用 `CI=true`，失败会重试 1 次；本地复验未开重试，结果更严格。
 
 ---

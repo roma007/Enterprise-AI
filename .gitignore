@@ -30,3 +30,7 @@ autopilot/.run.lock/
 
 # 试点值班表含真实联系人，不提交
 ops/oncall.yml
+
+# Python 缓存
+__pycache__/
+*.pyc

@@ -1,4 +1,4 @@
-.PHONY: up down logs ps backup restore metrics archive pdf-cleanup share-cleanup sessions-cleanup worker-logs migrate-prod drill-restore drill-pitr drill-rollout drill-alerts drill-s3 billing-run
+.PHONY: up down logs ps backup restore metrics archive pdf-cleanup share-cleanup sessions-cleanup worker-logs migrate-prod drill-restore drill-pitr drill-rollout drill-alerts drill-s3 billing-run impl-map
 
 up:
 	docker compose up -d --build
@@ -57,3 +57,7 @@ drill-s3:
 
 billing-run:
 	cd backend && npm run billing:run
+
+# 从《实施全景图.md》重新生成 HTML（单一事实源是 Markdown）
+impl-map:
+	python3 scripts/build_impl_map.py

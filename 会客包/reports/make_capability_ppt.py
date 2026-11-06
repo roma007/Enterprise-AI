@@ -140,6 +140,14 @@ def add_box(slide, left, top, width, height, title, detail, fill, line, title_co
     return shape
 
 
+def add_entry_card(slide, left, top, width, height, title, detail, title_color=NAVY,
+                   fill=LIGHT, line=LIGHT_2):
+    """入口小卡片：标题 + 一句说明，保持原生形状可编辑。"""
+    add_rect(slide, left, top, width, height, fill, line)
+    add_text(slide, title, left + 0.12, top + 0.09, width - 0.24, 0.24, 9.5, True, title_color)
+    add_text(slide, detail, left + 0.12, top + 0.36, width - 0.24, 0.22, 8.2, False, GRAY)
+
+
 def add_arrow(slide, left, top, width=0.45, height=0.3, color=ORANGE):
     shape = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(left), Inches(top), Inches(width), Inches(height))
     shape.fill.solid(); shape.fill.fore_color.rgb = color
@@ -248,18 +256,24 @@ add_notes(s, "按客户今天在做的活讲，不按技术模块讲。每个场
 
 # ---------------------------------------------------------------- 04 表现：托书
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "怎样表现 ①", "一张托书进来，右侧直接变成结构化草稿", "字段带置信度；规则先挑错；低置信转人工。")
+add_header(s, "怎样表现 ①", "托书从企业微信/H5/批量导入进来，右侧直接变成结构化草稿",
+           "企微文字可直接发、支持分条；字段带置信度，规则先挑错，低置信转人工。")
 add_image_fit(s, "ui-copilot-index.png", 4.55, 1.9, 8.2, 5.05)
+add_entry_card(s, 0.7, 2.0, 1.7, 0.66, "企业微信文字", "直接发、可分条",
+               GREEN, RGBColor(0xE8, 0xF8, 0xEE), RGBColor(0x9F, 0xD8, 0xB0))
+add_entry_card(s, 2.55, 2.0, 1.7, 0.66, "H5 拍照 / 上传", "手机拍托书")
+add_entry_card(s, 0.7, 2.78, 1.7, 0.66, "批量导入", "一次几十份")
+add_entry_card(s, 2.55, 2.78, 1.7, 0.66, "网页粘贴", "临时试单")
 add_bullets(s, [
     ("逐字段置信度", "客户、箱号、截港、费用都有分数"),
     ("规则先挑错", "箱号校验位、截港、地址冲突"),
     ("人确认才入业务", "确认与修正全部留痕"),
-], 0.7, 2.0, 3.55, 2.5, 11.5, BLACK, TEAL, 10)
-add_rect(s, 0.7, 4.9, 3.55, 1.55, LIGHT, LIGHT_2)
-add_text(s, "老板看到的不是“模型多强”，而是“单证员少抄多少、错单少多少”。", 0.95, 5.15, 3.05, 1.0, 11.5, True, NAVY, line_spacing=1.35)
-add_text(s, "截图：演示数据；真实客户需用客户样本复测。", 4.55, 7.0, 7.0, 0.2, 8.5, False, GRAY)
+], 0.7, 3.7, 3.55, 1.25, 10.5, BLACK, TEAL, 7)
+add_rect(s, 0.7, 5.05, 3.55, 1.55, LIGHT, LIGHT_2)
+add_text(s, "老板看到的不是“模型多强”，而是“单证员少抄多少、错单少多少”。", 0.95, 5.3, 3.05, 1.0, 11.5, True, NAVY, line_spacing=1.35)
+add_text(s, "截图：网页端演示数据；企微文字已跑通，图片暂走 H5 / 批量导入；真实客户需用样本复测。", 4.55, 7.0, 8.2, 0.2, 8.5, False, GRAY)
 add_footer(s)
-add_notes(s, "让老板看到真实界面：左边原文，右边结构化字段和置信度。强调规则先挑错、人工确认后才入业务。")
+add_notes(s, "先讲入口变化：以前要在网页里粘贴或上传，现在客户/单证可以直接在企业微信里发文字，分几条发也行，系统合并成一张；H5 和批量导入解决图片、扫描件。入口不同，后面是同一套解析、规则校验和人工确认。注意边界：企微图片消息还没接，图片先走 H5 或批量导入。")
 
 
 # ---------------------------------------------------------------- 05 表现：对账

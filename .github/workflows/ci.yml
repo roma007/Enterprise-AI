@@ -167,9 +167,11 @@ jobs:
         run: docker compose up -d
 
       - name: Wait for backend
+        # backend 不直接暴露宿主端口，统一经 nginx 的 /api 反向代理检查，
+        # 与 DEPLOY.md「8788 端口不直接暴露公网」的约束保持一致。
         run: |
           for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8788/api/health; then
+            if curl -fsS http://127.0.0.1:8080/api/health; then
               exit 0
             fi
             sleep 2

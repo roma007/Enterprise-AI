@@ -550,4 +550,78 @@ INSERT INTO knowledge_items (org_id, industry, category, title, summary, content
   '项目先统一预约、车辆、任务三类数据口径，再上线调度规则。第一阶段没有直接做复杂算法，而是用规则减少无效等待，空驶率从 32% 降到 27%，之后再评估算法优化空间。\n\n可复用点：数据口径统一是调度优化的前置条件。',
   ARRAY['调度','空驶','集卡'], '行业案例库', 'published');
 
+-- ---------------------------------------------------------------------
+-- 试点一：对账单复核样例（【合成演示】非真实客户数据）
+-- 让 POC 页签在全新环境里也有内容可看；真实复核记录由 ai-copilot 回写。
+-- ---------------------------------------------------------------------
+INSERT INTO copilot_reconcile_reviews
+  (id, idempotency_key, org_id, engagement_id, kind, document_id, status,
+   summary, document, differences, decisions, payload, source) VALUES
+ ('af000000-0000-4000-8000-000000000001', 'seed-demo-st-2026-09-001',
+  'a0000000-0000-4000-8000-000000000001', 'a4000000-0000-4000-8000-000000000001',
+  'statement', 'ST-2026-09-001', 'confirmed',
+  $json${
+    "lines": 2, "documents": 1, "differences": 2,
+    "decisions": {"采纳": 1, "忽略": 1}
+  }$json$::jsonb,
+  $json${
+    "document_id": "ST-2026-09-001",
+    "statement_no": "ST-2026-09-001",
+    "customer_name": "【合成演示】宏远国际物流",
+    "period_start": "2026-09-01",
+    "period_end": "2026-09-30",
+    "currency": "CNY",
+    "total_amount": 5434,
+    "engine": "rule-text-v1",
+    "source_format": "text",
+    "page_count": null,
+    "elapsed_ms": 0,
+    "needs_review": false,
+    "warnings": ["【合成演示】示例对账单，非真实客户数据"],
+    "lines": [
+      {"line_no": 1, "waybill_no": "HY20260901001", "container_no": "MSCU1234567",
+       "container_type": "40HQ", "amount": 2600, "tax_amount": 234, "total_amount": 2834,
+       "due_date": "2026-10-15", "confidence": 0.95, "remark": null, "source_page": null},
+      {"line_no": 2, "waybill_no": "HY20260901002", "container_no": "TGHU7654321",
+       "container_type": "20GP", "amount": 2600, "tax_amount": 0, "total_amount": 2600,
+       "due_date": "2026-10-15", "confidence": 0.95, "remark": null, "source_page": null}
+    ]
+  }$json$::jsonb,
+  $json$[
+    {
+      "difference_id": "ST-2026-09-001-1",
+      "document_id": "ST-2026-09-001",
+      "type": "amount_mismatch",
+      "waybill_no": "HY20260901001",
+      "statement_amount": 2834,
+      "system_amount": 2600,
+      "delta": 234,
+      "confidence": 0.6,
+      "source": "llm+rule",
+      "evidence": ["对账单第 1 行", "对账单金额 2834.0", "系统金额 2600.0", "金额不一致"],
+      "possible_causes": ["差额 234.0 可能来自附加费或燃油费，需核对费用明细。"],
+      "suggested_action": "核对运单 HY20260901001 的费用明细，确认差额构成。【合成演示】"
+    },
+    {
+      "difference_id": "ST-2026-09-001-3",
+      "document_id": "ST-2026-09-001",
+      "type": "missing_line",
+      "waybill_no": "HY20260902001",
+      "statement_amount": null,
+      "system_amount": 5200,
+      "delta": null,
+      "confidence": 0.8,
+      "source": "llm+rule",
+      "evidence": ["系统金额 5200.0", "系统有、对账单没报（客户漏单，要追）"],
+      "possible_causes": ["客户侧漏记或对账单导出时遗漏该行。"],
+      "suggested_action": "核对运单 HY20260902001 的业务日期与对账期间。【合成演示】"
+    }
+  ]$json$::jsonb,
+  $json$[
+    {"difference_id": "ST-2026-09-001-1", "decision": "采纳", "note": "【合成演示】财务确认"},
+    {"difference_id": "ST-2026-09-001-3", "decision": "忽略", "note": "【合成演示】客户漏单，已线下确认"}
+  ]$json$::jsonb,
+  $json${"source": "seed-demo", "synthetic": true}$json$::jsonb,
+  'seed-demo');
+
 COMMIT;

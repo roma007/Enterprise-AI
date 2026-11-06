@@ -38,10 +38,11 @@ export async function runReadinessChecks(): Promise<ReadinessReport> {
   };
 
   checkEnv('DATABASE_URL', 'FAIL', '未设置 DATABASE_URL');
-  checkEnv('AUTH_REQUIRED', 'FAIL', '试点环境必须 AUTH_REQUIRED=true');
-  if (env('AUTH_REQUIRED') && env('AUTH_REQUIRED') !== 'true') {
-    add('FAIL', 'AUTH_REQUIRED', `当前为 ${env('AUTH_REQUIRED')}，试点环境必须为 true`);
-  }
+  const authRequired = env('AUTH_REQUIRED');
+  if (!authRequired) add('FAIL', 'AUTH_REQUIRED', '未设置 AUTH_REQUIRED');
+  else if (authRequired !== 'true') {
+    add('FAIL', 'AUTH_REQUIRED', `当前为 ${authRequired}，试点环境必须为 true`);
+  } else add('PASS', 'AUTH_REQUIRED', '已设置且为 true');
 
   const secret = env('AUTH_SECRET');
   if (!secret) add('FAIL', 'AUTH_SECRET', '未设置');

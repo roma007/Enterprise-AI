@@ -254,6 +254,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - `PYTHONPATH=. .venv/bin/python scripts/test_wecom_image.py` **全部通过**（26 项）。
   - `ai-copilot/scripts/smoke.sh` **16/16 通过**（新增“企微图片自检”）。
   - `python -m py_compile` 通过（config/store/wecom/wecom_api/main/metrics/测试）。
+  - GitHub Actions run #130（`5b09237`）**4 个 job 全部通过**（backend 84s、frontend 27s、e2e 131s、docker 76s）；preflight 通过。
   - 未验证：真实企业微信账号、真实图片素材、真实主动推送、可信 IP、固定回调域名；因此 AI-07 保持 🟡，AI-07E 保持 `[ ]`。
 
 ---

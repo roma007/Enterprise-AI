@@ -18,7 +18,17 @@ import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-BUCKETS = ("未到期", "1–30 天", "31–60 天", "61–90 天", "90 天以上")
+from . import thresholds as th
+
+
+def cuts() -> tuple[int, int, int]:
+    return (int(th.get("aging.bucket_1")), int(th.get("aging.bucket_2")),
+            int(th.get("aging.bucket_3")))
+
+
+def buckets() -> tuple[str, str, str, str, str]:
+    c1, c2, c3 = cuts()
+    return ("未到期", f"1–{c1} 天", f"{c1 + 1}–{c2} 天", f"{c2 + 1}–{c3} 天", f"{c3} 天以上")
 
 _HINTS = {
     "client": ("客户", "货主", "抬头", "单位"),
@@ -115,15 +125,16 @@ def parse_receivables(text: str) -> list[dict]:
 
 
 def _bucket(days: int) -> str:
+    c1, c2, c3 = cuts()
     if days <= 0:
-        return BUCKETS[0]
-    if days <= 30:
-        return BUCKETS[1]
-    if days <= 60:
-        return BUCKETS[2]
-    if days <= 90:
-        return BUCKETS[3]
-    return BUCKETS[4]
+        return "未到期"
+    if days <= c1:
+        return f"1–{c1} 天"
+    if days <= c2:
+        return f"{c1 + 1}–{c2} 天"
+    if days <= c3:
+        return f"{c2 + 1}–{c3} 天"
+    return f"{c3} 天以上"
 
 
 def aging(rows: list[dict], as_of: date | None = None) -> dict:
@@ -186,7 +197,7 @@ def aging(rows: list[dict], as_of: date | None = None) -> dict:
         })
     summary.sort(key=lambda x: (-x["overdue"], -x["max_overdue_days"]))
 
-    bucket_totals = {b: Decimal("0") for b in BUCKETS}
+    bucket_totals = {b: Decimal("0") for b in buckets()}
     for it in items:
         if not it["paid_off"]:
             bucket_totals[it["bucket"]] += Decimal(str(it["outstanding"]))
@@ -217,11 +228,13 @@ def _advice(ratio: float, max_days: int, overdue_amount: float) -> tuple[str, st
 
     刻意不用"逾期占比"来分级：占比高但只逾期 3 天，不值得发催款函。
     """
+    remind = int(th.get("aging.remind_days"))
+    collect = int(th.get("aging.collect_days"))
     if max_days <= 0:
         return "正常", "未逾期，保持常规跟进"
-    if max_days <= 30:
+    if max_days <= remind:
         return "提醒", "发对账单时顺带提醒付款日期"
-    if max_days <= 90:
+    if max_days <= collect:
         extra = "；金额较大，建议先电话沟通" if overdue_amount >= 5000 else ""
         return "催收", "电话催收 + 书面催款函，明确最后付款日" + extra
     return "重点催收", "暂停接新单，走合同违约条款，必要时法务介入"

@@ -217,6 +217,35 @@ def api_settings_history(limit: int = 50):
     return {"items": items}
 
 
+@app.get("/api/settings/export")
+def api_settings_export():
+    """导出运行级配置。不含密钥：密钥在 .env，不在此接口范围内。"""
+    from . import thresholds as th
+
+    data = th.snapshot()
+    values = {item["key"]: item["value"] for group in data["groups"] for item in group["items"]}
+    return {
+        "version": 1,
+        "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "values": values,
+    }
+
+
+@app.post("/api/settings/import")
+def api_settings_import(req: dict, request: Request):
+    from . import thresholds as th
+
+    values = req.get("values")
+    if not isinstance(values, dict) or not values:
+        raise HTTPException(status_code=400, detail="values 不能为空")
+    try:
+        result = th.set_many(values, actor=_uid(request),
+                             reason=str(req.get("reason") or "导入配置")[:200])
+        return {**result, "imported": len(values)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/api/settings/rollback")
 def api_settings_rollback(req: dict, request: Request):
     from . import thresholds as th
@@ -568,6 +597,7 @@ def _draft_response(draft, run_id: str, extra: dict | None = None) -> dict:
 
 @app.get("/api/meta")
 def meta():
+    from . import thresholds as th
     return {
         "fields": [
             {"key": s.key, "label": s.label, "blocking": s.blocking, "kind": s.kind, "placeholder": s.example}
@@ -578,8 +608,8 @@ def meta():
         "llm_enabled": settings.llm_enabled,
         "model": settings.model if settings.llm_enabled else "rule-based-v1",
         "ocr_ready": ocr.available()["ready"],
-        "baseline_manual_sec": settings.baseline_manual_sec,
-        "hourly_cost": settings.hourly_cost,
+        "baseline_manual_sec": th.get("metrics.baseline_manual_sec"),
+        "hourly_cost": th.get("metrics.hourly_cost"),
     }
 
 
@@ -1888,7 +1918,11 @@ def api_reconcile(req: dict):
 
     result = reconcile(rows, waybills)
     result["statement_meta"] = meta
-    if req.get("explain"):
+    from . import thresholds as th
+    explain = req.get("explain")
+    if explain is None:
+        explain = th.get_bool("reconcile.explain_default")
+    if explain:
         diffs = explain_differences(
             to_differences(doc, result),
             context={"kind": "statement", "customer_name": doc.get("customer_name")},
@@ -2106,28 +2140,33 @@ def api_queue(limit: int = 50):
 
 @app.get("/api/metrics")
 def api_metrics():
-    return metrics(settings.baseline_manual_sec)
+    from . import thresholds as th
+    return metrics(th.get("metrics.baseline_manual_sec"))
 
 
 @app.get("/api/risk-sim")
 def api_risk_sim(monthly_tickets: int = 2000, penalty: float = 8300.0,
                  threshold: float = 0.9):
     """C5：取消人工确认的后果测算。参数默认值需按客户实际情况传。"""
+    from . import thresholds as th
     return risk_sim(monthly_tickets, penalty, threshold,
-                    settings.hourly_cost, settings.baseline_manual_sec)
+                    th.get("metrics.hourly_cost"), th.get("metrics.baseline_manual_sec"))
 
 
 @app.get("/api/report.md", response_class=PlainTextResponse)
 def api_report():
-    return report_md(settings.baseline_manual_sec, settings.hourly_cost)
+    from . import thresholds as th
+    return report_md(th.get("metrics.baseline_manual_sec"), th.get("metrics.hourly_cost"))
 
 
 @app.get("/report", response_class=HTMLResponse)
 def report_page():
     """运行月报的可读页面；原始 Markdown 仍从 /api/report.md 下载。"""
+    from . import thresholds as th
     from .report_view import render_page
 
-    return render_page(report_md(settings.baseline_manual_sec, settings.hourly_cost))
+    return render_page(report_md(th.get("metrics.baseline_manual_sec"),
+                                 th.get("metrics.hourly_cost")))
 
 
 @app.get("/api/samples")

@@ -654,6 +654,8 @@ def ops_counts() -> dict:
 
 def metrics(baseline_sec: float = 180.0) -> dict:
     """指标中心：这是第 6 个月老板问"省了多少"时，唯一能拿出来的东西。"""
+    from . import thresholds as th
+
     with _conn() as conn:
         r = conn.execute(
             "SELECT COUNT(*) n,"
@@ -726,8 +728,8 @@ def metrics(baseline_sec: float = 180.0) -> dict:
         "inbound_count": in_n,
         "inbound_confirmed": in_done,
         "bypass_rate": bypass_rate,
-        # C4 告警：超过 20% 说明"人挑活"已经影响到实际价值
-        "bypass_alert": bypass_rate > 0.2,
+        # C4 告警：超过阈值说明"人挑活"已经影响到实际价值（默认 20%，页面可调）
+        "bypass_alert": bypass_rate > th.get("metrics.bypass_alert"),
         "daily": [dict(x) for x in daily],
     }
 

@@ -36,6 +36,13 @@ _cache_at: float = 0.0
 _DB_TTL = 2.0  # PG 多实例：最多 2 秒看到别的实例的修改
 
 
+def _env_num(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return float(default)
+
+
 SPECS: list[dict] = [
     # ---- 托书解析 ----
     {"key": "booking.risk_auto_floor", "group": "托书解析", "default": 0.90,
@@ -80,6 +87,48 @@ SPECS: list[dict] = [
      "min": 0.0, "max": 500.0, "step": 0.01,
      "label": "外协结算容差（元）",
      "hint": "报账与合同价的差额在这个范围内视为一致"},
+    {"key": "reconcile.explain_default", "group": "对账 / 结算", "type": "bool",
+     "default": 0.0,
+     "label": "默认生成差异解释",
+     "hint": "开：对账结果自动带可能原因与建议动作；关：调用方显式传 explain=true 才生成"},
+
+    # ---- 账龄与催收 ----
+    {"key": "aging.bucket_1", "group": "账龄与催收", "default": 30,
+     "min": 1, "max": 120, "step": 1,
+     "label": "第一档上限（天）",
+     "hint": "未到期之后的第一档，例如 1–30 天"},
+    {"key": "aging.bucket_2", "group": "账龄与催收", "default": 60,
+     "min": 2, "max": 180, "step": 1,
+     "label": "第二档上限（天）",
+     "hint": "必须大于第一档"},
+    {"key": "aging.bucket_3", "group": "账龄与催收", "default": 90,
+     "min": 3, "max": 365, "step": 1,
+     "label": "第三档上限（天）",
+     "hint": "超过该天数进入「90 天以上」档；必须大于第二档"},
+    {"key": "aging.remind_days", "group": "账龄与催收", "default": 30,
+     "min": 0, "max": 120, "step": 1,
+     "label": "提醒档上限（天）",
+     "hint": "最长逾期 ≤ 该天数 → 提醒；再长进入催收"},
+    {"key": "aging.collect_days", "group": "账龄与催收", "default": 90,
+     "min": 1, "max": 365, "step": 1,
+     "label": "催收档上限（天）",
+     "hint": "超过该天数 → 重点催收；必须大于提醒档"},
+
+    # ---- 指标与月报 ----
+    {"key": "metrics.baseline_manual_sec", "group": "指标与月报",
+     "default": _env_num("BASELINE_MANUAL_SEC", 180), "env_key": "BASELINE_MANUAL_SEC",
+     "min": 10, "max": 3600, "step": 1,
+     "label": "人工单票基线（秒）",
+     "hint": "节省工时的基线；默认来自 BASELINE_MANUAL_SEC，页面值优先"},
+    {"key": "metrics.hourly_cost", "group": "指标与月报",
+     "default": _env_num("HOURLY_COST", 45), "env_key": "HOURLY_COST",
+     "min": 0, "max": 2000, "step": 1,
+     "label": "人工时薪（元）",
+     "hint": "折算金额用；默认来自 HOURLY_COST，页面值优先"},
+    {"key": "metrics.bypass_alert", "group": "指标与月报", "default": 0.20,
+     "min": 0.0, "max": 1.0, "step": 0.01,
+     "label": "绕过率告警阈值",
+     "hint": "超过该比例提示「节省工时会高估」"},
 ]
 
 BY_KEY = {s["key"]: s for s in SPECS}
@@ -173,6 +222,10 @@ def get(key: str) -> float:
         return float(default)
 
 
+def get_bool(key: str) -> bool:
+    return abs(get(key)) > 1e-9
+
+
 def _history_load() -> list:
     try:
         data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
@@ -214,9 +267,11 @@ def snapshot() -> dict:
     groups: dict[str, list] = {}
     for spec in SPECS:
         item = dict(spec)
-        item["value"] = get(spec["key"])
+        item["value"] = get_bool(spec["key"]) if spec.get("type") == "bool" else get(spec["key"])
         item["changed"] = spec["key"] in values and abs(
             float(values[spec["key"]]) - float(spec["default"])) > 1e-9
+        if spec.get("env_key"):
+            item["env_set"] = bool(os.getenv(spec["env_key"], "").strip())
         groups.setdefault(spec["group"], []).append(item)
     return {
         "groups": [{"name": k, "items": v} for k, v in groups.items()],
@@ -237,6 +292,16 @@ def _check_dependencies(merged: dict) -> None:
                 f"{label}的「自动通过阈值」不能低于「双人复核下限」（当前 {hi} < {lo}）"
             )
 
+    b1 = float(merged.get("aging.bucket_1", BY_KEY["aging.bucket_1"]["default"]))
+    b2 = float(merged.get("aging.bucket_2", BY_KEY["aging.bucket_2"]["default"]))
+    b3 = float(merged.get("aging.bucket_3", BY_KEY["aging.bucket_3"]["default"]))
+    if not (b1 < b2 < b3):
+        raise ValueError("账龄档位必须递增：第一档 < 第二档 < 第三档")
+    remind = float(merged.get("aging.remind_days", BY_KEY["aging.remind_days"]["default"]))
+    collect = float(merged.get("aging.collect_days", BY_KEY["aging.collect_days"]["default"]))
+    if remind >= collect:
+        raise ValueError("「提醒档上限」必须小于「催收档上限」")
+
 
 def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
     """批量设置。只接受 SPECS 里的 key，且必须落在范围内。"""
@@ -247,6 +312,18 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
     clean: dict[str, float] = {}
     for k, v in values.items():
         spec = BY_KEY[k]
+        if spec.get("type") == "bool":
+            if isinstance(v, str):
+                normalized = v.strip().lower()
+                if normalized in {"1", "true", "on", "yes"}:
+                    clean[k] = 1.0
+                elif normalized in {"0", "false", "off", "no", ""}:
+                    clean[k] = 0.0
+                else:
+                    raise ValueError(f"{spec['label']} 必须是开/关")
+            else:
+                clean[k] = 1.0 if bool(v) else 0.0
+            continue
         try:
             num = float(v)
         except (TypeError, ValueError):

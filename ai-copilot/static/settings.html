@@ -51,6 +51,9 @@
               font:inherit;font-size:13px;outline:none}
   .cfg-item input:focus{border-color:var(--brand)}
   .cfg-item .sub2{font-size:11px;color:var(--muted);margin-top:4px;text-align:right}
+  .cfg-item input.switch{width:18px;height:18px;accent-color:var(--brand)}
+  .env-tag{font-size:10.5px;color:#1f4e79;background:#eef4fa;border:1px solid #d7e6f5;
+           border-radius:999px;padding:0 6px;margin-left:6px}
   .irow{display:flex;justify-content:space-between;gap:12px;padding:8px 0;
         border-bottom:1px solid #f0f2f5;font-size:13px}
   .irow:last-child{border-bottom:0}
@@ -156,7 +159,14 @@ function render(){
     <div class="irow"><span>已修改（非默认）</span><b>${changed} 项</b></div>
     <div class="irow"><span>最后修改</span><b>${DATA.updated_at ? fmt(DATA.updated_at) : '尚未修改'}</b></div>
     <div class="irow"><span>部署级配置</span><b>来自 .env，改完需重启（见下方）</b></div>
-  </div><div class="note">默认值是演示口径，客户现场必须用真实工时和样本校准；降低自动通过阈值会要求填写原因。</div></section>`);
+  </div>
+  <div class="testbar">
+    <button type="button" id="btnExport">导出配置</button>
+    <button type="button" id="btnImport">导入配置</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden />
+    <span class="res">导出不含密钥；导入会覆盖同名项。</span>
+  </div>
+  <div class="note">默认值是演示口径，客户现场必须用真实工时和样本校准；降低自动通过阈值会要求填写原因。</div></section>`);
 
   // 阈值分组
   for(const g of DATA.groups){
@@ -165,14 +175,21 @@ function render(){
       ${g.items.map(it => `
         <div class="cfg-item">
           <div>
-            <div class="lbl">${esc(it.label)}${it.changed ? '<span class="chg">已修改</span>' : ''}</div>
+            <div class="lbl">${esc(it.label)}${it.changed ? '<span class="chg">已修改</span>' : ''}
+              ${it.env_set ? '<span class="env-tag">环境变量已设置，页面值优先</span>' : ''}</div>
             <div class="hint">${esc(it.hint)}</div>
           </div>
           <div>
-            <input type="number" step="${it.step}" min="${it.min}" max="${it.max}"
-                   value="${it.value}" data-key="${esc(it.key)}" data-old="${it.value}"
-                   data-default="${it.default}" ${admin ? '' : 'disabled'} />
-            <div class="sub2">默认 ${it.default} · 范围 ${it.min}–${it.max}</div>
+            ${it.type === 'bool' ? `
+              <input type="checkbox" class="switch" data-key="${esc(it.key)}"
+                     data-old="${it.value ? 1 : 0}" ${it.value ? 'checked' : ''} ${admin ? '' : 'disabled'} />
+              <div class="sub2">默认 ${it.default ? '开' : '关'} · 即时生效</div>
+            ` : `
+              <input type="number" step="${it.step}" min="${it.min}" max="${it.max}"
+                     value="${it.value}" data-key="${esc(it.key)}" data-old="${it.value}"
+                     data-default="${it.default}" ${admin ? '' : 'disabled'} />
+              <div class="sub2">默认 ${it.default} · 范围 ${it.min}–${it.max}</div>
+            `}
           </div>
         </div>`).join('')}
     </div></section>`);
@@ -222,6 +239,9 @@ function bind(){
   });
   $$('#main button[data-test]').forEach(b => b.onclick = () => testConn(b.dataset.test, b));
   $$('#main button[data-rollback]').forEach(b => b.onclick = () => rollback(b.dataset.rollback, b));
+  const ex = $('#btnExport'); if(ex) ex.onclick = exportCfg;
+  const im = $('#btnImport'); if(im) im.onclick = () => $('#importFile').click();
+  const fi = $('#importFile'); if(fi) fi.onchange = onImportFile;
 }
 
 // 降低风险阈值必须写原因
@@ -230,13 +250,42 @@ const DANGER = new Set(['booking.risk_auto_floor','booking.low_conf_floor',
 function collect(){
   const values = {}, lowered = [];
   $$('#main input[data-key]').forEach(i => {
-    const k = i.dataset.key, v = Number(i.value), old = Number(i.dataset.old);
+    const k = i.dataset.key, old = Number(i.dataset.old);
+    const v = i.type === 'checkbox' ? (i.checked ? 1 : 0) : Number(i.value);
     if(Math.abs(v - old) > 1e-9){
-      values[k] = v;
+      values[k] = i.type === 'checkbox' ? !!i.checked : v;
       if(DANGER.has(k) && v < old) lowered.push(k);
     }
   });
   return {values, lowered};
+}
+
+async function exportCfg(){
+  try{
+    const d = await j('/api/settings/export');
+    const blob = new Blob([JSON.stringify(d, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '智单-配置-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }catch(e){ toast('导出失败：' + e.message); }
+}
+
+async function onImportFile(e){
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); } catch(err){ toast('文件不是合法 JSON'); return; }
+  const values = (data && data.values) || data;
+  if(!values || typeof values !== 'object' || Array.isArray(values)){ toast('缺少 values 对象'); return; }
+  if(!confirm(`导入 ${Object.keys(values).length} 项配置？同名项会被覆盖。`)) return;
+  try{
+    await j('/api/settings/import', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({values, reason:'导入配置文件'})});
+    toast('已导入'); DIRTY = false; await load();
+  }catch(err){ toast('导入失败：' + err.message); }
 }
 
 $('#btnSave').onclick = async () => {

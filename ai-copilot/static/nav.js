@@ -42,6 +42,7 @@
         { href: '/learn', label: '学习队列', roles: ['admin', 'operator', 'finance'] },
         { href: '/settings', label: '阈值配置', roles: ['admin'] },
         { href: '/users', label: '用户管理', roles: ['admin'] },
+        { href: '/report', label: '运行月报' },
         { href: '/demo', label: '一键演示' }
       ]
     }

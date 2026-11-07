@@ -15,7 +15,7 @@ from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 
 from fastapi.responses import (
-    FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
+    FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
 )
 
 from . import auth, db, delivery, storage
@@ -1968,6 +1968,14 @@ def api_risk_sim(monthly_tickets: int = 2000, penalty: float = 8300.0,
 @app.get("/api/report.md", response_class=PlainTextResponse)
 def api_report():
     return report_md(settings.baseline_manual_sec, settings.hourly_cost)
+
+
+@app.get("/report", response_class=HTMLResponse)
+def report_page():
+    """运行月报的可读页面；原始 Markdown 仍从 /api/report.md 下载。"""
+    from .report_view import render_page
+
+    return render_page(report_md(settings.baseline_manual_sec, settings.hourly_cost))
 
 
 @app.get("/api/samples")

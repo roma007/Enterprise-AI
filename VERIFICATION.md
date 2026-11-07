@@ -431,6 +431,21 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - `git clone --depth 2` 后执行 `preflight.py --commit HEAD`：识别 5 个文件、通过；`--depth 1` 仍会把全仓库当改动（已在 CI 侧规避）。
 - GitHub Actions run #149（`af5734e`）**4 个 job 全部通过**（修复生效）；此前 run #148 因该误判失败。
 
+### 5.20 运行月报改为可读页面
+
+- 现象：托书录入页点「月报」，打开的是 `/api/report.md`，浏览器按 `text/plain` 原样显示 Markdown（`#`、`|`、`**`），看起来像一坨 JSON/原始数据。
+- 改动：
+  - 新增 `app/report_view.py`：最小 Markdown 渲染（标题 / 表格 / 引用 / 列表 / 粗体 / 代码），**不引入新依赖**，所有文本先 `html.escape`。
+  - 新增 `GET /report`：服务端渲染成完整页面，复用 `nav.css` / `nav.js` 左侧菜单；页面带「下载 Markdown」与「打印」。
+  - `static/index.html` 头部「月报 ↗」改为「运行月报」→ `/report`；侧栏「数据与设置」新增「运行月报」。
+  - `report_md()` 标题改为「智单 · 运行月报」，说明补一条：本表统计整条链路（OCR + 规则 + 人工确认），**不拆分大模型单独贡献**。
+  - `/api/report.md` 保留，Content-Type 仍为 `text/plain`，供下载或程序读取。
+- 验证：
+  - `/report` 返回 200，渲染 5 张表格、6 个二级标题；侧栏「运行月报」高亮；浏览器控制台 0 错误。
+  - 未登录访问 `/report` → 307 跳 `/login`。
+  - `./scripts/smoke.sh` **16/16 通过**。
+- 未做：未做打印预览逐页检查。
+
 ---
 
 ## 6. 未验证 / 阻塞项

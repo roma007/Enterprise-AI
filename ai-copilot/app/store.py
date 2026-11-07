@@ -1725,7 +1725,7 @@ def report_md(baseline_sec: float = 180.0, hourly_cost: float = 45.0) -> str:
     m = metrics(baseline_sec)
     saved_money = m["saved_hours"] * hourly_cost
     lines = [
-        "# 托书 AI 录入 · 运行报告",
+        "# 智单 · 运行月报",
         "",
         f"> 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
         f"> 基线口径：人工单票 {baseline_sec:.0f} 秒，人工时薪 {hourly_cost:.0f} 元",
@@ -1782,6 +1782,7 @@ def report_md(baseline_sec: float = 180.0, hourly_cost: float = 45.0) -> str:
         "",
         "- 基线必须用客户真实工时校准，默认值仅为演示口径。",
         "- 避开「跳过系统」的票不计入本表，因此本表**高估**节省量，需配合绕过率（C4）一起看。",
+        "- 本表统计整条链路（OCR + 规则 + 人工确认）相对人工基线的节省，不拆分大模型单独贡献。",
     ]
     return "\n".join(lines)
 

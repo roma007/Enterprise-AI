@@ -1,0 +1,3 @@
+#!/bin/sh
+# 提交说明检查：代码改动必须带节点 ID 或“图无影响：<原因>”
+exec python3 scripts/preflight.py --staged --message-only --message-file "$1"

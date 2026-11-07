@@ -226,6 +226,21 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 筛选：点“只看未完成”后可见 31 行，点“只看已完成”后可见 78 行。
   - `python3 -m py_compile scripts/build_impl_map.py` 通过；连续生成两次 HTML 哈希一致。
 
+### 5.8 铁律可执行化：preflight + Git hooks + CI
+
+- 规则权威归位 `AGENTS.md`（OpenCode 每次会话自动加载），新增“开工前 30 秒 / 提交前 30 秒”可执行清单；`实施全景图.md` §0 只保留摘要并指向 `AGENTS.md`，避免两处漂移。
+- 新增 `scripts/preflight.py`：
+  - 改了 `实施全景图.md` 但 HTML 未重新生成 → 失败。
+  - 改了代码/脚本/CI/运维配置，提交说明无 `[节点ID]` 且无 `图无影响：<原因>` → 失败。
+  - 带节点 ID 但没同提交更新本图 → 失败。
+- 新增 `.githooks/pre-commit`、`.githooks/commit-msg`、`scripts/install-git-hooks.sh` 与 `make install-hooks`；本地提交即拦截。
+- CI frontend job 新增 `python3 scripts/preflight.py --commit HEAD`，与本地共用同一脚本；合并提交自动跳过。
+- 复验：
+  - `python3 -m py_compile scripts/preflight.py` 通过。
+  - 正向：`--commit 202549f`（纯文档提交）通过。
+  - 反向：构造“代码改动 + 无节点 ID”与“节点 ID + 未更新图”两种场景，均按预期失败。
+  - 生成结果：完成 79 / 110（71.8%），未完成 31；8 个 Mermaid 图渲染正常。
+
 ---
 
 ## 6. 未验证 / 阻塞项

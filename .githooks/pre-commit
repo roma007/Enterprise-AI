@@ -1,0 +1,3 @@
+#!/bin/sh
+# 提交前预检：HTML 是否同步、代码改动是否有节点留痕
+exec python3 scripts/preflight.py --staged

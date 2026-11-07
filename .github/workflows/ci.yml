@@ -93,6 +93,10 @@ jobs:
           python3 scripts/build_impl_map.py
           git diff --exit-code -- 实施全景图.html
 
+      - name: Check commit follows 实施全景图 rules
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/preflight.py --commit HEAD
+
   e2e:
     name: e2e · playwright smoke
     runs-on: ubuntu-latest

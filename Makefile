@@ -1,4 +1,4 @@
-.PHONY: up down logs ps backup restore metrics archive pdf-cleanup share-cleanup sessions-cleanup worker-logs migrate-prod drill-restore drill-pitr drill-rollout drill-alerts drill-s3 billing-run impl-map
+.PHONY: up down logs ps backup restore metrics archive pdf-cleanup share-cleanup sessions-cleanup worker-logs migrate-prod drill-restore drill-pitr drill-rollout drill-alerts drill-s3 billing-run impl-map preflight install-hooks
 
 up:
 	docker compose up -d --build
@@ -61,3 +61,10 @@ billing-run:
 # 从《实施全景图.md》重新生成 HTML（单一事实源是 Markdown）
 impl-map:
 	python3 scripts/build_impl_map.py
+
+# 提交前预检：HTML 同步 + 节点留痕（本地 hook 与 CI 共用同一脚本）
+preflight:
+	python3 scripts/preflight.py --staged
+
+install-hooks:
+	./scripts/install-git-hooks.sh

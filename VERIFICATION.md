@@ -1,7 +1,7 @@
 # 全项目核验报告
 
 > 核验日期：2026-11-07
-> 基线提交：`c3b37ac` + 实施全景图/铁律文档变更
+> 基线提交：`e4e2b96` + 实施全景图/铁律/CI 同步校验
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -219,11 +219,12 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 新增 `AGENTS.md`：把“图先于改、同一提交更新、完成只认证据、外部项不冒充、验证串行、不包装 AI”写成项目铁律。
 - `AUTOPILOT.md` 顶部、`TODO.md` 顶部同步指向该图；新增 `make impl-map` 从 Markdown 生成 HTML。
 - 新增 `scripts/build_impl_map.py`：解析检查表统计完成度，生成可离线打开的 `实施全景图.html`；表格 `[x]/[ ]` 自动渲染为复选框，支持“只看未完成 / 只看已完成”。
-- CI 前端 job 新增“实施全景图 HTML 与 MD 同步”步骤：`python3 scripts/build_impl_map.py` + `git diff --exit-code -- 实施全景图.html`，防止手改或漂移；下一次 CI run 验证。
+- CI 前端 job 新增“实施全景图 HTML 与 MD 同步”步骤：`python3 scripts/build_impl_map.py` + `git diff --exit-code -- 实施全景图.html`，防止手改或漂移。
 - 复验：
-  - 生成结果：完成 77 / 108（71.3%），未完成 31；8 个 Mermaid 图全部渲染，0 个语法错误，浏览器控制台 0 error。
-  - 筛选：点“只看未完成”后可见 31 行，点“只看已完成”后可见 77 行。
-  - `python3 -m py_compile scripts/build_impl_map.py` 通过。
+  - GitHub Actions run #125（`e4e2b96`）**4 个 job 全部通过**（backend 72s、frontend 30s、e2e 103s、docker 77s）；CI-11 同步校验通过。
+  - 生成结果：完成 78 / 109（71.6%），未完成 31；8 个 Mermaid 图全部渲染，0 个语法错误，浏览器控制台 0 error。
+  - 筛选：点“只看未完成”后可见 31 行，点“只看已完成”后可见 78 行。
+  - `python3 -m py_compile scripts/build_impl_map.py` 通过；连续生成两次 HTML 哈希一致。
 
 ---
 

@@ -417,6 +417,19 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 企业未认证；客户现场仍需固定域名 + 正式认证，见 AI-08 / EXT-13。
   - 企业微信后台曾明文显示 Token/EncodingAESKey；如担心泄露可重置后同步 `.env` 并重启。
 
+### 5.19 CI preflight 浅克隆误判修复
+
+- 现象：`527887b` 的 run #148 中，frontend job 的 `preflight.py --commit HEAD` 失败，报“改了代码但没有节点 ID”。
+- 原因：
+  - `actions/checkout` 默认浅克隆（`fetch-depth: 1`），`git show HEAD` 把整仓库当成本次改动，于是文档提交也被判为“改了代码”。
+  - 节点 ID 正则 `\[[A-Z]{2,4}-\d{2,3}\]` 不认 `AI-07E` 这种带字母后缀的 ID。
+- 修复：
+  - `.github/workflows/ci.yml`：frontend job 的 checkout 增加 `fetch-depth: 2`，preflight 能拿到父提交做 diff。
+  - `scripts/preflight.py`：节点 ID 正则改为 `\[[A-Z]{2,4}-\d{2,3}[A-Z]?\]`。
+- 验证：
+  - 正则单测：`[AI-07E] / [AI-21] / [DEP-14] / [CI-12]` 全部匹配。
+  - `git clone --depth 2` 后执行 `preflight.py --commit HEAD`：识别 5 个文件、通过；`--depth 1` 仍会把全仓库当改动（已在 CI 侧规避）。
+
 ---
 
 ## 6. 未验证 / 阻塞项

@@ -5,6 +5,15 @@
 
 ---
 
+## [0.35.0] · 2026-11-08 · 账龄催收话术模板（AI-35）
+
+- 新增 `aging.tpl_remind` / `aging.tpl_collect` / `aging.tpl_serious` 三档话术模板
+- 支持 `{client} {count} {outstanding} {overdue} {days}` 占位符替换
+- 未知占位符、缺 `{client}`、空模板在保存时拒绝
+- 账龄页新增「催款话术」列与一键复制；正常档置灰
+- CSV 导出新增「催款话术」列
+- 设置页模板使用多行文本框
+
 ## [0.34.0] · 2026-11-08 · 通知与告警（AI-34）
 
 - 新增 `app/notify.py`：事件订阅、静默时段、重复抑制、站内记录

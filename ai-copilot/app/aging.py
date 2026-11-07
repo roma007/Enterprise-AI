@@ -194,6 +194,13 @@ def aging(rows: list[dict], as_of: date | None = None) -> dict:
             "max_overdue_days": c["max_days"],
             "level": level,
             "advice": advice,
+            "advice_text": _advice_text(level, {
+                "client": c["client"],
+                "count": c["count"],
+                "outstanding": float(c["outstanding"]),
+                "overdue": float(c["overdue"]),
+                "days": c["max_days"],
+            }),
         })
     summary.sort(key=lambda x: (-x["overdue"], -x["max_overdue_days"]))
 
@@ -240,16 +247,41 @@ def _advice(ratio: float, max_days: int, overdue_amount: float) -> tuple[str, st
     return "重点催收", "暂停接新单，走合同违约条款，必要时法务介入"
 
 
+_TPL_KEYS = {"提醒": "aging.tpl_remind", "催收": "aging.tpl_collect",
+             "重点催收": "aging.tpl_serious"}
+
+
+def _advice_text(level: str, ctx: dict) -> str:
+    """把配置里的催收话术模板渲染成可直接复制给客户的消息。
+
+    正常档不发催收话术，返回空串；模板缺占位符时按原样保留，不静默吞掉。
+    """
+    key = _TPL_KEYS.get(level)
+    if not key:
+        return ""
+    text = th.get_text(key)
+    values = {
+        "client": ctx["client"],
+        "count": str(ctx["count"]),
+        "outstanding": f'{ctx["outstanding"]:,.0f}',
+        "overdue": f'{ctx["overdue"]:,.0f}',
+        "days": str(ctx["days"]),
+    }
+    for name, value in values.items():
+        text = text.replace("{" + name + "}", value)
+    return text
+
+
 def export_csv(result: dict) -> str:
     buf = io.StringIO()
     buf.write("\ufeff")
     w = csv.writer(buf)
     w.writerow(["客户", "笔数", "应收合计", "未收", "逾期未收", "逾期占比",
-                "最长逾期天数", "等级", "建议"])
+                "最长逾期天数", "等级", "建议", "催款话术"])
     for c in result["clients"]:
         w.writerow([c["client"], c["count"], c["total"], c["outstanding"], c["overdue"],
                     f'{c["overdue_ratio"]*100:.1f}%', c["max_overdue_days"],
-                    c["level"], c["advice"]])
+                    c["level"], c["advice"], c.get("advice_text", "")])
     w.writerow([])
     w.writerow(["明细"])
     w.writerow(["客户", "单号", "应收", "已收", "未收", "到期日", "逾期天数", "账龄档"])

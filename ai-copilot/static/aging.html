@@ -36,6 +36,10 @@
   .l-提醒{background:#e8f0fb;color:var(--brand)}
   .l-催收{background:#fdf3e2;color:var(--warn)}
   .l-重点催收{background:#fde8e8;color:var(--err)}
+  .mini{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 9px;
+    font-size:12px;color:var(--brand);cursor:pointer;white-space:nowrap}
+  .mini:hover{background:#f2f7fc}
+  .mini:disabled{color:var(--muted);cursor:not-allowed;border-style:dashed}
   .bucket{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
   .bucket div{flex:1;min-width:130px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff}
   .bucket b{display:block;font-size:17px}
@@ -102,17 +106,35 @@ function render(r){
     `<div><b>${money(v)}</b><span>${k}</span></div>`).join('');
 
   $('#clients').innerHTML = '<tr><th>客户</th><th>笔数</th><th>未收</th><th>逾期未收</th>'
-    + '<th>逾期占比</th><th>最长逾期</th><th>等级</th><th>建议</th></tr>' +
-    r.clients.map(c=>`<tr>
+    + '<th>逾期占比</th><th>最长逾期</th><th>等级</th><th>建议</th><th>催款话术</th></tr>' +
+    r.clients.map((c,i)=>`<tr>
       <td>${c.client}</td><td>${c.count}</td>
       <td>${money(c.outstanding)}</td>
       <td style="color:${c.overdue?'var(--err)':'inherit'}">${money(c.overdue)}</td>
       <td>${(c.overdue_ratio*100).toFixed(0)}%</td>
       <td>${c.max_overdue_days} 天</td>
       <td><span class="tag l-${c.level}">${c.level}</span></td>
-      <td style="color:var(--muted);font-size:12px">${c.advice}</td></tr>`).join('');
+      <td style="color:var(--muted);font-size:12px">${c.advice}</td>
+      <td><button class="mini" data-copy="${i}" ${c.advice_text?'':'disabled'}
+            title="${c.advice_text?c.advice_text.replace(/"/g,'&quot;'):'未逾期，无需催款话术'}">
+            ${c.advice_text?'复制':'—'}</button></td></tr>`).join('');
   $('#out').style.display='block'; $('#out2').style.display='block';
 }
+
+$('#clients').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-copy]');
+  if(!btn || btn.disabled || !LAST) return;
+  const text = LAST.clients[Number(btn.dataset.copy)]?.advice_text || '';
+  try{
+    await navigator.clipboard.writeText(text);
+    toast('话术已复制，可直接发给客户');
+  }catch(_){
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('话术已复制，可直接发给客户');
+  }
+});
 
 $('#btnRun').onclick = async () => {
   $('#btnRun').disabled = true; $('#hint').textContent='分析中…';

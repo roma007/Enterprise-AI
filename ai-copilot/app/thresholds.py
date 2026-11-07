@@ -28,6 +28,7 @@ from .config import ROOT
 from .schema import BLOCKING_KEYS, SPEC_MAP
 
 PATH = ROOT / "data" / "settings.json"
+TPL_PLACEHOLDERS = ("client", "count", "outstanding", "overdue", "days")
 HISTORY_PATH = ROOT / "data" / "settings_history.json"
 HISTORY_MAX = 300
 _lock = threading.Lock()
@@ -132,6 +133,29 @@ SPECS: list[dict] = [
      "min": 1, "max": 365, "step": 1,
      "label": "催收档上限（天）",
      "hint": "超过该天数 → 重点催收；必须大于提醒档"},
+
+    # ---- 催收话术模板（可用占位符：{client} {count} {outstanding} {overdue} {days}）----
+    {"key": "aging.tpl_remind", "group": "账龄与催收", "type": "text", "lines": 3,
+     "max_len": 500,
+     "default": "{client}您好：本期对账单共 {count} 笔，未收 {outstanding} 元，"
+                "其中逾期 {overdue} 元（最长 {days} 天）。请在付款到期日前安排付款，"
+                "如有疑问随时联系我司对账专员。",
+     "label": "提醒档话术",
+     "hint": "最长逾期在提醒档内使用；{client} {count} {outstanding} {overdue} {days} 会被替换"},
+    {"key": "aging.tpl_collect", "group": "账龄与催收", "type": "text", "lines": 3,
+     "max_len": 500,
+     "default": "{client}您好：贵司目前未收 {outstanding} 元，逾期 {overdue} 元，"
+                "最长逾期 {days} 天。请于 3 个工作日内确认付款计划；"
+                "如需逐单对账明细，我司可即时提供。",
+     "label": "催收档话术",
+     "hint": "进入催收档使用；占位符同上"},
+    {"key": "aging.tpl_serious", "group": "账龄与催收", "type": "text", "lines": 3,
+     "max_len": 500,
+     "default": "{client}您好：贵司未收 {outstanding} 元，逾期已达 {days} 天，"
+                "其中逾期未收 {overdue} 元。请于 2 个工作日内书面确认付款安排；"
+                "逾期未回复将暂停接新单，并按合同条款处理。",
+     "label": "重点催收档话术",
+     "hint": "超过催收档上限使用；占位符同上"},
 
     # ---- 指标与月报 ----
     {"key": "metrics.baseline_manual_sec", "group": "指标与月报",
@@ -398,6 +422,17 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
                 m = __import__("re").fullmatch(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)", text)
                 if not m:
                     raise ValueError("静默时段格式应为 HH:MM-HH:MM，例如 22:00-08:00")
+            if spec["key"].startswith("aging.tpl_"):
+                if not text:
+                    raise ValueError(f"{spec['label']} 不能为空")
+                used = set(__import__("re").findall(r"\{(\w+)\}", text))
+                invalid = sorted(used - set(TPL_PLACEHOLDERS))
+                if invalid:
+                    raise ValueError(
+                        f"{spec['label']} 含未知占位符：{'、'.join('{' + x + '}' for x in invalid)}；"
+                        f"可用：{' '.join('{' + x + '}' for x in TPL_PLACEHOLDERS)}")
+                if "client" not in used:
+                    raise ValueError(f"{spec['label']} 至少需要 {{client}}，否则不知道发给谁")
             clean[k] = text
             continue
         if spec.get("type") == "list":

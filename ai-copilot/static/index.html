@@ -79,8 +79,8 @@
   footer{padding:0 20px 28px;color:#9aa4b0;font-size:11.5px}
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 </style>
-<link rel="stylesheet" href="/static/nav.css" />
-<script src="/static/nav.js" defer></script>
+<link rel="stylesheet" href="/static/nav.css?v=20261107d" />
+<script src="/static/nav.js?v=20261107d" defer></script>
 </head>
 <body class="app-shell">
 <header>
@@ -88,8 +88,6 @@
   <span class="sub">原文 → 草稿 → 规则挑错 → 人工确认 → 留痕</span>
   <span id="engineBadge" class="badge">检测引擎中…</span>
   <span style="flex:1"></span>
-  <span class="badge" id="userChip" style="display:none"></span>
-  <a href="#" id="logoutLink" style="display:none;font-size:12px;color:var(--muted);text-decoration:none">退出</a>
   <button class="ghost" id="btnMetrics" style="padding:4px 12px;font-size:12px">运行指标</button>
   <a href="/report" style="font-size:12px;color:var(--muted);text-decoration:none">运行月报</a>
 </header>
@@ -177,15 +175,7 @@ async function loadMe(){
     const me = await (await fetch('/api/me')).json();
     if(!me || !me.id) return;
     ME = me;
-    const chip = $('#userChip');
-    chip.textContent = (me.name || me.email) + ' · ' + (me.role_label || me.role);
-    chip.style.display = '';
-    $('#logoutLink').style.display = '';
-    $('#logoutLink').onclick = async e => {
-      e.preventDefault();
-      await fetch('/api/auth/logout', {method:'POST'});
-      location.href = '/login';
-    };
+    // 顶栏的账号信息与退出由 nav.js 统一渲染
   }catch(e){}
 }
 

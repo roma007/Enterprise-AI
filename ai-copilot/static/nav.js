@@ -99,27 +99,10 @@
     });
     aside.appendChild(menu);
 
-    // 底部：演示环境说明 + 当前用户（首页头部已有用户信息，不重复）
+    // 底部只留环境说明；账号与退出放顶栏
     var foot = el('div', 'foot');
     foot.id = 'navFoot';
     foot.appendChild(el('div', null, '演示环境 · 数据为合成样本'));
-    if (here !== '/') {
-      var me = el('div', 'me');
-      me.id = 'navMe';
-      me.style.display = 'none';
-      foot.appendChild(me);
-      var out = el('a', null, '退出登录');
-      out.href = '#';
-      out.id = 'navLogout';
-      out.style.display = 'none';
-      out.addEventListener('click', function (e) {
-        e.preventDefault();
-        fetch('/api/auth/logout', { method: 'POST' }).finally(function () {
-          location.href = '/login';
-        });
-      });
-      foot.appendChild(out);
-    }
     aside.appendChild(foot);
 
     document.body.insertBefore(aside, document.body.firstChild);
@@ -162,15 +145,31 @@
       var visible = g.querySelectorAll('a.item:not([style*="display: none"])').length;
       if (!visible) g.style.display = 'none';
     });
-    var me2 = document.getElementById('navMe');
-    var out = document.getElementById('navLogout');
-    if (me2) {
-      me2.textContent = me.name || me.email || '';
-      var sub = el('span', null, me.role_label || me.role);
-      me2.appendChild(sub);
-      me2.style.display = '';
+    renderHeaderUser(me);
+  }
+
+  // 顶栏右侧：当前用户 + 角色 + 退出
+  function renderHeaderUser(me) {
+    var header = document.querySelector('header');
+    if (!header || !me) return;
+    var box = header.querySelector('.nav-user');
+    if (!box) {
+      box = el('span', 'nav-user');
+      header.appendChild(box);
     }
-    if (out) out.style.display = '';
+    box.textContent = '';
+    box.appendChild(el('b', null, me.name || me.email || ''));
+    box.appendChild(el('span', 'role', me.role_label || me.role || ''));
+    var out = el('a', null, '退出');
+    out.href = '#';
+    out.addEventListener('click', function (e) {
+      e.preventDefault();
+      fetch('/api/auth/logout', { method: 'POST' }).finally(function () {
+        location.href = '/login';
+      });
+    });
+    box.appendChild(out);
+    box.style.display = '';
   }
 
   function init() {

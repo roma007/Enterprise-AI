@@ -123,8 +123,8 @@ _PAGE = """<!DOCTYPE html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>智单 · 运行月报</title>
-<link rel="stylesheet" href="/static/nav.css" />
-<script src="/static/nav.js" defer></script>
+<link rel="stylesheet" href="/static/nav.css?v=20261107d" />
+<script src="/static/nav.js?v=20261107d" defer></script>
 <style>
   :root{{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79}}
   *{{box-sizing:border-box}}

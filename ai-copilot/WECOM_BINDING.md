@@ -111,3 +111,9 @@ PYTHONPATH=. .venv/bin/python -m uvicorn app.main:app --port 8790 --host 127.0.0
 - 单张图片默认上限 10MB（`WECOM_IMAGE_MAX_MB`）；超过请走 H5。
 - PDF、多张图、扫描件仍建议走 H5 或批量导入。
 - Cloudflare 临时隧道地址每次重启会变，正式使用需要固定域名；图片主动推送还要求配置可信 IP。
+
+## 7. 实测状态（2026-11-07）
+
+- 已用测试租户跑通完整链路：文字消息、图片消息、OCR、主动推送；证据（msg_id / run_id / 回调 IP）见 `VERIFICATION.md` 5.18。
+- 当前回调是 `trycloudflare` 临时隧道，**重启即变**；公网 IP 也是动态的。
+- 正式使用前必须：固定 HTTPS 域名 + 企业认证 + 更新可信 IP，再按本文第 2 节重配。

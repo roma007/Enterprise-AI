@@ -1,7 +1,7 @@
 # 全项目核验报告
 
 > 核验日期：2026-11-07
-> 基线提交：`5c91604` + 客户现场实施图重构
+> 基线提交：`4f79afd` + 客户现场实施图重构
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -16,7 +16,7 @@
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
 | ai-copilot | **通过（内部样例）**：8 个专项测试 + 16 项 smoke 通过；规则评测通过 |
-| CI | **通过**：GitHub Actions 4 个 job 全部通过（`5c91604`，run #134） |
+| CI | **通过**：GitHub Actions 4 个 job 全部通过（`4f79afd`，run #136） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
 | 计划状态 | **65 项已完成 / 7 项未完成**；未完成项全部是真实客户/外部环境 |
@@ -297,6 +297,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 图片哈希比对：第 4、5 页各 1 张截图；**不再包含 `ui-platform-insights.png`**。
   - 页脚抽样：`05 / 13`、`06 / 13` 正确。
 - 说明：`ui-platform-insights.png` 资产保留（未删除），仅从客户版 PPT 移除引用。
+- GitHub Actions run #136（`4f79afd`）**4 个 job 全部通过**（backend 80s、frontend 26s、e2e 128s、docker 77s）；preflight 通过。
 
 ---
 

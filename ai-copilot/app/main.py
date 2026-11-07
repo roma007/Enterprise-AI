@@ -2060,6 +2060,30 @@ def api_aging_demo():
     return aging(demo_rows())
 
 
+@app.post("/api/aging/draft")
+def api_aging_draft(req: dict):
+    """可选：把规则模板改写成更自然的催收措辞。数字由规则锁定，模型只改措辞。"""
+    import math
+
+    from .advice_ai import draft
+
+    client = str(req.get("client") or "").strip()
+    if not client:
+        raise HTTPException(status_code=400, detail="缺少客户名称")
+    try:
+        count = int(req.get("count") or 0)
+        outstanding = float(req.get("outstanding") or 0)
+        overdue = float(req.get("overdue") or 0)
+        days = int(req.get("days") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="金额/天数参数不合法")
+    if not all(math.isfinite(x) for x in (outstanding, overdue)) or count < 0 or days < 0:
+        raise HTTPException(status_code=400, detail="金额/天数参数不合法")
+
+    return draft(client=client, count=count, outstanding=outstanding,
+                 overdue=overdue, days=days)
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

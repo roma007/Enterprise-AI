@@ -156,6 +156,9 @@ SPECS: list[dict] = [
                 "逾期未回复将暂停接新单，并按合同条款处理。",
      "label": "重点催收档话术",
      "hint": "超过催收档上限使用；占位符同上"},
+    {"key": "aging.ai_draft", "group": "账龄与催收", "type": "bool", "default": 0.0,
+     "label": "AI 润色催款话术（可选）",
+     "hint": "模型只改写措辞；金额、天数、客户名由规则锁定，输出不合规自动回退模板"},
 
     # ---- 指标与月报 ----
     {"key": "metrics.baseline_manual_sec", "group": "指标与月报",

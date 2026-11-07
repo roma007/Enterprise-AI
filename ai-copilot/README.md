@@ -301,7 +301,7 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **三单匹配**：订单↔运单↔发票，箱号/金额/客户/箱量四维核对 | `app/threeway.py` | `/threeway`、`/api/threeway/*` |
 | **账单级自动对账**：对账单 ↔ 系统运单双向比对，四类差异定位 | `app/reconcile.py` | `/reconcile`、`/api/reconcile/*` |
 | **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
-| **账龄与催收**：四档账龄 + 客户风险分级 + 催收话术 | `app/aging.py` | `/aging`、`/api/aging/*` |
+| **账龄与催收**：四档账龄 + 客户风险分级 + 催收话术模板（可选 AI 润色，数字由规则锁定） | `app/aging.py`、`app/advice_ai.py` | `/aging`、`/api/aging/*` |
 | **外协结算**：合同价 × 数量 = 应付，与车队报账比对 | `app/settlement.py` | `/settlement`、`/api/settlement/*` |
 | **对账单/结算单抽取（试点一）**：文本/CSV + PDF/图片 OCR → 标准 JSON；差异解释可接大模型 | `app/statement.py`、`app/settlement_extract.py`、`app/diff_explain.py` | `/api/statement/extract`、`/api/settlement/extract`、`explain=true` |
 | **试点一闭环**：抽取 → 规则比对 → 解释 → 评测 | `scripts/pilot_flow.py`、`scripts/eval_statement_pilot.py` | `python3 ai-copilot/scripts/pilot_flow.py` |

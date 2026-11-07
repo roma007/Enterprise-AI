@@ -214,6 +214,7 @@ def aging(rows: list[dict], as_of: date | None = None) -> dict:
 
     return {
         "as_of": as_of.isoformat(),
+        "ai_draft": th.get_bool("aging.ai_draft"),
         "summary": {
             "rows": len(items),
             "clients": len(summary),

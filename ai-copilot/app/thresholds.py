@@ -19,6 +19,7 @@ import json
 import os
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +27,8 @@ from . import db
 from .config import ROOT
 
 PATH = ROOT / "data" / "settings.json"
+HISTORY_PATH = ROOT / "data" / "settings_history.json"
+HISTORY_MAX = 300
 _lock = threading.Lock()
 _cache: dict | None = None
 _cache_mtime: float = -1.0
@@ -170,6 +173,40 @@ def get(key: str) -> float:
         return float(default)
 
 
+def _history_load() -> list:
+    try:
+        data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _history_save(items: list) -> None:
+    HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = HISTORY_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(items[:HISTORY_MAX], ensure_ascii=False, indent=1),
+                   encoding="utf-8")
+    os.replace(tmp, HISTORY_PATH)
+
+
+def _record(actor: str, changes: list[dict], reason: str) -> None:
+    if not changes:
+        return
+    items = _history_load()
+    items.insert(0, {
+        "id": uuid.uuid4().hex[:12],
+        "ts": _now(),
+        "actor": actor or "system",
+        "reason": (reason or "").strip()[:200],
+        "changes": changes,
+    })
+    _history_save(items)
+
+
+def history(limit: int = 50) -> list[dict]:
+    return _history_load()[: max(1, min(int(limit or 50), 200))]
+
+
 def snapshot() -> dict:
     """给 UI 用：带说明与当前值。"""
     data = _load()
@@ -188,7 +225,20 @@ def snapshot() -> dict:
     }
 
 
-def set_many(values: dict, actor: str = "") -> dict:
+def _check_dependencies(merged: dict) -> None:
+    """阈值之间的约束：自动通过阈值不能低于双人复核下限。"""
+    for prefix, label in (("booking", "托书"), ("invoice", "发票")):
+        hi_key = f"{prefix}.risk_auto_floor"
+        lo_key = f"{prefix}.low_conf_floor"
+        hi = float(merged.get(hi_key, BY_KEY[hi_key]["default"]))
+        lo = float(merged.get(lo_key, BY_KEY[lo_key]["default"]))
+        if hi < lo:
+            raise ValueError(
+                f"{label}的「自动通过阈值」不能低于「双人复核下限」（当前 {hi} < {lo}）"
+            )
+
+
+def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
     """批量设置。只接受 SPECS 里的 key，且必须落在范围内。"""
     unknown = [k for k in values if k not in BY_KEY]
     if unknown:
@@ -206,20 +256,66 @@ def set_many(values: dict, actor: str = "") -> dict:
         clean[k] = num
 
     with _lock:
-        current = dict(_load().get("values") or {})
-        current.update(clean)
+        old = dict(_load().get("values") or {})
+        merged = dict(old)
+        merged.update(clean)
+        _check_dependencies(merged)
+
+        changes = []
+        for k, new_value in clean.items():
+            old_value = get(k)
+            if abs(float(old_value) - float(new_value)) > 1e-9:
+                changes.append({
+                    "key": k,
+                    "label": BY_KEY[k]["label"],
+                    "old": round(float(old_value), 4),
+                    "new": round(float(new_value), 4),
+                })
+
+        current = dict(merged)
         # 与默认值相同的就不落盘，保持文件干净
         for k in list(current):
             if k in BY_KEY and abs(float(current[k]) - float(BY_KEY[k]["default"])) < 1e-9:
                 current.pop(k)
         _write({"values": current, "updated_at": _now(), "updated_by": actor})
+        _record(actor, changes, reason)
     return {"ok": True, "changed": list(clean), "values": current}
 
 
-def reset(keys: list[str] | None = None, actor: str = "") -> dict:
+def reset(keys: list[str] | None = None, actor: str = "", reason: str = "") -> dict:
     with _lock:
         current = dict(_load().get("values") or {})
-        for k in (keys or list(current)):
+        targets = keys or list(current)
+        changes = []
+        for k in targets:
+            if k not in BY_KEY:
+                continue
+            old_value = get(k)
+            default = float(BY_KEY[k]["default"])
+            if abs(old_value - default) > 1e-9:
+                changes.append({
+                    "key": k,
+                    "label": BY_KEY[k]["label"],
+                    "old": round(old_value, 4),
+                    "new": round(default, 4),
+                })
             current.pop(k, None)
         _write({"values": current, "updated_at": _now(), "updated_by": actor})
+        _record(actor, changes, reason or "恢复默认")
     return {"ok": True, "values": current}
+
+
+def rollback(entry_id: str, actor: str = "", reason: str = "") -> dict:
+    entry = next((x for x in _history_load() if x.get("id") == entry_id), None)
+    if not entry:
+        raise ValueError("找不到这条变更记录")
+    values = {}
+    for change in entry.get("changes") or []:
+        key = change.get("key")
+        if key not in BY_KEY:
+            continue
+        old = change.get("old")
+        values[key] = BY_KEY[key]["default"] if old is None else float(old)
+    if not values:
+        raise ValueError("这条记录没有可回滚的配置项")
+    return set_many(values, actor=actor, reason=reason or f"回滚 {entry_id}")

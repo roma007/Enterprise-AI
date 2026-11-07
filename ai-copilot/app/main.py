@@ -186,7 +186,8 @@ def api_settings_put(req: dict, request: Request):
     if not isinstance(values, dict) or not values:
         raise HTTPException(status_code=400, detail="values 不能为空")
     try:
-        return th.set_many(values, actor=_uid(request))
+        return th.set_many(values, actor=_uid(request),
+                           reason=str(req.get("reason") or "")[:200])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -195,7 +196,151 @@ def api_settings_put(req: dict, request: Request):
 def api_settings_reset(req: dict, request: Request):
     from . import thresholds as th
     keys = req.get("keys") or None
-    return th.reset(keys, actor=_uid(request))
+    try:
+        return th.reset(keys, actor=_uid(request),
+                        reason=str(req.get("reason") or "")[:200])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/settings/history")
+def api_settings_history(limit: int = 50):
+    from . import thresholds as th
+    items = th.history(limit)
+    names: dict[str, str] = {}
+    for item in items:
+        actor = str(item.get("actor") or "")
+        if actor and actor not in names:
+            user = get_user(actor) or {}
+            names[actor] = user.get("name") or user.get("email") or actor
+        item["actor_name"] = names.get(actor, actor or "system")
+    return {"items": items}
+
+
+@app.post("/api/settings/rollback")
+def api_settings_rollback(req: dict, request: Request):
+    from . import thresholds as th
+    entry_id = str(req.get("id") or "").strip()
+    if not entry_id:
+        raise HTTPException(status_code=400, detail="id 不能为空")
+    try:
+        return th.rollback(entry_id, actor=_uid(request),
+                           reason=str(req.get("reason") or "")[:200])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+def _mask_value(value: str, head: int = 0) -> str:
+    if not value:
+        return ""
+    if head:
+        return value[:head] + "****"
+    return f"已配置（{len(value)} 位）"
+
+
+@app.get("/api/config/integrations")
+def api_config_integrations():
+    """部署级配置只读视图：来自 .env，改完需要重启。"""
+    s = settings
+    return {
+        "note": "这些配置来自 .env，页面只读；改完需要重启服务。",
+        "groups": [
+            {"name": "模型", "items": [
+                {"key": "llm.provider", "label": "提供方", "value": s.provider,
+                 "configured": s.provider not in {"", "rule", "off", "none"}},
+                {"key": "llm.base_url", "label": "网关地址", "value": s.base_url},
+                {"key": "llm.model", "label": "模型", "value": s.model},
+                {"key": "llm.api_key", "label": "API Key", "value": _mask_value(s.api_key),
+                 "configured": bool(s.api_key), "secret": True},
+                {"key": "llm.strategy", "label": "调用策略", "value": s.llm_strategy},
+                {"key": "llm.timeout", "label": "超时（秒）", "value": s.timeout},
+                {"key": "llm.below_conf", "label": "补空阈值", "value": s.llm_conf_floor},
+            ]},
+            {"name": "企业微信", "items": [
+                {"key": "wecom.corpid", "label": "CorpID",
+                 "value": _mask_value(s.wecom_corpid, 4), "configured": bool(s.wecom_corpid)},
+                {"key": "wecom.agentid", "label": "AgentId", "value": s.wecom_agentid,
+                 "configured": bool(s.wecom_agentid)},
+                {"key": "wecom.secret", "label": "Secret", "value": _mask_value(s.wecom_secret),
+                 "configured": bool(s.wecom_secret), "secret": True},
+                {"key": "wecom.token", "label": "Token", "value": _mask_value(s.wecom_token),
+                 "configured": bool(s.wecom_token), "secret": True},
+                {"key": "wecom.aes_key", "label": "EncodingAESKey",
+                 "value": _mask_value(s.wecom_aes_key), "configured": bool(s.wecom_aes_key),
+                 "secret": True},
+                {"key": "wecom.image_max_mb", "label": "图片上限（MB）",
+                 "value": s.wecom_image_max_mb},
+            ]},
+            {"name": "存储", "items": [
+                {"key": "storage.backend", "label": "后端", "value": storage.BACKEND},
+                {"key": "storage.dir", "label": "本地目录", "value": str(storage.BASE)},
+                {"key": "storage.s3_bucket", "label": "Bucket",
+                 "value": storage.S3_BUCKET, "configured": bool(storage.S3_BUCKET)},
+                {"key": "storage.s3_endpoint", "label": "S3 Endpoint",
+                 "value": storage.S3_ENDPOINT, "configured": bool(storage.S3_ENDPOINT)},
+            ]},
+        ],
+    }
+
+
+@app.post("/api/config/test/llm")
+def api_config_test_llm():
+    from . import llm as llm_mod
+
+    if not settings.llm_enabled:
+        return {"ok": False, "error": "模型未启用（没有 API Key 或 provider=rule）"}
+    start = time.perf_counter()
+    res = llm_mod.chat_json("你是连通性测试，只输出 JSON。", '只输出 {"ok": true}')
+    return {
+        "ok": res.ok,
+        "elapsed_ms": round((time.perf_counter() - start) * 1000),
+        "model": settings.model,
+        "cached": res.cached,
+        "tokens": res.tokens,
+        "error": (res.error or "")[:200],
+    }
+
+
+@app.post("/api/config/test/wecom")
+def api_config_test_wecom():
+    from . import wecom_api
+
+    if not wecom_api.configured():
+        return {"ok": False, "error": "缺 CorpID / Secret / AgentID"}
+    start = time.perf_counter()
+    try:
+        token = wecom_api.get_access_token(force=True)
+        return {
+            "ok": bool(token),
+            "elapsed_ms": round((time.perf_counter() - start) * 1000),
+            "agentid": settings.wecom_agentid,
+            "callback_signed": bool(settings.wecom_token and settings.wecom_aes_key),
+        }
+    except Exception as exc:  # noqa: BLE001 — 外部接口失败要给人话
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+
+@app.post("/api/config/test/storage")
+def api_config_test_storage():
+    start = time.perf_counter()
+    rel = ""
+    try:
+        rel = storage.save(b"zhidan-storage-test", "connectivity.txt", scope="_selftest")
+        obj = storage.open_for_read(rel)
+        ok = obj is not None
+        if hasattr(obj, "read_bytes"):
+            ok = obj.read_bytes() == b"zhidan-storage-test"
+        return {
+            "ok": ok,
+            "elapsed_ms": round((time.perf_counter() - start) * 1000),
+            "backend": storage.BACKEND,
+            "key": rel,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
+    finally:
+        if rel:
+            storage.delete(rel)
 
 
 @app.get("/settings")

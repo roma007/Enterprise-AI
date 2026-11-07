@@ -5,6 +5,16 @@
 
 ---
 
+## [0.31.0] · 2026-11-07 · 配置中心 P0（AI-31）
+
+- `/settings` 重写：左侧分组导航（概览 / 阈值 / 模型 / 企微 / 存储 / 变更历史）
+- 阈值变更记录与回滚：`GET /api/settings/history`、`POST /api/settings/rollback`
+- 阈值依赖校验：自动通过阈值不得低于双人复核下限
+- 降低风险阈值必须填写变更原因
+- 部署级配置只读视图：`GET /api/config/integrations`（密钥只显示掩码）
+- 连通性测试：`POST /api/config/test/llm|wecom|storage`
+- `storage.delete()`：本地/S3 删除，供测试与清理使用
+
 ## [0.30.0] · 2026-11-07 · 运行月报可读页（AI-18）
 
 - 新增 `GET /report`：把 `report_md()` 渲染成网页，不再是 `text/plain` 的原始 Markdown

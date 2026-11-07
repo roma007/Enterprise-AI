@@ -163,6 +163,22 @@ def open_for_read(rel: str):
     return p
 
 
+def delete(rel: str) -> bool:
+    """删除原件（本地或 S3）。不存在也算成功，方便清理任务幂等。"""
+    if not rel or ".." in rel.split("/"):
+        return False
+    if BACKEND == "s3":
+        try:
+            _s3().delete_object(Bucket=S3_BUCKET, Key=_key(rel))
+            return True
+        except Exception:  # noqa: BLE001 — 删除失败不阻断调用方
+            return False
+    path = _local_path(rel)
+    if path and path.exists():
+        path.unlink()
+    return True
+
+
 def info(rel: str) -> dict:
     if not rel:
         return {"exists": False, "path": rel}

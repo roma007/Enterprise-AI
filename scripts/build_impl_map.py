@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -61,7 +60,6 @@ def build() -> Path:
     baseline = pick(r"\*\*基线\*\*：`([^`]+)`", "c3b37ac")
 
     payload = json.dumps(md, ensure_ascii=False)
-    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
     stat_json = json.dumps(stats, ensure_ascii=False)
 
     html = f"""<!doctype html>
@@ -170,7 +168,7 @@ def build() -> Path:
     <button data-filter="only-done">只看已完成</button>
     <button id="btnPrint">打印 / 存 PDF</button>
   </div>
-  <div class="gen">生成时间：{generated}</div>
+  <div class="gen">生成命令：<code>make impl-map</code> ｜ 内容随 <code>实施全景图.md</code> 更新，HTML 请勿手改</div>
 </header>
 
 <div class="layout">

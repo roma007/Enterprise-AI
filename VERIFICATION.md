@@ -219,6 +219,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 新增 `AGENTS.md`：把“图先于改、同一提交更新、完成只认证据、外部项不冒充、验证串行、不包装 AI”写成项目铁律。
 - `AUTOPILOT.md` 顶部、`TODO.md` 顶部同步指向该图；新增 `make impl-map` 从 Markdown 生成 HTML。
 - 新增 `scripts/build_impl_map.py`：解析检查表统计完成度，生成可离线打开的 `实施全景图.html`；表格 `[x]/[ ]` 自动渲染为复选框，支持“只看未完成 / 只看已完成”。
+- CI 前端 job 新增“实施全景图 HTML 与 MD 同步”步骤：`python3 scripts/build_impl_map.py` + `git diff --exit-code -- 实施全景图.html`，防止手改或漂移；下一次 CI run 验证。
 - 复验：
   - 生成结果：完成 77 / 108（71.3%），未完成 31；8 个 Mermaid 图全部渲染，0 个语法错误，浏览器控制台 0 error。
   - 筛选：点“只看未完成”后可见 31 行，点“只看已完成”后可见 77 行。

@@ -358,6 +358,21 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 说明：产品名只改显示层；目录 `ai-copilot/`、服务名、环境变量、API 路径、数据库均未改。
 - GitHub Actions run #142（`324df9b`）**4 个 job 全部通过**（backend 93s、frontend 28s、e2e 125s、docker 71s）；preflight 通过。
 
+### 5.16 客户老板版 PPT 第 5 页对账截图重抓
+
+- 原因：界面改为左侧菜单栏后，原截图仍是旧版顶部导航；且旧截图用的是旧演示数据（9 条系统无此单），与第 5 页正文写的 8/2/1/1 不一致。
+- 改动：
+  - 新增 `会客包/reports/capture_ui.mjs`：Playwright（系统 Edge）以 1440×900 @2x 抓图，固定输出 **2880×1800**；账号密码读 `ai-copilot/.env`，可重复执行。
+  - 重抓 `会客包/reports/ppt_assets/ui-copilot-reconcile.png`：显示侧栏、「智单」品牌、11 条对账、8 一致 / 2 金额不符 / 1 系统无此单 / 1 客户漏单、差额 −370。
+  - 重新生成 PPTX：**13 slides**，第 5 页图片哈希与新截图一致，且不含 `ui-platform-insights.png`。
+  - 顺带修正 UI 文案：`static/reconcile.html` 演示提示条与 `static/demo.html` 第 7 步的数字改为实际结果（原文写「10 条正常」，与实际 8 条一致不符）。
+  - `app/main.py` 中 `/api/reconcile/demo` 的 docstring 同步更正（不影响行为）。
+- 验证：
+  - 图片尺寸 2880×1800（1.6）；PPT 第 5 页引用哈希一致。
+  - `./scripts/smoke.sh` **16/16 通过**。
+  - 浏览器复核：页面滚动时顶栏吸顶（`position: sticky`，top=0），侧栏与高亮正常，控制台 0 错误。
+- 未做：PPT 未做逐页像素级渲染（本机无 LibreOffice）。
+
 ---
 
 ## 6. 未验证 / 阻塞项

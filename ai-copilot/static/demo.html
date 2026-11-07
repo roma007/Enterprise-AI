@@ -293,7 +293,7 @@ const steps = [
   {
     title: "⑦ 账单级自动对账",
     say: "客户发一张对账单，几十条，人工要几天。",
-    input: "演示对账单：11 条（10 条正常 + 2 条金额错 + 1 条系统没有 + 1 条客户漏报）",
+    input: "演示对账单：11 条（8 条一致 + 2 条金额不符 + 1 条系统无此单）；系统另有 1 条客户漏报",
     async run(){
       const d = await jget('/api/reconcile/demo');
       const s = d.result.summary;

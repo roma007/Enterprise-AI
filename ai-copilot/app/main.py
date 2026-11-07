@@ -1771,7 +1771,7 @@ def api_reconcile_export(req: dict):
 
 @app.get("/api/reconcile/demo")
 def api_reconcile_demo():
-    """造一张对账单：10 条正常、2 条金额错、1 条系统没有；系统另有 1 条对账单没报。"""
+    """造一张对账单：11 条里 8 条一致、2 条金额不符、1 条系统没有；系统另有 1 条对账单没报。"""
     from .reconcile import reconcile
 
     waybills = []

@@ -122,7 +122,7 @@ $('#btnDemo').onclick = async () => {
   const d = await (await fetch('/api/reconcile/demo')).json();
   DEMO = d; $('#stmt').value = d.statement_text;
   render(d.result);
-  toast('演示数据已加载：10 条正常 / 2 条金额错 / 1 条系统没有 / 1 条客户漏报');
+  toast('演示数据已加载：8 条一致 / 2 条金额不符 / 1 条系统无此单 / 1 条客户漏单');
 };
 
 $('#btnExport').onclick = async () => {

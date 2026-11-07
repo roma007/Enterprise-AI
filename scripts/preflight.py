@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""提交前预检：把《实施全景图.md》的铁律变成可执行检查。
+"""提交前预检：把《实施全景图.md》/《内部开发与发布.md》的铁律变成可执行检查。
 
 检查内容：
 1. 改了 `实施全景图.md`，必须同时提交重新生成的 `实施全景图.html`。
-2. 改了代码/脚本/CI/运维配置，提交说明必须带节点 ID（如 `[AI-21]`），
-   或显式声明 `图无影响：<原因>`；带节点 ID 时还必须同提交更新本图。
+2. 改了代码/脚本/CI/运维配置，提交说明必须带节点 ID（如 `[AI-21]`、`[DEP-14]`），
+   或显式声明 `图无影响：<原因>`；带节点 ID 时还必须同提交更新两份事实源之一。
 3. 文档类改动不强制节点 ID。
 
 用法：
@@ -22,7 +22,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MD_NAME = "实施全景图.md"
+DEV_MD_NAME = "内部开发与发布.md"
 HTML_NAME = "实施全景图.html"
+DOC_NAMES = (MD_NAME, DEV_MD_NAME)
 
 CODE_PREFIXES = (
     "backend/",
@@ -83,10 +85,11 @@ def html_is_fresh() -> tuple[bool, str]:
 def check(files: list[str], message: str, label: str) -> list[str]:
     errors: list[str] = []
     code_files = [f for f in files if is_code(f)]
-    md_changed = MD_NAME in files
+    main_changed = MD_NAME in files
+    doc_changed = any(name in files for name in DOC_NAMES)
     html_changed = HTML_NAME in files
 
-    if md_changed:
+    if main_changed:
         fresh, why = html_is_fresh()
         if not fresh:
             errors.append(why)
@@ -100,13 +103,13 @@ def check(files: list[str], message: str, label: str) -> list[str]:
         if message.strip() and not has_node and not no_impact:
             errors.append(
                 "改了代码但没有节点 ID 或“图无影响：<原因>”："
-                "提交说明请带 [AI-21]/[MT-05]/[CI-12] 这类节点 ID，"
+                "提交说明请带 [AI-21]/[MT-05]/[CI-12]/[DEP-14] 这类节点 ID，"
                 "或写“图无影响：<原因>”"
             )
-        elif has_node and not md_changed and not no_impact:
+        elif has_node and not doc_changed and not no_impact:
             errors.append(
                 "提交说明带了节点 ID，但没有同提交更新 "
-                f"{MD_NAME}；请更新对应节点与“最近核验”"
+                f"{MD_NAME} 或 {DEV_MD_NAME}；请更新对应文档与“最近核验”"
             )
 
     if errors:
@@ -159,9 +162,9 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        if code_files and has_node and MD_NAME not in files and not no_impact:
+        if code_files and has_node and MD_NAME not in files and DEV_MD_NAME not in files and not no_impact:
             print(
-                f"preflight 失败：带节点 ID 但没有同提交更新 {MD_NAME}",
+                f"preflight 失败：带节点 ID 但没有同提交更新 {MD_NAME} 或 {DEV_MD_NAME}",
                 file=sys.stderr,
             )
             return 1

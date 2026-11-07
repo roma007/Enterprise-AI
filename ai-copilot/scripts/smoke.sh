@@ -121,6 +121,12 @@ if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
   else
     echo "  - 未安装 cryptography，跳过企微加解密自检"
   fi
+
+  if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_wecom_image.py >/dev/null 2>&1); then
+    chk "企微图片自检（解析/幂等/下载/推送/失败兜底）" 1
+  else
+    chk "企微图片自检（解析/幂等/下载/推送/失败兜底）" 0
+  fi
 fi
 
 rm -f "$COOKIE"

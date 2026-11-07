@@ -1,7 +1,7 @@
 # 全项目核验报告
 
 > 核验日期：2026-11-07
-> 基线提交：`e87e65d` + 实施全景图/铁律/CI 同步校验
+> 基线提交：`74132b5` + 企微图片异步链路
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -15,8 +15,8 @@
 | 数据库 | **通过**：59 个迁移全部应用；85 张表；81 张业务表启用 RLS；82 条策略 |
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
-| ai-copilot | **通过（内部样例）**：7 个专项测试 + 15 项 smoke 通过；规则评测通过 |
-| CI | **通过**：GitHub Actions 4 个 job 全部通过（`d6351db`，run #117；已升级 Node 24 Actions） |
+| ai-copilot | **通过（内部样例）**：8 个专项测试 + 16 项 smoke 通过；规则评测通过 |
+| CI | **通过**：GitHub Actions 4 个 job 全部通过（`74132b5`，run #129） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
 | 计划状态 | **65 项已完成 / 7 项未完成**；未完成项全部是真实客户/外部环境 |
@@ -54,7 +54,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 | 检查 | 结果 |
 |---|---|
 | `test_address` / `test_fees` / `test_metrics` / `test_delivery` / `test_hardening` / `test_wecom_crypto` / `test_storage` | 全部通过 |
-| `make smoke` | **15/15 通过** |
+| `make smoke` | **16/16 通过** |
 | H5 拍照/上传（本机实测） | **通过**：上传 `samples/fixtures/booking_sample.png`，OCR + 规则抽出 17 个字段，`review_level=single`，带逐字段置信度与截港预警 |
 | 网站粘贴（本机实测） | **通过**：粘贴 8 行托书，抽出 8 个字段、`review_level=single`；生成 `source=web` 的 inbound 并关联 run；点内置样例不计入 inbound |
 | 批量导入（本机实测） | **通过**：2 个文件（PNG + PDF）100% 识别，各生成 `source=batch-booking` 的 inbound 并关联 run；默认规则 + 脱敏 |
@@ -242,6 +242,20 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 生成结果：完成 79 / 110（71.8%），未完成 31；8 个 Mermaid 图渲染正常。
   - GitHub Actions run #128（`db566f3`）**4 个 job 全部通过**（backend 69s、frontend 30s、e2e 116s、docker 74s）；新增的 preflight 步骤通过。
 
+### 5.9 企业微信图片消息（异步 OCR）
+
+- 新增 `app/wecom_api.py`：access_token 缓存（提前 5 分钟刷新）、临时素材下载（跟随 302、RFC 5987 文件名、JSON 错误、10MB 上限）、应用消息主动推送、token 失效自动重试一次。
+- `app/wecom.py`：解析 `MsgType=image` 的 `MediaId/PicUrl/MsgId`；文本按 2048 字节安全截断；图片帮助文案更新。
+- `app/main.py`：图片回调 5 秒内先回“已收到”，用 FastAPI `BackgroundTasks` 异步下载 → OCR → 抽取 → 入库 → 主动推送；`MsgId` 幂等（企微重试不重复 OCR）；所有图片先写 `inbound`（`source=wecom-image`），OCR 后回填原文并关联 `run_id`；失败落 `wecom_msgs.status=failed` 并通知用户。
+- `app/store.py`：新增 `wecom_msgs` 幂等表、`claim_wecom_msg`、`mark_wecom_msg`、`update_inbound_text`。
+- `app/metrics.py`：新增 `copilot_wecom_image_total{result=received|done|failed|duplicate|unconfigured}`。
+- `scripts/test_wecom_image.py`：MockTransport + 临时库覆盖解析、幂等、inbound 回填、token 缓存、token 过期重试、素材下载、文件名、主动推送、非法 media_id、未配置提示、后台成功/失败兜底。
+- 复验：
+  - `PYTHONPATH=. .venv/bin/python scripts/test_wecom_image.py` **全部通过**（26 项）。
+  - `ai-copilot/scripts/smoke.sh` **16/16 通过**（新增“企微图片自检”）。
+  - `python -m py_compile` 通过（config/store/wecom/wecom_api/main/metrics/测试）。
+  - 未验证：真实企业微信账号、真实图片素材、真实主动推送、可信 IP、固定回调域名；因此 AI-07 保持 🟡，AI-07E 保持 `[ ]`。
+
 ---
 
 ## 6. 未验证 / 阻塞项
@@ -251,6 +265,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 | 真实客户机会点走完 S2 | 未验证 | 需要真实客户、访谈、样本与确认 |
 | 真实 POC 与客户确认 | 未验证 | 合成样本不能替代真实托书 |
 | 真实试点上线/UAT 签收 | 未验证 | 需要客户环境与签收人 |
+| 企微图片真实端到端 | 未验证 | 缺 Secret/AgentID、可信 IP、固定域名与真机素材；代码仅 Mock 自检 |
 | K8s 预发滚动发布 | 未验证 | 只有本地演练 |
 | 真实支付/发票/扣费 | 未验证 | 当前 mock/manual |
 | 真实模型联调与提示词评测 | 未验证 | 规则引擎可跑；LLM 评测未执行 |

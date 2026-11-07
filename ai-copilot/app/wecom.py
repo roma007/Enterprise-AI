@@ -29,16 +29,28 @@ def verify_signature(token: str, signature: str, timestamp: str, nonce: str) -> 
 
 
 def parse_message(xml_text: str) -> dict:
-    """解析企业微信推送的 XML（明文模式）。"""
-    out = {"msg_type": "", "content": "", "from_user": "", "to_user": ""}
+    """解析企业微信推送的 XML（明文模式）。
+
+    图片消息没有 Content，但有 MediaId / PicUrl / MsgId；
+    MsgId 用于幂等，MediaId 用于下载临时素材。
+    """
+    out = {
+        "msg_type": "", "content": "", "from_user": "", "to_user": "",
+        "msg_id": "", "media_id": "", "pic_url": "", "event": "",
+        "event_key": "", "agent_id": "",
+    }
     if not xml_text:
         return out
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError:
         return out
-    for tag, key in (("MsgType", "msg_type"), ("Content", "content"),
-                     ("FromUserName", "from_user"), ("ToUserName", "to_user")):
+    for tag, key in (
+        ("MsgType", "msg_type"), ("Content", "content"),
+        ("FromUserName", "from_user"), ("ToUserName", "to_user"),
+        ("MsgId", "msg_id"), ("MediaId", "media_id"), ("PicUrl", "pic_url"),
+        ("Event", "event"), ("EventKey", "event_key"), ("AgentID", "agent_id"),
+    ):
         node = root.find(tag)
         if node is not None and node.text:
             out[key] = node.text.strip()
@@ -99,6 +111,24 @@ def format_help() -> str:
         "把托书发给我：\n"
         "· 一条发完：直接粘贴全部内容\n"
         "· 分多条发：先发「分条」，逐条发，最后发「完成」\n"
-        "· 图片/PDF：打开 H5 拍照上传，或用批量导入\n\n"
+        "· 图片：直接发图，我会识别后把结果发给你\n"
+        "· PDF / 多张图：打开 H5 上传，或用批量导入\n\n"
         "我会返回结构化结果，你回复「确认」后入库。"
     )
+
+
+def image_received_text() -> str:
+    return "已收到图片，正在识别，结果稍后发给你。\n如果着急，也可以打开 H5 上传。"
+
+
+def image_failed_text(reason: str = "") -> str:
+    tail = f"\n原因：{reason}" if reason else ""
+    return f"图片没识别成功。请重拍一张（正对、光线足），或改用 H5 上传 / 批量导入。{tail}"
+
+
+def clip_text(text: str, limit: int = 2000) -> str:
+    """企业微信文本消息上限 2048 字节，按 UTF-8 截断且不切断汉字。"""
+    raw = text.encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    return raw[:limit].decode("utf-8", errors="ignore").rstrip() + "…"

@@ -12,7 +12,7 @@ import secrets
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 
 from fastapi.responses import (
     FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response,
@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from . import ocr, wecom_crypto
 from .config import ROOT, VERSION, settings
 from .csvio import decode_csv_bytes, export_csv, parse_tms_csv
-from . import wecom
+from . import wecom, wecom_api
 from .evalrun import SAMPLE_PATH, run_all
 from .extract import extract
 from .schema import BLOCKING_KEYS, FIELD_KEYS, LABELS, SPECS
@@ -42,6 +42,7 @@ from .store import (
     save_pilot_review, get_pilot_review, list_pilot_reviews, mark_pilot_review_delivery,
     list_jobs,
     confirmed_recent, revisions, undo_confirm, NotConfirmed, VersionMismatch,
+    claim_wecom_msg, mark_wecom_msg, update_inbound_text,
 )
 
 MAX_UPLOAD = 10 * 1024 * 1024  # 10 MB
@@ -700,8 +701,86 @@ def _looks_complete(text: str) -> bool:
     return hit >= 3 and bool(values.get("booking_no") or values.get("container_no") or values.get("client"))
 
 
+def _handle_wecom_image(msg: dict, encrypted: bool,
+                        background: BackgroundTasks) -> Response:
+    """图片消息：先记 inbound，再异步下载/OCR，5 秒内先回一条确认。"""
+    media_id = msg.get("media_id") or ""
+    from_user = msg.get("from_user") or ""
+    to_user = msg.get("to_user") or ""
+    msg_id = msg.get("msg_id") or ""
+    actor = f"wecom:{from_user}" if from_user else "wecom"
+
+    def reply(text: str) -> Response:
+        inner = wecom.build_text_reply(from_user, to_user, text)
+        return _wecom_reply(inner, encrypted)
+
+    # 先记分母：即使缺 MediaId / 未配置 / OCR 失败，这条图片也算一次来单。
+    inbound = record_inbound(f"[图片待识别] media_id={media_id[:32] or 'missing'}",
+                             source="wecom-image")
+
+    if not media_id:
+        prom.inc_wecom_image("failed")
+        mark_wecom_msg(msg_id, "failed", "missing media_id")
+        return reply("图片消息里没有 MediaId，请重发，或改用 H5 上传。")
+
+    if not wecom_api.configured():
+        prom.inc_wecom_image("unconfigured")
+        mark_wecom_msg(msg_id, "unconfigured", "missing secret/agentid")
+        return reply(
+            "图片识别通道还没配置好（缺少 WECOM_SECRET / WECOM_AGENTID）。\n"
+            "请先用 H5 上传或批量导入。"
+        )
+
+    if not ocr.available().get("ready"):
+        prom.inc_wecom_image("unconfigured")
+        mark_wecom_msg(msg_id, "unconfigured", "ocr unavailable")
+        return reply("OCR 服务未安装，图片暂时不能识别。请改用文字或 H5 粘贴。")
+
+    # 先记分母：即使后续 OCR 失败，这条图片也算一次来单。
+    background.add_task(
+        _process_wecom_image,
+        msg_id=msg_id,
+        media_id=media_id,
+        from_user=from_user,
+        inbound_id=inbound["id"],
+        actor=actor,
+    )
+    prom.inc_wecom_image("received")
+    return reply(wecom.image_received_text())
+
+
+def _process_wecom_image(*, msg_id: str, media_id: str, from_user: str,
+                         inbound_id: str, actor: str) -> None:
+    """后台任务：下载临时素材 → OCR → 抽取 → 入库 → 主动推送结果。"""
+    try:
+        data, filename, _ctype = wecom_api.download_media(media_id)
+        stored = storage.save(data, filename, "booking")
+        res = ocr.extract(filename, data)
+        text = (res.text or "").strip()
+        if not text:
+            raise RuntimeError("没有识别出文字")
+
+        # 占位 inbound 补成真实原文，save_run 才能按 text_hash 关联。
+        update_inbound_text(inbound_id, text)
+        draft = extract(text)
+        run_id = save_run(text, draft, actor=actor, source_file=stored)
+        mark_wecom_msg(msg_id, "done", run_id)
+        prom.inc_wecom_image("done")
+        wecom_api.send_text(from_user, wecom.format_result(draft, run_id))
+    except Exception as exc:  # noqa: BLE001
+        # 后台任务必须兜底：失败也要落状态、回消息，不能静默。
+        print(f"[wecom-image] 处理失败 msg={msg_id[:16]} err={exc}")
+        mark_wecom_msg(msg_id, "failed", str(exc))
+        prom.inc_wecom_image("failed")
+        try:
+            wecom_api.send_text(from_user, wecom.image_failed_text(str(exc)))
+        except Exception as send_exc:  # noqa: BLE001
+            print(f"[wecom-image] 失败通知也没发出去 msg={msg_id[:16]} err={send_exc}")
+
+
 @app.post("/api/wecom/callback", response_class=PlainTextResponse)
-async def wecom_message(request: Request, msg_signature: str = "", timestamp: str = "",
+async def wecom_message(request: Request, background: BackgroundTasks,
+                        msg_signature: str = "", timestamp: str = "",
                         nonce: str = "", signature: str = ""):
     """企业微信消息入口：先记录来单，再解析，最后被动回复。
 
@@ -734,6 +813,21 @@ async def wecom_message(request: Request, msg_signature: str = "", timestamp: st
         xml_text = body
 
     msg = wecom.parse_message(xml_text)
+    msg_type = msg.get("msg_type") or "text"
+
+    # 幂等：企微 5 秒超时会重试 3 次，同一 MsgId 只处理一次。
+    if not claim_wecom_msg(msg.get("msg_id", ""), msg_type):
+        if msg_type == "image":
+            prom.inc_wecom_image("duplicate")
+        return _wecom_reply("", encrypted)
+
+    # 关注/进入应用等事件不需要回复内容。
+    if msg_type == "event":
+        return _wecom_reply("", encrypted)
+
+    if msg_type == "image":
+        return _handle_wecom_image(msg, encrypted, background)
+
     content = msg["content"].strip()
     actor = f"wecom:{msg['from_user']}" if msg.get("from_user") else "wecom"
 

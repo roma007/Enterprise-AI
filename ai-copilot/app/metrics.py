@@ -25,6 +25,7 @@ _started = time.time()
 _lock = threading.Lock()
 _http: dict[tuple[str, str, int], int] = {}
 _dur: dict[tuple[str, str], list[float]] = {}
+_wecom_image: dict[str, int] = {}
 
 
 def normalize_route(route: str) -> str:
@@ -47,6 +48,12 @@ def observe(method: str, route: str, status: int, duration_ms: float) -> None:
         bucket = _dur.setdefault(dkey, [0.0, 0.0])
         bucket[0] += duration_ms
         bucket[1] += 1
+
+
+def inc_wecom_image(result: str) -> None:
+    """企微图片链路计数：received / done / failed / duplicate / unconfigured。"""
+    with _lock:
+        _wecom_image[result] = _wecom_image.get(result, 0) + 1
 
 
 def _esc(v: str) -> str:
@@ -143,6 +150,15 @@ def render() -> str:
                      kind="gauge", help_text="启用用户数")
     lines += _family("copilot_sessions_active", [(None, counts["sessions_active"])],
                      kind="gauge", help_text="有效会话数")
+
+    with _lock:
+        wecom_image = dict(_wecom_image)
+    if wecom_image:
+        lines += _family(
+            "copilot_wecom_image_total",
+            [({"result": k}, v) for k, v in sorted(wecom_image.items())],
+            help_text="企业微信图片消息处理结果",
+        )
 
     with _lock:
         http = dict(_http)

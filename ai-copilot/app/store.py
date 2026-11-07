@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS inbound (
     run_id      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_inbound_hash ON inbound(text_hash);
+CREATE TABLE IF NOT EXISTS wecom_msgs (
+    msg_id      TEXT PRIMARY KEY,
+    ts          TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'received',
+    note        TEXT
+);
 CREATE TABLE IF NOT EXISTS learn_queue (
     id          TEXT PRIMARY KEY,
     run_id      TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
@@ -339,6 +346,46 @@ def record_inbound(text: str, source: str = "wecom") -> dict:
             (inbound_id, _now(), source, text_hash, text[:40]),
         )
     return {"id": inbound_id, "text_hash": text_hash}
+
+
+def update_inbound_text(inbound_id: str, text: str) -> None:
+    """图片先以占位文本入 inbound，OCR 完成后补成真实原文。
+
+    inbound.id 不变，所以绕过率统计不会因为"先占位再识别"多算一条。
+    """
+    text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE inbound SET text_hash=?, preview=? WHERE id=?",
+            (text_hash, text[:40], inbound_id),
+        )
+
+
+def claim_wecom_msg(msg_id: str, kind: str) -> bool:
+    """企业微信消息幂等：同一 MsgId 只处理一次。
+
+    企业微信在 5 秒内收不到响应会重试 3 次；没有这张表，
+    一条图片会被 OCR 三遍、生成三条 run。
+    """
+    if not msg_id:
+        return True
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO wecom_msgs (msg_id, ts, kind, status)"
+            " VALUES (?,?,?,'received') ON CONFLICT (msg_id) DO NOTHING",
+            (msg_id, _now(), kind),
+        )
+        return cur.rowcount == 1
+
+
+def mark_wecom_msg(msg_id: str, status: str, note: str = "") -> None:
+    if not msg_id:
+        return
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE wecom_msgs SET status=?, note=? WHERE msg_id=?",
+            (status, note[:200], msg_id),
+        )
 
 
 class AlreadyConfirmed(Exception):

@@ -1,7 +1,7 @@
 # 企业微信绑定清单
 
-> 目标：把企业微信自建应用接到 `ai-copilot`，员工把托书**文字**发给应用后自动解析并回复。
-> 边界：当前只自动处理文字消息；图片消息还未接入，图片请走 H5 或批量导入。
+> 目标：把企业微信自建应用接到 `ai-copilot`，员工把托书**文字或图片**发给应用后自动解析并回复。
+> 边界：文字同步解析；图片异步 OCR 后主动推送。PDF、多张图、扫描件走 H5 或批量导入。
 
 ## 0. 需要准备
 
@@ -9,6 +9,8 @@
 - 一个公网 HTTPS 回调地址（本机可用 Cloudflare Tunnel 临时生成）
 - 自建应用的 `Token`、`EncodingAESKey`
 - 企业 `CorpID`
+- 图片通道：应用 `Secret`、`AgentID`（只有文字入口时可不配）
+- 生产环境：固定 HTTPS 域名、可信 IP（企业微信调用 API 的出口 IP）
 
 ## 1. 启动回调代理和公网隧道
 
@@ -37,6 +39,7 @@ cloudflared tunnel --url http://127.0.0.1:8791 --no-autoupdate
    - EncodingAESKey：点随机获取，复制
 4. 保存。
 5. 在「我的企业」复制 CorpID。
+6. 在应用详情复制 `Secret` 和 `AgentId`（图片下载与主动推送要用）。
 
 ## 3. 写入本地配置
 
@@ -46,6 +49,8 @@ cloudflared tunnel --url http://127.0.0.1:8791 --no-autoupdate
 WECOM_TOKEN=后台生成的 Token
 WECOM_CORPID=企业 CorpID
 WECOM_ENCODING_AES_KEY=后台生成的 43 位 Key
+WECOM_SECRET=应用 Secret
+WECOM_AGENTID=应用 AgentId
 ```
 
 > Token / Key / CorpID 不要发到聊天里，直接写本地 `.env`。
@@ -77,6 +82,14 @@ PYTHONPATH=. .venv/bin/python -m uvicorn app.main:app --port 8790 --host 127.0.0
 3. 应用应回复结构化字段和置信度。
 4. 在 `ai-copilot` 的「历史」里能看到这条解析记录。
 
+### 5.0.1 验证图片
+
+1. 直接给应用发一张托书照片/截图。
+2. 5 秒内应先收到「已收到图片，正在识别」。
+3. OCR 完成后，应用会主动推送结构化字段和置信度。
+4. 「历史」里能看到 `source=wecom-image` 的来单与对应 run。
+5. 如果没有收到结果：看服务日志 `[wecom-image]`，以及 `/metrics` 的 `copilot_wecom_image_total`。
+
 ## 5.1 分多条发送
 
 托书不是一条消息发完时：
@@ -93,5 +106,8 @@ PYTHONPATH=. .venv/bin/python -m uvicorn app.main:app --port 8790 --host 127.0.0
 
 - 普通自建应用只能收到**发给应用**的消息，不能读取员工与客户的已有聊天记录。
 - 要读已有聊天，需要企业微信「会话内容存档」，涉及许可、授权、RSA 密钥和合规确认，当前未接入。
-- 图片消息需要额外接 `media_id` 下载；当前图片请走 H5 或批量导入。
-- Cloudflare 临时隧道地址每次重启会变，正式使用需要固定域名。
+- 图片下载的是企业微信**临时素材**，有效期 3 天；系统收到后立即转存到自己的存储，不依赖素材长期可用。
+- 企微回调要求 5 秒内响应，且失败会重试 3 次；图片处理是异步的，用 `MsgId` 幂等，不会重复 OCR。
+- 单张图片默认上限 10MB（`WECOM_IMAGE_MAX_MB`）；超过请走 H5。
+- PDF、多张图、扫描件仍建议走 H5 或批量导入。
+- Cloudflare 临时隧道地址每次重启会变，正式使用需要固定域名；图片主动推送还要求配置可信 IP。

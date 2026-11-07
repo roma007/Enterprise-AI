@@ -73,6 +73,13 @@ class Settings:
     wecom_token: str = os.getenv("WECOM_TOKEN", "").strip()
     wecom_corpid: str = os.getenv("WECOM_CORPID", "").strip()
     wecom_aes_key: str = os.getenv("WECOM_ENCODING_AES_KEY", "").strip()
+    # 图片消息：下载临时素材 + 主动推送结果需要 Secret / AgentID
+    wecom_secret: str = os.getenv("WECOM_SECRET", "").strip()
+    wecom_agentid: str = os.getenv("WECOM_AGENTID", "").strip()
+    wecom_api_base: str = os.getenv(
+        "WECOM_API_BASE", "https://qyapi.weixin.qq.com"
+    ).rstrip("/")
+    wecom_image_max_mb: int = int(os.getenv("WECOM_IMAGE_MAX_MB", "10"))
 
     # 图像增强（D2）：多版本 OCR。关掉可省时间，但糊图识别率会明显下降
     ocr_enhance: bool = os.getenv("OCR_ENHANCE", "1").strip() not in {"0", "false", "off"}

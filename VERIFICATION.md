@@ -336,6 +336,27 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 说明：本轮只改对外材料口径，**未改 `ai-copilot` 代码**。
 - GitHub Actions run #140（`bba6fe1`）**4 个 job 全部通过**；preflight 通过。
 
+### 5.15 客户侧界面：中文名「智单」+ 左侧菜单栏（AI-30）
+
+- 原因：
+  - 英文名 `ai-copilot` 在客户现场不好说、不好找；界面里也没有统一产品名。
+  - 原顶部导航是各页各写一套链接：有的页只有「← 返回工作台」，有的页缺 5 个模块；`/settings`、`/batch`、`/demo` 根本进不去。
+- 改动（只动 `ai-copilot/static/`，未改 Python 后端）：
+  - 新增 `static/nav.css` + `static/nav.js`：固定左侧菜单，品牌「智单 / 托书 · 发票 · 对账 · 结算」；分组：工作台 / 单证 / 对账与结算 / 应收 / 数据与设置。
+  - 14 个桌面页接入侧栏：`index / invoice / batch / history / reconcile / pilot / threeway / settlement / fees / aging / learn / settings / users / demo`；`<body class="app-shell">`，页内标题与操作按钮保留。
+  - 删除各页头部零散导航链接；`index.html` 同步移除已不存在的 `#learnLink / #feesLink / #historyLink / #userLink` 引用。
+  - 按角色隐藏入口（复用现有角色）：确认历史/阈值配置/用户管理仅 admin；异常费用 admin+finance；学习队列非 viewer。
+  - 登录页与移动端 `h5.html` 不加侧栏，只统一产品名与页面标题。
+  - 窄屏（≤900px）侧栏收成抽屉，左上角按钮展开；打印时隐藏侧栏。
+- 验证（本机 8790 实测）：
+  - `./scripts/smoke.sh`：**16/16 通过**（health / 登录 / 401 / 解析 / 校验位 / 截港 / 评测 / OCR / 存储 / 指标 / 加固 / 地址 / 费用 / 回写 / 企微加解密 / 企微图片）。
+  - 浏览器逐页核对 **13 个路由**（`/`、`/reconcile`、`/pilot`、`/demo`、`/aging`、`/settings`、`/users`、`/learn`、`/invoice`、`/threeway`、`/settlement`、`/fees`、`/history`、`/batch`）：侧栏存在、当前项高亮正确、`body` 左内边距 220px、控制台 0 错误。
+  - 登录页、`/demo`、`/reconcile`、`/pilot` 已截图目视确认布局；移动端仅做 CSS 断点检查，**未真机验证**。
+- 未做 / 遗留：
+  - 客户老板版 PPT 第 5 页对账截图仍是旧版顶部导航，需重截（已记 `TODO.md`）。
+  - 客户现场培训材料与截图未同步替换为「智单」。
+- 说明：产品名只改显示层；目录 `ai-copilot/`、服务名、环境变量、API 路径、数据库均未改。
+
 ---
 
 ## 6. 未验证 / 阻塞项

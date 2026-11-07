@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>自动对账 · 对账单 ↔ 系统运单</title>
+<title>智单 · 自动对账 · 对账单 ↔ 系统运单</title>
 <style>
   :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
         --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
@@ -41,15 +41,15 @@
   .toast.show{opacity:1}
   .hint{color:var(--muted);font-size:12px}
 </style>
+<link rel="stylesheet" href="/static/nav.css" />
+<script src="/static/nav.js" defer></script>
 </head>
-<body>
+<body class="app-shell">
 <header>
   <h1>自动对账</h1>
   <span class="sub">客户对账单 ↔ 系统运单 · 双向比对</span>
-  <a href="/">← 托书</a>
-  <a href="/invoice" style="margin-left:12px">发票</a>
-  <a href="/threeway" style="margin-left:12px">三单匹配</a>
 </header>
+
 
 <div class="wrap">
   <section class="card">

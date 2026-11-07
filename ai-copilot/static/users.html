@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>用户管理</title>
+<title>智单 · 用户管理</title>
 <style>
   :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a}
   *{box-sizing:border-box}
@@ -32,13 +32,15 @@
   .toast.show{opacity:1}
   .hint{color:var(--muted);font-size:12px}
 </style>
+<link rel="stylesheet" href="/static/nav.css" />
+<script src="/static/nav.js" defer></script>
 </head>
-<body>
+<body class="app-shell">
 <header>
   <h1>用户管理</h1>
   <span class="sub">仅管理员可见</span>
-  <a href="/">← 返回工作台</a>
 </header>
+
 
 <div class="wrap">
   <section class="card">

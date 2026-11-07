@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>试点一 · 对账单/结算单复核</title>
+<title>智单 · 对账复核</title>
 <style>
   :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
         --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
@@ -56,16 +56,15 @@
   .notice-ok{background:#e6f4ea;color:#22543d;border:1px solid #b7e1c1}
   @media (max-width:900px){.grid{grid-template-columns:1fr}.grid3{grid-template-columns:1fr}}
 </style>
+<link rel="stylesheet" href="/static/nav.css" />
+<script src="/static/nav.js" defer></script>
 </head>
-<body>
+<body class="app-shell">
 <header>
   <h1>试点一 · 对账单 / 结算单复核</h1>
   <span class="sub">抽取 → 规则比对 → 差异解释 → 人工确认 → 保存/回写</span>
-  <a href="/">← 托书</a>
-  <a href="/reconcile">自动对账</a>
-  <a href="/settlement">外协结算</a>
-  <a href="/pilot" style="color:var(--brand);font-weight:600">复核</a>
 </header>
+
 
 <div class="wrap">
   <section class="card">

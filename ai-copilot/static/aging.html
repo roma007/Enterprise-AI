@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>账龄与催收</title>
+<title>智单 · 账龄与催收</title>
 <style>
   :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;
         --brand:#1f4e79;--ok:#2f855a;--warn:#b7791f;--err:#c53030}
@@ -44,16 +44,15 @@
          padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
   .toast.show{opacity:1}
 </style>
+<link rel="stylesheet" href="/static/nav.css" />
+<script src="/static/nav.js" defer></script>
 </head>
-<body>
+<body class="app-shell">
 <header>
   <h1>账龄与催收</h1>
   <span class="sub">应收台账 → 分档 → 客户风险 → 催收建议</span>
-  <a href="/">← 托书</a>
-  <a href="/invoice" style="margin-left:12px">发票</a>
-  <a href="/threeway" style="margin-left:12px">三单</a>
-  <a href="/reconcile" style="margin-left:12px">对账</a>
 </header>
+
 
 <div class="wrap">
   <section class="card">

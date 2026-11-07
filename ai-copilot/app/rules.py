@@ -127,8 +127,9 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
         v = f.get(key)
         return (v.value or "").strip() if v else ""
 
-    # 1. 必填缺失（阻断）
-    for key in BLOCKING_KEYS:
+    # 1. 必填缺失（阻断）——字段清单可由配置中心调整
+    required = th.get_list("rules.required") or list(BLOCKING_KEYS)
+    for key in required:
         if not val(key):
             checks.append(Check(
                 level="error", code="E_REQUIRED", field=key,
@@ -143,9 +144,9 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
                 message=f"{SPEC_MAP[key].label} 置信度偏低（{fv.confidence:.0%}），请人工核对",
             ))
 
-    # 3. 箱号 ISO 6346 校验位
+    # 3. 箱号 ISO 6346 校验位（可关闭）
     raw_containers = val("container_no")
-    if raw_containers:
+    if raw_containers and th.get_bool("rules.container_checksum"):
         items = [c for c in re.split(r"[,，;；\s]+", raw_containers) if c]
         bad = [c for c in items if not container_is_valid(c)]
         for c in bad:
@@ -186,12 +187,13 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
             message=f"电话 {phone} 格式可疑",
         ))
 
-    # 6.5 地址校验（B5）：错别字、区县与城市冲突、港区与城市冲突、提卸同址
-    checks.extend(check_addresses(val("pickup_addr"), val("delivery_addr")))
+    # 6.5 地址校验（B5）：错别字、区县与城市冲突、港区与城市冲突、提卸同址（可关闭）
+    if th.get_bool("rules.address"):
+        checks.extend(check_addresses(val("pickup_addr"), val("delivery_addr")))
 
-    # 7. 截港时间（本行业最贵的错误）
+    # 7. 截港时间（本行业最贵的错误，可关闭）
     closing = parse_datetime(val("closing_time"), now)
-    if closing:
+    if closing and th.get_bool("rules.closing"):
         if closing < now:
             checks.append(Check(
                 level="error", code="E_CLOSING_PASSED", field="closing_time",
@@ -204,9 +206,9 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
                 message=f"距截港仅剩 {hours:.1f} 小时，需优先安排",
             ))
 
-    # 8. 装柜时间窗 vs 截港时间
+    # 8. 装柜时间窗 vs 截港时间（跟截港检查一起开关）
     window = parse_datetime(val("loading_window"), now)
-    if window and closing and window > closing:
+    if window and closing and th.get_bool("rules.closing") and window > closing:
         checks.append(Check(
             level="warn", code="W_WINDOW_AFTER_CLOSING", field="loading_window",
             message="装柜时间晚于截港时间，时间安排矛盾",
@@ -252,7 +254,7 @@ def decide_review_level(draft: Draft) -> str:
     low_floor = th.get("booking.low_conf_floor")
     auto_floor = th.get("booking.risk_auto_floor")
 
-    watch = set(BLOCKING_KEYS) | set(RISK_KEYS)
+    watch = set(th.get_list("rules.required") or BLOCKING_KEYS) | set(RISK_KEYS)
     low = [draft.fields[k].confidence for k in watch
            if k in draft.fields and draft.fields[k].value]
     if low and min(low) < low_floor:

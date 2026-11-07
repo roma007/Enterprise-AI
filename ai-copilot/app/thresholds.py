@@ -25,6 +25,7 @@ from pathlib import Path
 
 from . import db
 from .config import ROOT
+from .schema import BLOCKING_KEYS, SPEC_MAP
 
 PATH = ROOT / "data" / "settings.json"
 HISTORY_PATH = ROOT / "data" / "settings_history.json"
@@ -67,6 +68,24 @@ SPECS: list[dict] = [
      "min": 0.30, "max": 1.0, "step": 0.01,
      "label": "双人复核下限",
      "hint": "关键字段低于该值 → 转双人复核"},
+
+    # ---- 单证规则开关 ----
+    {"key": "rules.required", "group": "单证规则", "type": "list",
+     "default": list(BLOCKING_KEYS),
+     "label": "必填字段（缺失即阻断）",
+     "hint": "勾选的字段为空时整单不可提交；至少保留 1 项"},
+    {"key": "rules.container_checksum", "group": "单证规则", "type": "bool",
+     "default": 1.0,
+     "label": "箱号校验位 + 箱量一致性",
+     "hint": "关掉后不再拦截 ISO 6346 校验失败的箱号，也不再提示箱号数量与箱量不一致"},
+    {"key": "rules.closing", "group": "单证规则", "type": "bool",
+     "default": 1.0,
+     "label": "截港时间检查",
+     "hint": "关掉后不再拦截「截港已过」，也不再提示 24 小时内截港与装柜时间矛盾"},
+    {"key": "rules.address", "group": "单证规则", "type": "bool",
+     "default": 1.0,
+     "label": "地址校验",
+     "hint": "关掉后不再提示错别字、区县与城市冲突、提卸同址"},
 
     # ---- 文档配对 ----
     {"key": "pairing.auto_accept", "group": "纸质↔TMS 配对", "default": 0.90,
@@ -226,6 +245,15 @@ def get_bool(key: str) -> bool:
     return abs(get(key)) > 1e-9
 
 
+def get_list(key: str) -> list[str]:
+    spec = BY_KEY.get(key)
+    default = spec["default"] if spec else []
+    raw = (_load().get("values") or {}).get(key, default)
+    if isinstance(raw, list):
+        return [str(x) for x in raw]
+    return [x for x in str(raw).split(",") if x]
+
+
 def _history_load() -> list:
     try:
         data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
@@ -267,9 +295,21 @@ def snapshot() -> dict:
     groups: dict[str, list] = {}
     for spec in SPECS:
         item = dict(spec)
-        item["value"] = get_bool(spec["key"]) if spec.get("type") == "bool" else get(spec["key"])
-        item["changed"] = spec["key"] in values and abs(
-            float(values[spec["key"]]) - float(spec["default"])) > 1e-9
+        kind = spec.get("type", "number")
+        if kind == "bool":
+            item["value"] = get_bool(spec["key"])
+        elif kind == "list":
+            item["value"] = get_list(spec["key"])
+        else:
+            item["value"] = get(spec["key"])
+        if spec["key"] not in values:
+            item["changed"] = False
+        elif kind == "list":
+            item["changed"] = sorted(get_list(spec["key"])) != sorted(spec["default"])
+        elif kind == "bool":
+            item["changed"] = abs(float(values[spec["key"]]) - float(spec["default"])) > 1e-9
+        else:
+            item["changed"] = abs(float(values[spec["key"]]) - float(spec["default"])) > 1e-9
         if spec.get("env_key"):
             item["env_set"] = bool(os.getenv(spec["env_key"], "").strip())
         groups.setdefault(spec["group"], []).append(item)
@@ -312,6 +352,16 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
     clean: dict[str, float] = {}
     for k, v in values.items():
         spec = BY_KEY[k]
+        if spec.get("type") == "list":
+            items = v if isinstance(v, list) else [x for x in str(v).split(",") if x]
+            keys = sorted({str(x).strip() for x in items if str(x).strip()})
+            if not keys:
+                raise ValueError(f"{spec['label']} 至少要保留 1 项")
+            invalid = [x for x in keys if x not in SPEC_MAP]
+            if invalid:
+                raise ValueError(f"{spec['label']} 含未知字段：{', '.join(invalid)}")
+            clean[k] = keys
+            continue
         if spec.get("type") == "bool":
             if isinstance(v, str):
                 normalized = v.strip().lower()
@@ -340,19 +390,33 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
 
         changes = []
         for k, new_value in clean.items():
+            spec = BY_KEY[k]
+            if spec.get("type") == "list":
+                old_list = sorted(get_list(k))
+                new_list = sorted(new_value)
+                if old_list != new_list:
+                    changes.append({"key": k, "label": spec["label"],
+                                    "old": old_list, "new": new_list})
+                continue
             old_value = get(k)
             if abs(float(old_value) - float(new_value)) > 1e-9:
                 changes.append({
                     "key": k,
-                    "label": BY_KEY[k]["label"],
+                    "label": spec["label"],
                     "old": round(float(old_value), 4),
                     "new": round(float(new_value), 4),
                 })
 
         current = dict(merged)
-        # 与默认值相同的就不落盘，保持文件干净
+        # 与默认值相同的就不落盘，保持文件干净（列表项单独比较）
         for k in list(current):
-            if k in BY_KEY and abs(float(current[k]) - float(BY_KEY[k]["default"])) < 1e-9:
+            spec = BY_KEY.get(k)
+            if not spec:
+                continue
+            if spec.get("type") == "list":
+                if sorted(str(x) for x in current[k]) == sorted(spec["default"]):
+                    current.pop(k)
+            elif abs(float(current[k]) - float(spec["default"])) < 1e-9:
                 current.pop(k)
         _write({"values": current, "updated_at": _now(), "updated_by": actor})
         _record(actor, changes, reason)
@@ -367,15 +431,23 @@ def reset(keys: list[str] | None = None, actor: str = "", reason: str = "") -> d
         for k in targets:
             if k not in BY_KEY:
                 continue
-            old_value = get(k)
-            default = float(BY_KEY[k]["default"])
-            if abs(old_value - default) > 1e-9:
-                changes.append({
-                    "key": k,
-                    "label": BY_KEY[k]["label"],
-                    "old": round(old_value, 4),
-                    "new": round(default, 4),
-                })
+            spec = BY_KEY[k]
+            if spec.get("type") == "list":
+                old_list = sorted(get_list(k))
+                default_list = sorted(spec["default"])
+                if old_list != default_list:
+                    changes.append({"key": k, "label": spec["label"],
+                                    "old": old_list, "new": default_list})
+            else:
+                old_value = get(k)
+                default = float(spec["default"])
+                if abs(old_value - default) > 1e-9:
+                    changes.append({
+                        "key": k,
+                        "label": spec["label"],
+                        "old": round(old_value, 4),
+                        "new": round(default, 4),
+                    })
             current.pop(k, None)
         _write({"values": current, "updated_at": _now(), "updated_by": actor})
         _record(actor, changes, reason or "恢复默认")

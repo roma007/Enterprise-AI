@@ -52,6 +52,10 @@
   .cfg-item input:focus{border-color:var(--brand)}
   .cfg-item .sub2{font-size:11px;color:var(--muted);margin-top:4px;text-align:right}
   .cfg-item input.switch{width:18px;height:18px;accent-color:var(--brand)}
+  .cfg-item.wide{grid-template-columns:1fr}
+  .fieldpick{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:6px}
+  .fieldpick label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink)}
+  .fieldpick input{width:15px;height:15px;accent-color:var(--brand)}
   .env-tag{font-size:10.5px;color:#1f4e79;background:#eef4fa;border:1px solid #d7e6f5;
            border-radius:999px;padding:0 6px;margin-left:6px}
   .irow{display:flex;justify-content:space-between;gap:12px;padding:8px 0;
@@ -113,6 +117,7 @@ let DATA = null;      // /api/settings
 let INTEG = null;     // /api/config/integrations
 let HIST = [];        // /api/settings/history
 let ME = null;
+let META = null;
 let DIRTY = false;
 
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
@@ -140,10 +145,11 @@ async function loadMe(){
 }
 
 async function load(){
-  [DATA, INTEG, HIST] = await Promise.all([
+  [DATA, INTEG, HIST, META] = await Promise.all([
     j('/api/settings'),
     j('/api/config/integrations'),
     j('/api/settings/history?limit=50').then(d => d.items || []),
+    j('/api/meta'),
   ]);
   render();
 }
@@ -173,14 +179,21 @@ function render(){
     sections.push(`<section class="card" id="sec-${encodeURIComponent(g.name)}"><h2>${esc(g.name)}
       <span class="tag">即时生效</span></h2><div class="body">
       ${g.items.map(it => `
-        <div class="cfg-item">
+        <div class="cfg-item ${it.type === 'list' ? 'wide' : ''}">
           <div>
             <div class="lbl">${esc(it.label)}${it.changed ? '<span class="chg">已修改</span>' : ''}
               ${it.env_set ? '<span class="env-tag">环境变量已设置，页面值优先</span>' : ''}</div>
             <div class="hint">${esc(it.hint)}</div>
           </div>
           <div>
-            ${it.type === 'bool' ? `
+            ${it.type === 'list' ? `
+              <div class="fieldpick" data-list-key="${esc(it.key)}" data-old='${JSON.stringify(it.value)}'>
+                ${(META.fields || []).map(f => `<label><input type="checkbox" data-list="${esc(it.key)}"
+                    value="${esc(f.key)}" ${it.value.includes(f.key) ? 'checked' : ''}
+                    ${admin ? '' : 'disabled'} /> ${esc(f.label)}</label>`).join('')}
+              </div>
+              <div class="sub2">至少 1 项 · 即时生效</div>
+            ` : it.type === 'bool' ? `
               <input type="checkbox" class="switch" data-key="${esc(it.key)}"
                      data-old="${it.value ? 1 : 0}" ${it.value ? 'checked' : ''} ${admin ? '' : 'disabled'} />
               <div class="sub2">默认 ${it.default ? '开' : '关'} · 即时生效</div>
@@ -255,6 +268,16 @@ function collect(){
     if(Math.abs(v - old) > 1e-9){
       values[k] = i.type === 'checkbox' ? !!i.checked : v;
       if(DANGER.has(k) && v < old) lowered.push(k);
+      if(i.type === 'checkbox' && k.startsWith('rules.') && old === 1 && v === 0) lowered.push(k);
+    }
+  });
+  $$('.fieldpick').forEach(box => {
+    const k = box.dataset.listKey;
+    const old = JSON.parse(box.dataset.old || '[]').slice().sort();
+    const now = [...box.querySelectorAll('input[data-list]:checked')].map(i => i.value).sort();
+    if(now.join(',') !== old.join(',')){
+      values[k] = now;
+      if(now.length < old.length) lowered.push(k);
     }
   });
   return {values, lowered};
@@ -292,7 +315,7 @@ $('#btnSave').onclick = async () => {
   const {values, lowered} = collect();
   if(!Object.keys(values).length){ toast('没有改动'); return; }
   const reason = $('#reason').value.trim();
-  if(lowered.length && !reason){ toast('降低自动通过/复核阈值需要填写变更原因'); return; }
+  if(lowered.length && !reason){ toast('降低阈值、关闭规则或减少必填字段，需要填写变更原因'); return; }
   $('#btnSave').disabled = true;
   try{
     await j('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'},

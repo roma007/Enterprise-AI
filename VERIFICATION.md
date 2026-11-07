@@ -542,6 +542,32 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 通知与告警、账龄催收建议模板（P1 剩余）。
 - GitHub Actions run #162（`a9ce2af`）**4 个 job 全部通过**；preflight 通过。
 
+### 5.26 通知与告警
+
+- 配置项从 22 项扩到 **27 项**：启用开关、企微群机器人 Webhook（密钥）、触发事件（多选）、静默时段、重复抑制。
+- 新增 `app/notify.py`：
+  - `notify(event, title, detail, key)` 写 `data/notifications.jsonl`，按开关/订阅/静默/去重决定是否外发。
+  - 企微群机器人 markdown 消息；失败只记录，不阻断业务。
+  - 后台巡检线程每 30 分钟检查绕过率，超阈按天去重发一次。
+- 已接线事件：
+  - `batch_failed`：批次结束有失败项，或任务异常。
+  - `wecom_image_failed`：企微图片下载/OCR/入库失败。
+  - `bypass_alert`：绕过率超过配置阈值。
+- 实测：
+  - Webhook 校验：`ftp://` 被拒；静默时段 `25:00-08:00` 被拒。
+  - 未配置 Webhook 时测试返回 `sent=false / 未配置 webhook`。
+  - 起本地接收端后配置 `http://127.0.0.1:8899/hook`，测试发送成功；收到的 body 为
+    `{"msgtype":"markdown","markdown":{"content":"**智单通知测试**..."}}`。
+  - 静默时段：当前 01:13 落在 `22:00-08:00` 内，`in_quiet=True`；测试消息因 `force=True` 仍发送。
+  - 去重：同 key 30 分钟内第一次 `True`、第二次 `False`。
+  - `/api/notify/recent` 返回测试记录（含 `sent` 与 `error`）。
+  - 配置页：2 个文本框、3 个事件复选框、测试按钮、最近通知列表；控制台 0 错误。
+  - `./scripts/smoke.sh` **16/16 通过**。
+- 未做：
+  - 邮件 / 站内信渠道（当前只有企微群机器人）。
+  - 通知模板自定义。
+  - 账龄催收建议模板、费用/多票/改单开关（仍为 P1 剩余）。
+
 ---
 
 ## 6. 未验证 / 阻塞项

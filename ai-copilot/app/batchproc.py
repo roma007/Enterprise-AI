@@ -174,11 +174,31 @@ def _process(job: dict) -> None:
         finish_job(job["id"], WORKER_ID, "done",
                    "canceled" if batch_cancel_requested(batch_id) else "")
         set_batch_status(batch_id, "idle")
+        try:
+            from .notify import notify
+
+            counts = (detail(batch_id) or {}).get("counts") or {}
+            failed = int(counts.get("failed") or 0)
+            if failed:
+                notify("batch_failed", f"批量任务有 {failed} 个文件失败",
+                       f"批次 {batch.get('name') or batch_id}："
+                       f"已识别 {counts.get('extracted', 0)} / 失败 {failed}",
+                       key=batch_id)
+        except Exception:  # noqa: BLE001 — 通知失败不影响批次
+            pass
     except Exception as exc:  # noqa: BLE001
         print(f"[batch] {batch_id} 任务失败：{exc}")
         traceback.print_exc()
         finish_job(job["id"], WORKER_ID, "failed", f"{type(exc).__name__}: {exc}")
         set_batch_status(batch_id, "failed")
+        try:
+            from .notify import notify
+
+            notify("batch_failed", "批量任务失败",
+                   f"批次 {batch.get('name') or batch_id}：{type(exc).__name__}: {exc}",
+                   key=batch_id)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _loop() -> None:

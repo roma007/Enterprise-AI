@@ -57,6 +57,8 @@ def _startup() -> None:
     from .batchproc import start_worker as start_batch_worker
     start_batch_worker()
     delivery.start_worker()
+    from .notify import start_watcher as start_notify_watcher
+    start_notify_watcher()
     if count_users() == 0:
         email = os.getenv("ADMIN_EMAIL", "admin@local").strip() or "admin@local"
         pw = os.getenv("ADMIN_PASSWORD", "").strip()
@@ -223,7 +225,8 @@ def api_settings_export():
     from . import thresholds as th
 
     data = th.snapshot()
-    values = {item["key"]: item["value"] for group in data["groups"] for item in group["items"]}
+    values = {item["key"]: item["value"] for group in data["groups"]
+              for item in group["items"] if not item.get("secret")}
     return {
         "version": 1,
         "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -347,6 +350,21 @@ def api_config_test_wecom():
         }
     except Exception as exc:  # noqa: BLE001 — 外部接口失败要给人话
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+
+@app.post("/api/config/test/notify")
+def api_config_test_notify():
+    from .notify import notify as send_notify
+
+    return send_notify("test", "智单通知测试",
+                       "这是一条测试消息；收到说明 Webhook 配置有效。", force=True)
+
+
+@app.get("/api/notify/recent")
+def api_notify_recent(limit: int = 20):
+    from .notify import recent
+
+    return {"items": recent(limit)}
 
 
 @app.post("/api/config/test/storage")
@@ -954,6 +972,13 @@ def _process_wecom_image(*, msg_id: str, media_id: str, from_user: str,
         print(f"[wecom-image] 处理失败 msg={msg_id[:16]} err={exc}")
         mark_wecom_msg(msg_id, "failed", str(exc))
         prom.inc_wecom_image("failed")
+        try:
+            from .notify import notify
+
+            notify("wecom_image_failed", "企微图片处理失败",
+                   f"msg={msg_id[:16]} err={str(exc)[:200]}", key=msg_id)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             wecom_api.send_text(from_user, wecom.image_failed_text(str(exc)))
         except Exception as send_exc:  # noqa: BLE001

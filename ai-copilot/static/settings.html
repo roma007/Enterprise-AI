@@ -118,6 +118,7 @@ let INTEG = null;     // /api/config/integrations
 let HIST = [];        // /api/settings/history
 let ME = null;
 let META = null;
+let NOTIFY = {items: []};
 let DIRTY = false;
 
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');
@@ -145,11 +146,12 @@ async function loadMe(){
 }
 
 async function load(){
-  [DATA, INTEG, HIST, META] = await Promise.all([
+  [DATA, INTEG, HIST, META, NOTIFY] = await Promise.all([
     j('/api/settings'),
     j('/api/config/integrations'),
     j('/api/settings/history?limit=50').then(d => d.items || []),
     j('/api/meta'),
+    j('/api/notify/recent?limit=8').catch(() => ({items: []})),
   ]);
   render();
 }
@@ -188,11 +190,15 @@ function render(){
           <div>
             ${it.type === 'list' ? `
               <div class="fieldpick" data-list-key="${esc(it.key)}" data-old='${JSON.stringify(it.value)}'>
-                ${(META.fields || []).map(f => `<label><input type="checkbox" data-list="${esc(it.key)}"
-                    value="${esc(f.key)}" ${it.value.includes(f.key) ? 'checked' : ''}
-                    ${admin ? '' : 'disabled'} /> ${esc(f.label)}</label>`).join('')}
+                ${(it.options || (META.fields || []).map(f => ({key: f.key, label: f.label}))).map(o => `<label><input type="checkbox" data-list="${esc(it.key)}"
+                    value="${esc(o.key)}" ${it.value.includes(o.key) ? 'checked' : ''}
+                    ${admin ? '' : 'disabled'} /> ${esc(o.label)}</label>`).join('')}
               </div>
               <div class="sub2">至少 1 项 · 即时生效</div>
+            ` : it.type === 'text' ? `
+              <input type="text" data-key="${esc(it.key)}" data-old="${esc(it.value)}"
+                     value="${esc(it.value)}" ${admin ? '' : 'disabled'} />
+              <div class="sub2">${it.secret ? '密钥类，导出配置时不会带出' : '即时生效'}</div>
             ` : it.type === 'bool' ? `
               <input type="checkbox" class="switch" data-key="${esc(it.key)}"
                      data-old="${it.value ? 1 : 0}" ${it.value ? 'checked' : ''} ${admin ? '' : 'disabled'} />
@@ -205,7 +211,17 @@ function render(){
             `}
           </div>
         </div>`).join('')}
-    </div></section>`);
+    </div>
+    ${g.name === '通知与告警' ? `
+      <div class="testbar">
+        ${admin ? '<button data-test="通知">发送测试消息</button>' : ''}
+        <span class="res" id="res-通知"></span>
+      </div>
+      <div class="note">最近通知：${(NOTIFY.items || []).length
+        ? (NOTIFY.items).slice(0, 6).map(n => `<div>${fmt(n.ts)} · ${esc(n.label || n.event)} ·
+            ${n.sent ? '已发送' : (n.error ? esc(n.error) : (n.quiet ? '静默未发' : '未发送'))}</div>`).join('')
+        : '暂无记录'}</div>` : ''}
+    </section>`);
   }
 
   // 集成（只读）
@@ -264,6 +280,10 @@ function collect(){
   const values = {}, lowered = [];
   $$('#main input[data-key]').forEach(i => {
     const k = i.dataset.key, old = Number(i.dataset.old);
+    if(i.type === 'text'){
+      if(i.value !== (i.dataset.old || '')) values[k] = i.value;
+      return;
+    }
     const v = i.type === 'checkbox' ? (i.checked ? 1 : 0) : Number(i.value);
     if(Math.abs(v - old) > 1e-9){
       values[k] = i.type === 'checkbox' ? !!i.checked : v;
@@ -349,7 +369,8 @@ async function rollback(id, btn){
 
 async function testConn(name, btn){
   const res = $('#res-' + CSS.escape(name));
-  const target = name === '模型' ? 'llm' : name === '企业微信' ? 'wecom' : 'storage';
+  const target = name === '模型' ? 'llm' : name === '企业微信' ? 'wecom'
+               : name === '通知' ? 'notify' : 'storage';
   btn.disabled = true; if(res){ res.className = 'res'; res.textContent = '测试中…'; }
   try{
     const ctrl = new AbortController();
@@ -359,9 +380,14 @@ async function testConn(name, btn){
     }).finally(() => clearTimeout(timer));
     if(res){
       res.className = 'res ' + (r.ok ? 'ok' : 'err');
-      res.textContent = r.ok
-        ? `连接正常 · ${r.elapsed_ms} ms${r.model ? ' · ' + r.model : ''}${r.backend ? ' · ' + r.backend : ''}`
-        : '失败：' + (r.error || '未知错误');
+      if(target === 'notify'){
+        res.textContent = r.sent ? '测试消息已发送' : ('未发送：' + (r.error || r.skipped || '未知原因'));
+        res.className = 'res ' + (r.sent ? 'ok' : 'err');
+      } else {
+        res.textContent = r.ok
+          ? `连接正常 · ${r.elapsed_ms} ms${r.model ? ' · ' + r.model : ''}${r.backend ? ' · ' + r.backend : ''}`
+          : '失败：' + (r.error || '未知错误');
+      }
     }
   }catch(e){
     if(res){ res.className = 'res err'; res.textContent = '失败：' + String(e.message || e); }

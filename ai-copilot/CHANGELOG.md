@@ -5,6 +5,15 @@
 
 ---
 
+## [0.34.0] · 2026-11-08 · 通知与告警（AI-34）
+
+- 新增 `app/notify.py`：事件订阅、静默时段、重复抑制、站内记录
+- 企微群机器人 Webhook 发送；失败只记录，不阻断业务
+- 已接事件：批量导入失败、企微图片处理失败、绕过率超阈（后台每 30 分钟巡检）
+- 新增 `POST /api/config/test/notify`、`GET /api/notify/recent`
+- 配置页支持 Webhook / 静默时段 / 事件多选 / 测试发送 / 最近记录
+- 导出配置自动跳过密钥项
+
 ## [0.33.0] · 2026-11-08 · 单证规则开关与必填字段（AI-33）
 
 - 新增 `rules.required`（字段多选）、`rules.container_checksum`、`rules.closing`、`rules.address`

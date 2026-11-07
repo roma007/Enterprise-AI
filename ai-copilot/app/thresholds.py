@@ -148,6 +148,31 @@ SPECS: list[dict] = [
      "min": 0.0, "max": 1.0, "step": 0.01,
      "label": "绕过率告警阈值",
      "hint": "超过该比例提示「节省工时会高估」"},
+
+    # ---- 通知与告警 ----
+    {"key": "notify.enabled", "group": "通知与告警", "type": "bool", "default": 0.0,
+     "label": "启用通知",
+     "hint": "关闭时只记录事件，不外发；开启后按下面的事件与渠道发送"},
+    {"key": "notify.webhook", "group": "通知与告警", "type": "text", "default": "",
+     "secret": True, "max_len": 500,
+     "label": "企微群机器人 Webhook",
+     "hint": "群机器人地址；导入导出配置时不会带出该值"},
+    {"key": "notify.events", "group": "通知与告警", "type": "list",
+     "default": ["batch_failed", "wecom_image_failed", "bypass_alert"],
+     "options": [
+         {"key": "batch_failed", "label": "批量导入失败"},
+         {"key": "wecom_image_failed", "label": "企微图片处理失败"},
+         {"key": "bypass_alert", "label": "绕过率超阈"},
+     ],
+     "label": "触发事件",
+     "hint": "只发勾选的事件；至少保留 1 项"},
+    {"key": "notify.quiet_hours", "group": "通知与告警", "type": "text", "default": "22:00-08:00",
+     "label": "静默时段",
+     "hint": "格式 HH:MM-HH:MM，可跨午夜；留空表示不静默"},
+    {"key": "notify.dedup_min", "group": "通知与告警", "default": 30,
+     "min": 0, "max": 1440, "step": 1,
+     "label": "重复抑制（分钟）",
+     "hint": "同一事件 + 同一 key 在窗口内只发一次"},
 ]
 
 BY_KEY = {s["key"]: s for s in SPECS}
@@ -245,6 +270,13 @@ def get_bool(key: str) -> bool:
     return abs(get(key)) > 1e-9
 
 
+def get_text(key: str) -> str:
+    spec = BY_KEY.get(key)
+    default = str(spec["default"]) if spec else ""
+    raw = (_load().get("values") or {}).get(key, default)
+    return str(raw)
+
+
 def get_list(key: str) -> list[str]:
     spec = BY_KEY.get(key)
     default = spec["default"] if spec else []
@@ -300,12 +332,16 @@ def snapshot() -> dict:
             item["value"] = get_bool(spec["key"])
         elif kind == "list":
             item["value"] = get_list(spec["key"])
+        elif kind == "text":
+            item["value"] = get_text(spec["key"])
         else:
             item["value"] = get(spec["key"])
         if spec["key"] not in values:
             item["changed"] = False
         elif kind == "list":
             item["changed"] = sorted(get_list(spec["key"])) != sorted(spec["default"])
+        elif kind == "text":
+            item["changed"] = get_text(spec["key"]) != str(spec["default"])
         elif kind == "bool":
             item["changed"] = abs(float(values[spec["key"]]) - float(spec["default"])) > 1e-9
         else:
@@ -352,6 +388,18 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
     clean: dict[str, float] = {}
     for k, v in values.items():
         spec = BY_KEY[k]
+        if spec.get("type") == "text":
+            text = str(v if v is not None else "").strip()
+            if len(text) > int(spec.get("max_len", 500)):
+                raise ValueError(f"{spec['label']} 太长（最多 {spec.get('max_len', 500)} 字）")
+            if spec["key"] == "notify.webhook" and text and not text.startswith(("http://", "https://")):
+                raise ValueError("Webhook 必须以 http:// 或 https:// 开头")
+            if spec["key"] == "notify.quiet_hours" and text:
+                m = __import__("re").fullmatch(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)", text)
+                if not m:
+                    raise ValueError("静默时段格式应为 HH:MM-HH:MM，例如 22:00-08:00")
+            clean[k] = text
+            continue
         if spec.get("type") == "list":
             items = v if isinstance(v, list) else [x for x in str(v).split(",") if x]
             keys = sorted({str(x).strip() for x in items if str(x).strip()})
@@ -398,6 +446,12 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
                     changes.append({"key": k, "label": spec["label"],
                                     "old": old_list, "new": new_list})
                 continue
+            if spec.get("type") == "text":
+                old_text = get_text(k)
+                if old_text != new_value:
+                    changes.append({"key": k, "label": spec["label"],
+                                    "old": old_text, "new": new_value})
+                continue
             old_value = get(k)
             if abs(float(old_value) - float(new_value)) > 1e-9:
                 changes.append({
@@ -415,6 +469,9 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
                 continue
             if spec.get("type") == "list":
                 if sorted(str(x) for x in current[k]) == sorted(spec["default"]):
+                    current.pop(k)
+            elif spec.get("type") == "text":
+                if str(current[k]) == str(spec["default"]):
                     current.pop(k)
             elif abs(float(current[k]) - float(spec["default"])) < 1e-9:
                 current.pop(k)
@@ -438,6 +495,11 @@ def reset(keys: list[str] | None = None, actor: str = "", reason: str = "") -> d
                 if old_list != default_list:
                     changes.append({"key": k, "label": spec["label"],
                                     "old": old_list, "new": default_list})
+            elif spec.get("type") == "text":
+                old_text = get_text(k)
+                if old_text != str(spec["default"]):
+                    changes.append({"key": k, "label": spec["label"],
+                                    "old": old_text, "new": str(spec["default"])})
             else:
                 old_value = get(k)
                 default = float(spec["default"])

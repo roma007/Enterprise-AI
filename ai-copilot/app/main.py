@@ -150,6 +150,10 @@ async def observe_middleware(request: Request, call_next):
         prom.observe(request.method, path, response.status_code,
                      (time.perf_counter() - start) * 1000)
 
+    # 页面改动后浏览器要重新校验，避免客户打开到旧界面
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     response.headers.setdefault("Referrer-Policy", "no-referrer")

@@ -447,6 +447,17 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 未做：未做打印预览逐页检查。
 - GitHub Actions run #151（`1ae0416`）**4 个 job 全部通过**；preflight 通过。
 
+### 5.21 左侧菜单全路由巡检 + HTML 禁止缓存
+
+- 现象：反馈「发票识别页没有左侧菜单」。巡检结果为**旧页面缓存**：`static/invoice.html` 已包含 `nav.css` / `nav.js` / `body.app-shell`，新开标签访问 `/invoice` 侧栏正常。
+- 巡检范围：`/`、`/invoice`、`/batch`、`/history`、`/reconcile`、`/pilot`、`/threeway`、`/settlement`、`/fees`、`/aging`、`/learn`、`/settings`、`/users`、`/demo`、`/report`，共 **15 个路由**。
+- 结果：15/15 有侧栏、当前项高亮正确、`body` 左内边距 220px、无横向溢出、控制台 0 错误。
+- 修复：`observe_middleware` 对 `text/html` 响应加 `Cache-Control: no-cache`，部署后普通刷新即可拿到新页面，不再需要清缓存。
+- 验证：
+  - `GET /invoice` 响应头包含 `cache-control: no-cache`。
+  - `./scripts/smoke.sh` **16/16 通过**。
+  - 静态资源（`nav.css` / `nav.js`）仍按 ETag 缓存，不受影响。
+
 ---
 
 ## 6. 未验证 / 阻塞项

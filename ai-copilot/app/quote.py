@@ -213,7 +213,7 @@ def quote(text: str, use_llm: bool = True) -> dict:
         "explanation": explanation,
         "engine": engine,
         "samples": rows[-6:],
-        "warning": "合成演示价格，不代表真实客户报价；报价前必须用客户价格表重算。",
+        "warning": "演示价格，不代表真实客户报价；报价前必须用客户价格表重算。",
     }
 
 

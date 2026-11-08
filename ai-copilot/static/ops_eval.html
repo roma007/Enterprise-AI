@@ -35,18 +35,18 @@
   .toast.show{opacity:1}
   @media(max-width:900px){.kpi{grid-template-columns:1fr 1fr}}
 </style>
-<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<link rel="stylesheet" href="/static/nav.css?v=20261108j" />
 <script src="/static/nav.js?v=20261108j" defer></script>
 </head>
 <body class="app-shell">
 <header>
   <h1>能力回归</h1>
-  <span class="sub">在途查询 / 调度装箱 / 在途事件 / HS 候选（合成数据，不代表真实客户）</span>
+  <span class="sub">在途查询 / 调度装箱 / 在途事件 / HS 候选（示例数据，不代表真实客户）</span>
 </header>
 
 <div class="wrap">
   <section class="card">
-    <h2>① 合成数据规模</h2>
+    <h2>① 示例数据规模</h2>
     <div class="warn" id="warn">加载中…</div>
     <div class="kpi" id="kpi"></div>
   </section>
@@ -72,7 +72,7 @@ function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');cl
 function pill(ok){ return `<span class="pill ${ok?'pass':'fail'}">${ok?'通过':'未通过'}</span>`; }
 
 function render(d){
-  $('#warn').textContent = d.warning || '合成数据回归，不代表真实客户效果。';
+  $('#warn').textContent = d.warning || '示例数据回归，不代表真实客户效果。';
   const t = d.tracking, p = d.dispatch, e = d.events, c = d.customs;
   $('#kpi').innerHTML = `
     <div><b>${t.shipments}</b><span>在途票数</span></div>
@@ -96,7 +96,7 @@ function render(d){
   ];
   $('#result').innerHTML = '<tr><th>能力</th><th>指标</th><th>结果</th><th>判定</th></tr>' +
     rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${pill(r[3])}</td></tr>`).join('');
-  $('#note').textContent = `生成时间：${d.generated_at} ｜ 全部通过：${d.pass ? '是' : '否'} ｜ 合成数据只验证规则/流程，不代表真实客户效果。`;
+  $('#note').textContent = `生成时间：${d.generated_at} ｜ 全部通过：${d.pass ? '是' : '否'} ｜ 示例数据只验证规则/流程，不代表真实客户效果。`;
 }
 
 async function run(){

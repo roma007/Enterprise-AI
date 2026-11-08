@@ -40,7 +40,7 @@
   .toast.show{opacity:1}
   @media(max-width:980px){.grid{grid-template-columns:1fr}}
 </style>
-<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<link rel="stylesheet" href="/static/nav.css?v=20261108j" />
 <script src="/static/nav.js?v=20261108j" defer></script>
 </head>
 <body class="app-shell">
@@ -127,7 +127,7 @@ $('#btnDemo').onclick = async () => {
   $('#invoice').value = d.invoice_text;
   $('#statement').value = d.statement_text;
   render(d.result);
-  toast('已加载合成演示单据：故意有一处金额差异');
+  toast('已加载演示单据：故意有一处金额差异');
 };
 </script>
 </body>

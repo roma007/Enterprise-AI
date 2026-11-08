@@ -41,7 +41,7 @@
   .empty{padding:22px;color:var(--muted);text-align:center;font-size:13px}
   @media(max-width:900px){.grid{grid-template-columns:1fr}}
 </style>
-<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<link rel="stylesheet" href="/static/nav.css?v=20261108j" />
 <script src="/static/nav.js?v=20261108j" defer></script>
 </head>
 <body class="app-shell">
@@ -111,7 +111,7 @@ function render(r){
     <div><b>${(s.margin*100).toFixed(1)}%</b><span>毛利率</span></div>
     <div><b>${s.orders}</b><span>订单数</span></div>
     <div><b style="color:${s.unallocated?'var(--warn)':'inherit'}">${money(s.unallocated)}</b><span>待分摊成本</span></div>`;
-  $('#warn').textContent = (r.synthetic ? '【合成演示】' : '') + r.warning;
+  $('#warn').textContent = (r.synthetic ? '【演示】' : '') + r.warning;
 
   $('#orderTable').innerHTML = '<tr><th>日期</th><th>单号</th><th>车辆</th><th>客户</th>'
     + '<th>应收</th><th>成本</th><th>毛利</th><th>毛利率</th><th>标记</th></tr>' +
@@ -156,7 +156,7 @@ $('#btnDemo').onclick = async () => {
   $('#revenue').value = d.revenue_text;
   $('#costs').value = d.cost_text;
   render(d.result);
-  toast('已加载合成演示数据，不代表真实毛利');
+  toast('已加载演示数据，不代表真实毛利');
 };
 
 $('#btnExport').onclick = async () => {

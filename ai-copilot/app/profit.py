@@ -136,5 +136,5 @@ def demo() -> dict:
         "customers": customers,
         "routes": routes,
         "insights": insights,
-        "warning": "合成 24 个月数据；规则/统计，不代表客户真实经营结论。",
+        "warning": "演示数据；系统计算/统计，不代表客户真实经营结论。",
     }

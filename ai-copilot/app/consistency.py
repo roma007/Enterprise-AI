@@ -246,6 +246,6 @@ HY2026110801,MSCU7654329,2550,宁波宏运集卡运输有限公司
 """
     result = check(booking, invoice, statement, use_llm=False)
     result["synthetic"] = True
-    result["warning"] = "合成演示：托书运费 2600，对账单 2550，故意制造金额差异。"
+    result["warning"] = "演示：托书运费 2600，对账单 2550，故意制造金额差异。"
     return {"booking_text": booking, "invoice_text": invoice,
             "statement_text": statement, "result": result}

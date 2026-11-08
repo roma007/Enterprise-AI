@@ -163,5 +163,5 @@ def summary() -> dict:
         "trucks": len(TRUCKS),
         "orders": len(orders()),
         "history_months": 24,
-        "warning": "合成演示数据，不代表真实客户。",
+        "warning": "演示数据，不代表真实客户。",
     }

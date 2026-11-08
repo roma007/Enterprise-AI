@@ -146,7 +146,7 @@ def run(orders_: list[dict], vehicles_: list[dict], loading_count: int = 80) -> 
         },
         "assignments": optimized_rows[:12],
         "loading": loading,
-        "warning": "合成演示数据；调度/装箱为启发式规则，不是大模型，也不代表真实降本。",
+        "warning": "演示数据；调度/装箱为优化规则，不代表真实降本。",
     }
 
 

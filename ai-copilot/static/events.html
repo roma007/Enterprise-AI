@@ -46,7 +46,7 @@
   .toast.show{opacity:1}
   @media(max-width:900px){.kpi div{min-width:90px}}
 </style>
-<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<link rel="stylesheet" href="/static/nav.css?v=20261108j" />
 <script src="/static/nav.js?v=20261108j" defer></script>
 </head>
 <body class="app-shell">
@@ -131,7 +131,7 @@ $('#btnDemo').onclick = async () => {
   const d = await (await fetch('/api/events/demo')).json();
   $('#text').value = d.text;
   render(d.result);
-  toast('已加载合成演示对话');
+  toast('已加载演示对话');
 };
 </script>
 </body>

@@ -127,7 +127,7 @@
     // 底部只留环境说明；账号与退出放顶栏
     var foot = el('div', 'foot');
     foot.id = 'navFoot';
-    foot.appendChild(el('div', null, '演示环境 · 数据为合成样本'));
+    foot.appendChild(el('div', null, '演示环境 · 数据为示例样本'));
     aside.appendChild(foot);
 
     document.body.insertBefore(aside, document.body.firstChild);

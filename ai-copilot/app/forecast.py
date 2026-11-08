@@ -108,5 +108,5 @@ def demo() -> dict:
         "customers": cs,
         "routes": rs[:8],
         "cash": cash_forecast(),
-        "warning": "合成 24 个月数据 + 规则/简单统计；不是生产级预测，不能对外当准确率。",
+        "warning": "演示数据 + 系统计算/统计；不是生产级预测，不能对外当准确率。",
     }

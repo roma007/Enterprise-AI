@@ -41,13 +41,13 @@
   .toast.show{opacity:1}
   @media(max-width:900px){.kpi{grid-template-columns:1fr 1fr}}
 </style>
-<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<link rel="stylesheet" href="/static/nav.css?v=20261108j" />
 <script src="/static/nav.js?v=20261108j" defer></script>
 </head>
 <body class="app-shell">
 <header>
   <h1>盈利分析</h1>
-  <span class="sub">客户 / 线路维度：收入、成本、毛利、集中度与趋势（合成演示）</span>
+  <span class="sub">客户 / 线路维度：收入、成本、毛利、集中度与趋势（演示）</span>
 </header>
 
 <div class="wrap">
@@ -55,7 +55,7 @@
     <h2>① 演示数据</h2>
     <div class="bar">
       <button class="primary" id="btnRun">重新计算</button>
-      <span class="hint" id="hint">20 客户 × 8 线路 × 24 个月合成历史</span>
+      <span class="hint" id="hint">20 客户 × 8 线路 × 24 个月历史示例</span>
     </div>
   </section>
 
@@ -116,7 +116,7 @@ async function run(){
   try{
     const d = await (await fetch('/api/profit/demo')).json();
     render(d);
-  } finally { $('#btnRun').disabled=false; $('#hint').textContent='20 客户 × 8 线路 × 24 个月合成历史'; }
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent='20 客户 × 8 线路 × 24 个月历史示例'; }
 }
 $('#btnRun').onclick = run;
 run();

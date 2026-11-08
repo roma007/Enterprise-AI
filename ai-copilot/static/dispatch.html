@@ -35,13 +35,13 @@
   .toast.show{opacity:1}
   @media(max-width:900px){.kpi{grid-template-columns:1fr 1fr}}
 </style>
-<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<link rel="stylesheet" href="/static/nav.css?v=20261108j" />
 <script src="/static/nav.js?v=20261108j" defer></script>
 </head>
 <body class="app-shell">
 <header>
   <h1>调度优化</h1>
-  <span class="sub">订单/车辆/装箱 → 优化前后对比（合成演示，启发式，不是大模型）</span>
+  <span class="sub">订单/车辆/装箱 → 优化前后对比（演示，优化规则）</span>
 </header>
 
 <div class="wrap">
@@ -49,7 +49,7 @@
     <h2>① 演示数据</h2>
     <div class="bar">
       <button class="primary" id="btnRun">重新计算</button>
-      <span class="hint" id="hint">合成 160 单、30 台车；40HQ 装箱演示</span>
+      <span class="hint" id="hint">示例 160 单、30 台车；40HQ 装箱演示</span>
     </div>
   </section>
 
@@ -106,7 +106,7 @@ async function run(){
   try{
     const d = await (await fetch('/api/dispatch/demo')).json();
     render(d);
-  } finally { $('#btnRun').disabled=false; $('#hint').textContent='合成 160 单、30 台车；40HQ 装箱演示'; }
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent='示例 160 单、30 台车；40HQ 装箱演示'; }
 }
 $('#btnRun').onclick = run;
 run();

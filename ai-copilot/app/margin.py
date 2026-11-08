@@ -240,7 +240,7 @@ def demo() -> dict:
     cost_text = _csv(["日期", "车辆", "单号", "科目", "金额"], cost_rows)
     result = analyze(parse_revenue(revenue_text), parse_costs(cost_text))
     result["synthetic"] = True
-    result["warning"] = "演示数据为合成样本，不代表真实客户毛利。" + result["warning"]
+    result["warning"] = "演示数据，不代表真实客户毛利。" + result["warning"]
     return {"revenue_text": revenue_text, "cost_text": cost_text, "result": result}
 
 

@@ -168,5 +168,5 @@ def demo() -> dict:
 """
     result = extract_events(text, use_llm=False)
     result["synthetic"] = True
-    result["warning"] = "合成演示对话，不代表真实客户；规则抽取，模型可补充。" + result["warning"]
+    result["warning"] = "演示对话，不代表真实客户；系统抽取，AI 可补充。" + result["warning"]
     return {"text": text, "result": result}

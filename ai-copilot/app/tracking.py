@@ -93,9 +93,9 @@ def answer(question: str, use_llm: bool = True) -> dict:
         "answer": text,
         "shipment": facts,
         "timeline": s["timeline"],
-        "sources": ["合成演示：订单/箱动态/报关状态"],
+        "sources": ["演示：订单/箱动态/报关状态"],
         "engine": engine,
-        "warning": "合成演示数据；真实查询需接港口/船期/报关接口。",
+        "warning": "演示数据；真实查询需对接港口/船期/报关数据。",
     }
 
 

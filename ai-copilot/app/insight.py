@@ -148,7 +148,7 @@ def demo() -> dict:
     receivables_text = _receivables_csv(aging_mod.demo_rows())
     result = analyze(d["revenue_text"], d["cost_text"], receivables_text)
     result["synthetic"] = True
-    result["warning"] = "合成演示数据，不代表真实客户经营结论。" + result["warning"]
+    result["warning"] = "演示数据，不代表真实客户经营结论。" + result["warning"]
     return {
         "revenue_text": d["revenue_text"],
         "cost_text": d["cost_text"],

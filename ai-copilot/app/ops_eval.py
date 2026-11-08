@@ -292,7 +292,7 @@ def evaluate() -> dict:
         "customs": customs,
         "checks": checks,
         "pass": all(checks.values()),
-        "warning": "合成数据回归，不代表真实客户效果；真实上线仍需客户接口与样本。",
+        "warning": "示例数据回归，不代表真实客户效果；真实上线仍需客户接口与样本。",
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

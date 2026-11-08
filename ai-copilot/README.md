@@ -122,6 +122,7 @@ app/evalrun.py           评测跑批
 app/main.py              FastAPI，7 个端点
 samples/bookings.jsonl   20 份调优用合成托书 + 金标
 samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
+samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不对外报准确率）
 ```
 
 ### 一个关键设计：规则有最终裁决权
@@ -295,6 +296,7 @@ samples/bookings_holdout.jsonl  8 份留出集（写完后未回头调规则）
 | **并发幂等（B3）**：同内容重复提交幂等返回，不同内容 409 | `app/store.py` `AlreadyConfirmed` | `/api/confirm` |
 | **脱敏（B4）**：公司/人名/手机/身份证/报关号自动替换，映射表持久化 | `app/masking.py` | `/api/mask` |
 | **批量导入（B5）**：一次传 N 份，后台处理，进度与失败重试 | `app/batchproc.py` | `/batch`、`/api/batches/*` |
+| **批量金标（AI-24）**：导出 gold 模板、导入比对、结果落盘 | `app/batchgold.py` | `/api/batches/{id}/gold.csv`、`/gold-eval` |
 | **分层抽样（B6）**：月份×客户×格式分层，输出可打印清单 | `app/sampling.py` | `/api/sampling/*`、`make sample` |
 | **跨批次失败队列（B7）**：失败项集中可见、一键重排 | `app/store.py` `failed_items` | `/api/batches/failed`、`retry-all` |
 | **发票识别（04b）**：税号校验位、金额勾稽、税率合法性；规则够好自动跳过模型 | `app/invoice.py` | `/invoice`、`/api/invoice/*` |

@@ -1429,6 +1429,45 @@ def api_batch_retry(batch_id: str):
     return {"requeued": retry_failed(batch_id)}
 
 
+@app.get("/api/batches/{batch_id}/gold.csv", response_class=PlainTextResponse)
+def api_batch_gold(batch_id: str):
+    """导出金标模板：gold_* 留空，pred_* 带系统值，text 带原文。"""
+    from .batchgold import export_template
+    from .store import get_batch
+
+    if not get_batch(batch_id):
+        raise HTTPException(status_code=404, detail="批次不存在")
+    try:
+        content = export_template(batch_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return PlainTextResponse(
+        content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition":
+                 f'attachment; filename="batch-{batch_id}-gold.csv"'},
+    )
+
+
+@app.post("/api/batches/{batch_id}/gold-eval")
+def api_batch_gold_eval(batch_id: str, req: dict, request: Request):
+    """导入填好的金标 CSV，逐字段比对。"""
+    from .batchgold import evaluate_csv
+    from .store import get_batch
+
+    if not get_batch(batch_id):
+        raise HTTPException(status_code=404, detail="批次不存在")
+    text = str(req.get("csv") or "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="CSV 为空")
+    if len(text) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="CSV 超过 10MB")
+    try:
+        return evaluate_csv(batch_id, text, actor=_uid(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @app.get("/api/invoice/meta")
 def api_invoice_meta():
     from .invoice import INVOICE_SPECS

@@ -170,7 +170,15 @@ def _dt_near(text: str, keys: tuple[str, ...]) -> str | None:
     low = text.lower()
     for line in _lines(text):
         ll = line.lower()
-        if any(k.lower() in ll for k in keys):
+        for k in keys:
+            pos = ll.find(k.lower())
+            if pos < 0:
+                continue
+            # 同一行可能写了两个时间（装柜 / 截港）。必须从关键词之后找，
+            # 否则「装柜时间 11-06 08:00  截港时间 11-07 18:00」会取到装柜时间。
+            dt = parse_datetime(line[pos:])
+            if dt:
+                return fmt(dt)
             dt = parse_datetime(line)
             if dt:
                 return fmt(dt)

@@ -41,11 +41,15 @@
       items: [{ href: '/events', label: '在途异常', roles: ['admin', 'operator'] }]
     },
     {
-      title: '成本',
+      title: '经营',
       items: [
-        { href: '/margin', label: '单车毛利', roles: ['admin', 'finance'] },
+        { href: '/quote', label: '报价助手', roles: ['admin', 'operator', 'finance'] },
         { href: '/insight', label: '经营洞察', roles: ['admin', 'finance'] }
       ]
+    },
+    {
+      title: '成本',
+      items: [{ href: '/margin', label: '单车毛利', roles: ['admin', 'finance'] }]
     },
     {
       title: '数据与设置',

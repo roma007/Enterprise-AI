@@ -2389,6 +2389,40 @@ def kb_page():
     return FileResponse(ROOT / "static" / "kb.html")
 
 
+# ---------------------------------------------------------------- 报价
+
+@app.post("/api/quote")
+def api_quote(req: dict):
+    from .quote import quote
+
+    text = str(req.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="询价内容为空")
+    try:
+        return quote(text, use_llm=bool(req.get("use_llm", True)))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/quote/demo")
+def api_quote_demo():
+    from .quote import demo
+
+    return demo()
+
+
+@app.get("/api/quote/history")
+def api_quote_history():
+    from .quote import history
+
+    return {"items": history()}
+
+
+@app.get("/quote")
+def quote_page():
+    return FileResponse(ROOT / "static" / "quote.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

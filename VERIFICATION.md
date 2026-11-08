@@ -1010,6 +1010,27 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 
 ---
 
+### 5.49 运维智能：灰犀牛 / 黑天鹅（AI-51）
+
+- 目标：规则 + AI 的运维闭环，不是“AI 直接修服务器”。灰犀牛做趋势预判，黑天鹅做快速发现/研判/升级。
+- 代码：
+  - `ai-copilot/app/aiops.py`：规则引擎、风险/事件模型、AI 研判、Runbook 计划、状态存储。
+  - `ai-copilot/static/ops_ai.html`、`/ops-ai`、`/api/ops/ai/*`：页面与接口。
+  - `ai-copilot/scripts/test_aiops.py`、`make aiops-test`：20 项自检。
+  - `ai-copilot/docs/AIOps运维能力.md`：能力说明、快照格式、边界与下一步。
+- 规则覆盖：
+  - 灰犀牛：磁盘将满、DB 增长、连接池、备份变旧、证书到期、队列积压、批次失败、内存压力、错误预算、模型超时。
+  - 黑天鹅：主机/网络不可达、DB 不可用、应用不可用、外部探针失败、发布后 5xx 飙升、模型网关连续超时、疑似勒索。
+- AI 研判：规则先出结论，模型可选补充；输出 summary/confidence/causes/evidence/actions/escalate_to/runbook；模型失败或未配置回退规则；证据必须能在上下文找到。
+- Runbook：11 个；低风险可自动、中高风险需审批；默认只生成计划，生产执行需接 K8s/Ansible/客户运维平台，不直接跑 shell。
+- 页面验证：登录后 `/ops-ai` 200；`/api/ops/ai/state`、`/api/ops/ai/demo?scenario=gray|black|mixed`、`/api/ops/ai/evaluate` 均返回 JSON；灰犀牛演示 9 条风险、黑天鹅演示 1 条 P0；Playwright 点击“灰犀牛/黑天鹅/AI 研判”均正常，研判返回结构化 JSON。
+- 通知：`POST /api/ops/ai/incidents/{id}/notify` 已接 `app/notify.py`；未配置渠道时返回 `skipped: disabled`，不阻断页面。
+- 自检结果：`make aiops-test` 20/20 通过（健康快照无告警、灰犀牛 5 类、黑天鹅 P0、研判证据/动作/升级、Runbook 审批、状态持久化、认领/解决）。
+- 指标：`copilot_aiops_risks_open`、`copilot_aiops_incidents_open{severity}`；告警 `CopilotAiopsP0Incident`、`CopilotAiopsRiskHigh`。
+- 边界：黑天鹅不承诺预测；真实 exporter/Alertmanager/执行器仍需按客户环境接入；当前为规则 + 演示快照 + 计划闭环。
+
+---
+
 ## 6. 未验证 / 阻塞项
 
 | 项 | 状态 | 说明 |

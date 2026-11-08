@@ -2529,6 +2529,103 @@ def dispatch_page():
     return FileResponse(ROOT / "static" / "dispatch.html")
 
 
+@app.get("/api/ops/ai/state")
+def api_aiops_state():
+    from . import aiops
+
+    return {"summary": aiops.summary(), **aiops.state()}
+
+
+@app.get("/api/ops/ai/summary")
+def api_aiops_summary():
+    from . import aiops
+
+    return aiops.summary()
+
+
+@app.get("/api/ops/ai/demo")
+def api_aiops_demo(scenario: str = "mixed"):
+    from . import aiops
+
+    return aiops.demo(scenario)
+
+
+@app.post("/api/ops/ai/evaluate")
+def api_aiops_evaluate(req: dict):
+    from . import aiops
+
+    snapshot = req.get("snapshot")
+    if not isinstance(snapshot, dict) or not snapshot:
+        snapshot = aiops.demo_snapshot(str(req.get("scenario") or "mixed"))
+    return aiops.evaluate(snapshot)
+
+
+@app.post("/api/ops/ai/incidents/{incident_id}/diagnose")
+def api_aiops_diagnose(incident_id: str, req: dict):
+    from . import aiops
+
+    try:
+        return aiops.diagnose_incident(incident_id, use_llm=bool(req.get("use_llm", True)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/ops/ai/incidents/{incident_id}/notify")
+def api_aiops_notify(incident_id: str, req: dict):
+    from . import aiops
+
+    try:
+        return aiops.notify_incident(
+            incident_id, force=bool(req.get("force", False)))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/ops/ai/incidents/{incident_id}/ack")
+def api_aiops_ack(incident_id: str, req: dict):
+    from . import aiops
+
+    try:
+        return aiops.ack_incident(incident_id, by=str(req.get("by") or "on-call"))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/ops/ai/incidents/{incident_id}/resolve")
+def api_aiops_resolve(incident_id: str, req: dict):
+    from . import aiops
+
+    try:
+        return aiops.resolve_incident(
+            incident_id, by=str(req.get("by") or "on-call"),
+            note=str(req.get("note") or ""),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/ops/ai/runbooks/{name}/plan")
+def api_aiops_runbook_plan(name: str, req: dict):
+    from . import aiops
+
+    try:
+        return aiops.plan_runbook(name, str(req.get("target") or ""))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/ops/ai/reset")
+def api_aiops_reset():
+    from . import aiops
+
+    return aiops.reset()
+
+
+@app.get("/ops-ai")
+def ops_ai_page():
+    return FileResponse(ROOT / "static" / "ops_ai.html")
+
+
 @app.get("/api/ops/eval")
 def api_ops_eval():
     from .ops_eval import evaluate

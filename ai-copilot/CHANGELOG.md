@@ -13,6 +13,15 @@
 - 修正事件关键词：补“船开”，把“等卸/等装”收紧为“等卸货/等装货”，减少“等卸船”误判为压车
 - 边界不变：合成数据只验证规则/流程，不代表真实客户；真实上线仍需港口/船期/订单/GPS/报关接口
 
+## [0.50.0] · 2026-11-09 · 运维智能（AI-51）
+
+- 新增 `app/aiops.py`：灰犀牛风险（容量/趋势/到期）与黑天鹅事故（主机/DB/应用/外部探针/坏发布/模型网关）分轨规则
+- 新增 `/ops-ai` 页面与 `/api/ops/ai/*`：风险/事件、AI 研判、认领/解决、Runbook 计划
+- 新增 11 个 Runbook：disk_cleanup、db_archive、db_pool_tune、backup_now、cert_renew、queue_drain、batch_retry、service_restart、rollback_release、llm_fallback、failover_host
+- AI 只做研判/建议；模型失败回退规则；Runbook 默认只出计划，执行需接客户执行器并审批
+- 新增 `make aiops-test`：20 项规则/研判/Runbook/状态自检
+- 新增指标 `copilot_aiops_risks_open`、`copilot_aiops_incidents_open{severity}` 与两条告警
+
 ## [0.43.0] · 2026-11-08 · 默认模型切换为 deepseek-v4.1-flash
 
 - 按使用方要求，`LLM_MODEL` 从 `claude-haiku-5-5` 改为 OpenCode Go 网关的 `deepseek-v4.1-flash`

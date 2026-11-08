@@ -2,6 +2,7 @@
 
 > 目标：把“能监控”变成“可承诺、可值班、可复盘”。
 > 指标由后端 `/metrics` 与可选 node_exporter textfile 提供；规则见 `ops/alerts.yml`。
+> 灰犀牛/黑天鹅的规则 + AI 研判见 `ai-copilot/docs/AIOps运维能力.md`；页面 `/ops-ai`。
 
 ## 1. 服务分级
 

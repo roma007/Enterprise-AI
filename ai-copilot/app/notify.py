@@ -25,6 +25,7 @@ LABELS = {
     "batch_failed": "批量导入失败",
     "wecom_image_failed": "企微图片处理失败",
     "bypass_alert": "绕过率超阈值",
+    "aiops_incident": "运维智能事件",
     "test": "测试消息",
 }
 

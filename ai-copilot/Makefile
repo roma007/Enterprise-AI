@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke ops-eval prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply verify-https pg-migrate pg-migrate-apply pg-test
+.PHONY: setup dev eval smoke ops-eval aiops-test prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply verify-https pg-migrate pg-migrate-apply pg-test
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -17,6 +17,9 @@ eval:
 
 ops-eval:
 	PYTHONPATH=. $(PY) scripts/eval_ops.py
+
+aiops-test:
+	PYTHONPATH=. $(PY) scripts/test_aiops.py
 
 smoke:
 	./scripts/smoke.sh http://127.0.0.1:$(PORT)

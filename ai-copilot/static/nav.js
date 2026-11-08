@@ -67,6 +67,7 @@
         { href: '/settings', label: '阈值配置', roles: ['admin'] },
         { href: '/users', label: '用户管理', roles: ['admin'] },
         { href: '/report', label: '运行月报' },
+        { href: '/ops-ai', label: '运维智能', roles: ['admin'] },
         { href: '/ops-eval', label: '能力回归', roles: ['admin'] },
         { href: '/demo', label: '一键演示' }
       ]

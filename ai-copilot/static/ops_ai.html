@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 运维智能</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1280px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;flex-wrap:wrap}
+  button{font:inherit;font-size:12.5px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button.ghost{background:#fafbfc}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+  .kpi div{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:20px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .list{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .item{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:#fff}
+  .item .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .item b{font-size:13.5px}
+  .item .meta{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .ev{font-size:12px;color:#3d4a5a;margin-top:6px;line-height:1.45}
+  .sev{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700}
+  .sev.P0{background:#fde8e8;color:var(--err)}
+  .sev.P1{background:#fff4e5;color:var(--warn)}
+  .sev.高{background:#fde8e8;color:var(--err)}
+  .sev.中{background:#fff4e5;color:var(--warn)}
+  .sev.低{background:#e6f4ea;color:var(--ok)}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .diag{margin-top:8px;background:#f7fafc;border-left:3px solid var(--brand);padding:8px 10px;border-radius:6px;font-size:12px;white-space:pre-wrap}
+  pre{white-space:pre-wrap;background:#0f2740;color:#d7e3ef;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;overflow:auto;max-height:360px}
+  .empty{color:var(--muted);font-size:12px;padding:8px 0}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}.kpi{grid-template-columns:1fr 1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108l" />
+<script src="/static/nav.js?v=20261108k" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>运维智能</h1>
+  <span class="sub">灰犀牛（可预判） / 黑天鹅（突发） · 规则 + AI 研判</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <div class="bar">
+      <button class="primary" id="btnGray">灰犀牛演示</button>
+      <button id="btnBlack">黑天鹅演示</button>
+      <button class="ghost" id="btnMixed">混合演示</button>
+      <button class="ghost" id="btnReset">重置演示</button>
+      <span class="sub" id="hint">加载中…</span>
+    </div>
+    <div class="kpi" id="kpi"></div>
+  </section>
+
+  <div class="cols">
+    <section class="card">
+      <h2>灰犀牛 · 可提前预判（容量 / 趋势 / 到期）</h2>
+      <div class="list" id="risks"></div>
+    </section>
+    <section class="card">
+      <h2>黑天鹅 · 突发故障（发现 / 止损 / 升级）</h2>
+      <div class="list" id="incidents"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>研判 / 处置计划</h2>
+    <div style="padding:12px 14px" id="detail"><div class="empty">点“AI 研判”或“查看处置计划”查看详情。</div></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+async function api(path, opt){ const r=await fetch(path, opt||{}); const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.detail||('HTTP '+r.status)); return d; }
+
+function render(d){
+  const s = d.summary || {};
+  $('#kpi').innerHTML = `
+    <div><b>${s.risks ?? 0}</b><span>灰犀牛风险</span></div>
+    <div><b>${s.incidents ?? 0}</b><span>黑天鹅事件</span></div>
+    <div><b style="color:var(--err)">${s.p0 ?? 0}</b><span>P0 待处理</span></div>
+    <div><b style="color:var(--ok)">${s.auto_ready ?? 0}</b><span>可自动处置</span></div>`;
+
+  const risks = (d.risks || []).filter(x => x.status !== 'resolved');
+  $('#risks').innerHTML = risks.length ? risks.map(x => `
+    <div class="item">
+      <div class="row"><span class="sev ${esc(x.severity)}">${esc(x.severity)}</span><b>${esc(x.title)}</b></div>
+      <div class="ev">${(x.evidence||[]).map(esc).join(' · ')}</div>
+      <div class="meta">预计：${esc(x.eta)} ｜ Runbook：${esc(x.runbook)} ｜ ${x.auto?'可自动处置':'需审批'} ｜ 负责人：${esc(x.owner)}</div>
+      <div class="actions"><button onclick="plan('${esc(x.runbook)}','${esc(x.id)}')">查看处置计划</button></div>
+    </div>`).join('') : '<div class="empty">暂无灰犀牛风险。点“灰犀牛演示”看示例。</div>';
+
+  const incidents = (d.incidents || []).filter(x => x.status !== 'resolved');
+  $('#incidents').innerHTML = incidents.length ? incidents.map(x => `
+    <div class="item">
+      <div class="row"><span class="sev ${esc(x.severity)}">${esc(x.severity)}</span><b>${esc(x.title)}</b><span class="meta">${esc(x.status)}</span></div>
+      <div class="ev">${esc(x.symptom)}<br>${(x.evidence||[]).map(esc).join(' · ')}</div>
+      <div class="meta">影响：${esc(x.blast_radius)} ｜ 升级：${esc(x.escalate_to)}</div>
+      ${x.diagnosis ? `<div class="diag">${esc(x.diagnosis.summary)}\n置信度 ${(x.diagnosis.confidence*100).toFixed(0)}% ｜ ${esc(x.diagnosis.engine)}</div>` : ''}
+      <div class="actions">
+        <button class="primary" onclick="diagnose('${esc(x.id)}')">AI 研判</button>
+        <button onclick="notifyIncident('${esc(x.id)}')">通知值班</button>
+        <button onclick="ack('${esc(x.id)}')">认领</button>
+        <button onclick="resolve('${esc(x.id)}')">解决</button>
+      </div>
+    </div>`).join('') : '<div class="empty">暂无黑天鹅事件。点“黑天鹅演示”看示例。</div>';
+  $('#hint').textContent = d.last_eval ? `最近评估：${d.last_eval}` : '还没有评估数据';
+}
+
+async function load(){
+  try { render(await api('/api/ops/ai/state')); }
+  catch(e){ toast('加载失败：'+e.message); }
+}
+async function demo(scenario){
+  try {
+    $('#hint').textContent = '评估中…';
+    await api(`/api/ops/ai/demo?scenario=${encodeURIComponent(scenario)}`);
+    await load();
+    toast('已加载'+scenario+'演示');
+  } catch(e){ toast('评估失败：'+e.message); }
+}
+async function plan(name,target){
+  try {
+    const d = await api(`/api/ops/ai/runbooks/${encodeURIComponent(name)}/plan`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target})
+    });
+    $('#detail').innerHTML = `<pre>${esc(JSON.stringify(d,null,2))}</pre>`;
+  } catch(e){ toast('生成失败：'+e.message); }
+}
+async function diagnose(id){
+  try {
+    const d = await api(`/api/ops/ai/incidents/${encodeURIComponent(id)}/diagnose`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({use_llm:true})
+    });
+    $('#detail').innerHTML = `<pre>${esc(JSON.stringify(d.diagnosis,null,2))}</pre>`;
+    await load();
+  } catch(e){ toast('研判失败：'+e.message); }
+}
+async function notifyIncident(id){
+  try {
+    const d = await api(`/api/ops/ai/incidents/${encodeURIComponent(id)}/notify`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+    });
+    const r = d.notify || {};
+    const why = r.skipped === 'disabled' ? '通知未启用'
+      : r.skipped === 'not_subscribed' ? '未订阅运维事件'
+      : r.skipped === 'dedup' ? '重复通知已抑制'
+      : (r.error || '通知未配置');
+    toast(r.sent ? '已发送通知' : '未发送：'+why);
+  } catch(e){ toast('通知失败：'+e.message); }
+}
+async function ack(id){
+  try { await api(`/api/ops/ai/incidents/${encodeURIComponent(id)}/ack`, {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); toast('已认领'); await load(); }
+  catch(e){ toast('认领失败：'+e.message); }
+}
+async function resolve(id){
+  try { await api(`/api/ops/ai/incidents/${encodeURIComponent(id)}/resolve`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note:'页面标记解决'})}); toast('已标记解决'); await load(); }
+  catch(e){ toast('操作失败：'+e.message); }
+}
+async function reset(){
+  try { await api('/api/ops/ai/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); await load(); toast('已重置'); }
+  catch(e){ toast('重置失败：'+e.message); }
+}
+$('#btnGray').onclick = () => demo('gray');
+$('#btnBlack').onclick = () => demo('black');
+$('#btnMixed').onclick = () => demo('mixed');
+$('#btnReset').onclick = reset;
+load();
+</script>
+</body>
+</html>

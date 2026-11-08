@@ -109,6 +109,16 @@ PYTHONPATH=. .venv/bin/python scripts/eval_ops.py
 
 结果写入 `data/ops_eval.json`，也可在 `/ops-eval` 页面复跑。合成数据只验证规则/流程，不代表真实客户效果。
 
+运维智能自检（灰犀牛 / 黑天鹅 / AI 研判 / Runbook）：
+
+```bash
+make aiops-test
+# 或
+PYTHONPATH=. .venv/bin/python scripts/test_aiops.py
+```
+
+页面：`/ops-ai`；接口：`/api/ops/ai/*`；说明：`docs/AIOps运维能力.md`。
+
 ### 演示前预热（必做）
 
 ```bash

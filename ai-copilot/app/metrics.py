@@ -183,4 +183,17 @@ def render() -> str:
                 f'route="{_esc(route)}"}} {int(n)}'
             )
 
+    try:
+        from . import aiops
+        s = aiops.summary()
+        lines += _family("copilot_aiops_risks_open", [(None, s["risks"])],
+                         kind="gauge", help_text="未关闭的灰犀牛风险数")
+        lines += _family("copilot_aiops_incidents_open", [
+            ({"severity": "P0"}, s["p0"]),
+            ({"severity": "P1"}, s["p1"]),
+            ({"severity": "all"}, s["incidents"]),
+        ], kind="gauge", help_text="未关闭的黑天鹅事件数")
+    except Exception:  # noqa: BLE001
+        pass
+
     return "\n".join(lines) + "\n"

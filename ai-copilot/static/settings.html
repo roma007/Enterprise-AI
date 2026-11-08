@@ -201,8 +201,10 @@ function render(){
               ${it.lines ? `<textarea rows="${it.lines}" data-key="${esc(it.key)}" data-old="${esc(it.value)}"
                      ${admin ? '' : 'disabled'}>${esc(it.value)}</textarea>`
                 : `<input type="text" data-key="${esc(it.key)}" data-old="${esc(it.value)}"
-                     value="${esc(it.value)}" ${admin ? '' : 'disabled'} />`}
-              <div class="sub2">${it.secret ? '密钥类，导出配置时不会带出' : (it.lines ? '占位符按客户自动替换 · 即时生效' : '即时生效')}</div>
+                     value="${esc(it.value)}"
+                     placeholder="${it.secret ? (it.configured ? '已配置，留空不修改' : '未配置') : ''}"
+                     ${admin ? '' : 'disabled'} />`}
+              <div class="sub2">${it.secret ? '密钥类，接口/导出不回显；留空表示不修改' : (it.lines ? '占位符按客户自动替换 · 即时生效' : '即时生效')}</div>
             ` : it.type === 'bool' ? `
               <input type="checkbox" class="switch" data-key="${esc(it.key)}"
                      data-old="${it.value ? 1 : 0}" ${it.value ? 'checked' : ''} ${admin ? '' : 'disabled'} />
@@ -216,6 +218,12 @@ function render(){
           </div>
         </div>`).join('')}
     </div>
+    ${g.name === 'TMS 写回' ? `
+      <div class="testbar">
+        ${admin ? '<button data-test="TMS">测试连接</button>' : ''}
+        <span class="res" id="res-TMS"></span>
+      </div>
+      <div class="note">发送一份固定契约的测试 JSON；不会建单，也不写发件箱。</div>` : ''}
     ${g.name === '通知与告警' ? `
       <div class="testbar">
         ${admin ? '<button data-test="通知">发送测试消息</button>' : ''}
@@ -374,7 +382,7 @@ async function rollback(id, btn){
 async function testConn(name, btn){
   const res = $('#res-' + CSS.escape(name));
   const target = name === '模型' ? 'llm' : name === '企业微信' ? 'wecom'
-               : name === '通知' ? 'notify' : 'storage';
+               : name === '通知' ? 'notify' : name === 'TMS' ? 'tms' : 'storage';
   btn.disabled = true; if(res){ res.className = 'res'; res.textContent = '测试中…'; }
   try{
     const ctrl = new AbortController();
@@ -387,6 +395,11 @@ async function testConn(name, btn){
       if(target === 'notify'){
         res.textContent = r.sent ? '测试消息已发送' : ('未发送：' + (r.error || r.skipped || '未知原因'));
         res.className = 'res ' + (r.sent ? 'ok' : 'err');
+      } else if(target === 'tms'){
+        res.textContent = r.ok
+          ? `TMS 接收正常 · ${r.elapsed_ms} ms`
+          : '失败：' + (r.error || r.status || '未知错误');
+        res.className = 'res ' + (r.ok ? 'ok' : 'err');
       } else {
         res.textContent = r.ok
           ? `连接正常 · ${r.elapsed_ms} ms${r.model ? ' · ' + r.model : ''}${r.backend ? ' · ' + r.backend : ''}`

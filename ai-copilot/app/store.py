@@ -140,6 +140,23 @@ CREATE TABLE IF NOT EXISTS delivery_outbox (
     lease_until     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON delivery_outbox(status, created_at);
+CREATE TABLE IF NOT EXISTS tms_outbox (
+    id              TEXT PRIMARY KEY,
+    created_at      TEXT NOT NULL,
+    run_id          TEXT NOT NULL,
+    version         INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    payload_json    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    last_error      TEXT,
+    response_json   TEXT,
+    sent_at         TEXT,
+    worker          TEXT,
+    lease_until     INTEGER,
+    UNIQUE (run_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_tms_outbox_status ON tms_outbox(status, created_at);
 CREATE TABLE IF NOT EXISTS app_settings (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL,

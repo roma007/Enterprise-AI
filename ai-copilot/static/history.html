@@ -29,6 +29,8 @@
   button{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:7px;border:1px solid var(--line);background:#fff;cursor:pointer}
   button.danger{border-color:#f0c2c2;color:var(--err)}
   button.danger:hover{background:#fde8e8}
+  button.tms{border-color:#bfe3cd;color:#1e7b45}
+  button.tms:hover{background:#e6f4ea}
   .rev{background:#fafbfc}
   .rev table{font-size:12px}
   .rev td{padding:6px 10px;border-bottom:1px solid #eef1f4}
@@ -116,7 +118,9 @@ async function load(){
     $('#list').innerHTML = '<tr><td class="empty">还没有已确认的单据。去工作台确认一张单，这里就会出现。</td></tr>';
     return;
   }
+  const tmsOn = !!(d.tms && d.tms.enabled);
   $('#list').innerHTML = `
+    ${tmsOn ? '<tr><td colspan="6" style="background:#e6f4ea;color:#1e7b45;font-size:12.5px">TMS 写回已启用：已确认单据可推送到配置的接收地址；失败会进发件箱重试。</td></tr>' : ''}
     <tr><th>时间</th><th>单号/预览</th><th>级别</th><th>确认人</th><th>版本</th><th>操作</th></tr>
     ${d.items.map(r => `
       <tr class="run" data-id="${esc(r.id)}">
@@ -127,6 +131,7 @@ async function load(){
         <td>${r.version}</td>
         <td>
           <button class="detail" data-id="${esc(r.id)}">修订</button>
+          ${tmsOn ? `<button class="tms push-tms" data-id="${esc(r.id)}">推送 TMS</button>` : ''}
           ${ME.role === 'admin' ? `<button class="danger undo" data-id="${esc(r.id)}" data-version="${r.version}">撤销</button>` : ''}
         </td>
       </tr>
@@ -145,6 +150,16 @@ async function load(){
     }catch(e){
       tr.firstElementChild.innerHTML = '<div class="chg" style="padding:8px">' + esc(e.message) + '</div>';
     }
+  });
+
+  document.querySelectorAll('.push-tms').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try{
+      const r = await j('/api/tms/push/' + b.dataset.id, {method:'POST'});
+      const st = r.result?.details?.[0]?.status || r.status || 'pending';
+      toast(st === 'sent' ? '已推送到 TMS' : `已进发件箱，状态 ${st}；稍后自动重试`);
+    }catch(e){ toast('推送失败：' + e.message); }
+    finally{ b.disabled = false; }
   });
 
   document.querySelectorAll('.undo').forEach(b => b.onclick = async () => {

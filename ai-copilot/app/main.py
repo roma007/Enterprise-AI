@@ -59,6 +59,8 @@ def _startup() -> None:
     delivery.start_worker()
     from .notify import start_watcher as start_notify_watcher
     start_notify_watcher()
+    from .tms import start_worker as start_tms_worker
+    start_tms_worker()
     if count_users() == 0:
         email = os.getenv("ADMIN_EMAIL", "admin@local").strip() or "admin@local"
         pw = os.getenv("ADMIN_PASSWORD", "").strip()
@@ -350,6 +352,46 @@ def api_config_test_wecom():
         }
     except Exception as exc:  # noqa: BLE001 — 外部接口失败要给人话
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+
+@app.post("/api/config/test/tms")
+def api_config_test_tms():
+    from .tms import test_endpoint
+
+    return test_endpoint()
+
+
+@app.get("/api/tms/status")
+def api_tms_status():
+    from .tms import status
+
+    return status()
+
+
+@app.get("/api/tms/outbox")
+def api_tms_outbox(limit: int = 20):
+    from .tms import recent
+
+    return {"items": recent(limit)}
+
+
+@app.post("/api/tms/push/{run_id}")
+def api_tms_push(run_id: str):
+    from .tms import push
+
+    try:
+        return push(run_id)
+    except (LookupError,) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/tms/flush")
+def api_tms_flush():
+    from .tms import flush
+
+    return flush()
 
 
 @app.post("/api/config/test/notify")
@@ -803,7 +845,9 @@ def api_undo(run_id: str, req: UndoReq, request: Request):
 
 @app.get("/api/runs/confirmed")
 def api_runs_confirmed(limit: int = 100):
-    return {"items": confirmed_recent(limit)}
+    from .tms import status as tms_status
+
+    return {"items": confirmed_recent(limit), "tms": tms_status()}
 
 
 @app.get("/api/runs/{run_id}/revisions")

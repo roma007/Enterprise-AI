@@ -200,6 +200,23 @@ SPECS: list[dict] = [
      "min": 0, "max": 1440, "step": 1,
      "label": "重复抑制（分钟）",
      "hint": "同一事件 + 同一 key 在窗口内只发一次"},
+
+    # ---- TMS 写回（通用适配层）----
+    {"key": "tms.enabled", "group": "TMS 写回", "type": "bool", "default": 0.0,
+     "label": "启用 TMS 写回",
+     "hint": "开启后可在确认历史里把已确认单据推送到客户 TMS；关闭时只保留发件箱记录"},
+    {"key": "tms.endpoint", "group": "TMS 写回", "type": "text", "default": "",
+     "max_len": 500,
+     "label": "TMS 接收地址",
+     "hint": "客户 TMS 或中间适配器的 HTTP 地址；发的是一份固定契约 JSON"},
+    {"key": "tms.token", "group": "TMS 写回", "type": "text", "default": "",
+     "secret": True, "max_len": 300,
+     "label": "TMS 访问令牌",
+     "hint": "以 Authorization: Bearer 发送；导出配置时不会带出"},
+    {"key": "tms.timeout_sec", "group": "TMS 写回", "default": 10,
+     "min": 1, "max": 60, "step": 1,
+     "label": "TMS 超时（秒）",
+     "hint": "超时按可重试处理；4xx 直接标记失败，不反复重试"},
 ]
 
 BY_KEY = {s["key"]: s for s in SPECS}
@@ -360,7 +377,12 @@ def snapshot() -> dict:
         elif kind == "list":
             item["value"] = get_list(spec["key"])
         elif kind == "text":
-            item["value"] = get_text(spec["key"])
+            if spec.get("secret"):
+                # 密钥类只回显“是否已配置”，接口和页面都不返回明文。
+                item["configured"] = bool(get_text(spec["key"]))
+                item["value"] = ""
+            else:
+                item["value"] = get_text(spec["key"])
         else:
             item["value"] = get(spec["key"])
         if spec["key"] not in values:
@@ -421,6 +443,8 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
                 raise ValueError(f"{spec['label']} 太长（最多 {spec.get('max_len', 500)} 字）")
             if spec["key"] == "notify.webhook" and text and not text.startswith(("http://", "https://")):
                 raise ValueError("Webhook 必须以 http:// 或 https:// 开头")
+            if spec["key"] == "tms.endpoint" and text and not text.startswith(("http://", "https://")):
+                raise ValueError("TMS 接收地址必须以 http:// 或 https:// 开头")
             if spec["key"] == "notify.quiet_hours" and text:
                 m = __import__("re").fullmatch(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)", text)
                 if not m:
@@ -487,8 +511,10 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
             if spec.get("type") == "text":
                 old_text = get_text(k)
                 if old_text != new_value:
+                    secret = bool(spec.get("secret"))
                     changes.append({"key": k, "label": spec["label"],
-                                    "old": old_text, "new": new_value})
+                                    "old": ("••••" if old_text else "（未配置）") if secret else old_text,
+                                    "new": "••••" if secret else new_value})
                 continue
             old_value = get(k)
             if abs(float(old_value) - float(new_value)) > 1e-9:
@@ -515,7 +541,8 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
                 current.pop(k)
         _write({"values": current, "updated_at": _now(), "updated_by": actor})
         _record(actor, changes, reason)
-    return {"ok": True, "changed": list(clean), "values": current}
+    public = {k: ("" if BY_KEY[k].get("secret") else v) for k, v in current.items()}
+    return {"ok": True, "changed": list(clean), "values": public}
 
 
 def reset(keys: list[str] | None = None, actor: str = "", reason: str = "") -> dict:
@@ -536,8 +563,10 @@ def reset(keys: list[str] | None = None, actor: str = "", reason: str = "") -> d
             elif spec.get("type") == "text":
                 old_text = get_text(k)
                 if old_text != str(spec["default"]):
+                    secret = bool(spec.get("secret"))
                     changes.append({"key": k, "label": spec["label"],
-                                    "old": old_text, "new": str(spec["default"])})
+                                    "old": ("••••" if old_text else "（未配置）") if secret else old_text,
+                                    "new": "••••" if secret else str(spec["default"])})
             else:
                 old_value = get(k)
                 default = float(spec["default"])
@@ -551,7 +580,8 @@ def reset(keys: list[str] | None = None, actor: str = "", reason: str = "") -> d
             current.pop(k, None)
         _write({"values": current, "updated_at": _now(), "updated_by": actor})
         _record(actor, changes, reason or "恢复默认")
-    return {"ok": True, "values": current}
+    public = {k: ("" if BY_KEY[k].get("secret") else v) for k, v in current.items()}
+    return {"ok": True, "values": public}
 
 
 def rollback(entry_id: str, actor: str = "", reason: str = "") -> dict:

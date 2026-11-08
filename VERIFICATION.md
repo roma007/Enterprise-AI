@@ -668,6 +668,28 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 
 ---
 
+### 5.31 TMS 通用写回适配层（AI-37）
+
+- 配置项从 31 项扩到 **35 项**：`tms.enabled`、`tms.endpoint`、`tms.token`、`tms.timeout_sec`。
+- 新增 `app/tms.py`：
+  - 固定契约 `schema=ai-copilot/tms-generic-v1`，字段为 `booking.*`。
+  - `tms_outbox` 发件箱；按 `run_id+version` 幂等。
+  - 2xx → sent；4xx → failed（不重试）；5xx / 网络 → pending（后台重试）。
+- 实测（本地 mock TMS `scripts/mock_tms.py`，token `dev-token`）：
+  - 测试连接：`ok=true`、`status=sent`、52 ms。
+  - 推送已确认单 `bb68767f367e`：`sent`，mock 收到 17 个字段；再次推送 `created=false`，不重复发。
+  - 把 endpoint 指向 `/fail`：HTTP 500 → `pending`、attempts=1；改回 `/hook` 后 `flush` → `sent`。
+  - 把 endpoint 指向 `/nope`：HTTP 404 → `failed`、attempts=1；改回 `/hook` 再推同一单 → `sent`。
+  - 关闭 TMS 后推送：422 `TMS 写回未启用或未配置 endpoint`。
+  - 页面：`/history` 出现「TMS 写回已启用」提示和 4 个「推送 TMS」按钮；点击提示「已推送到 TMS」，控制台 0 错误。
+  - `/settings`：TMS 分组显示 4 项；测试连接可用。
+- 顺带修复：密钥类配置不再通过 `/api/settings` 回显明文；`tms.token` / `notify.webhook`
+  返回 `value=""`、`configured=true/false`，导出配置跳过；PUT 响应与变更历史也脱敏为 `••••`；页面留空表示不修改。
+- `./scripts/smoke.sh` **16/16 通过**。
+- 边界：**没有对接真实客户 TMS**；AI-26 保持 `[ ]`，需客户接口文档与字段映射。
+
+---
+
 ## 6. 未验证 / 阻塞项
 
 | 项 | 状态 | 说明 |

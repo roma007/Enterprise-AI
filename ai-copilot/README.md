@@ -297,6 +297,7 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 | **脱敏（B4）**：公司/人名/手机/身份证/报关号自动替换，映射表持久化 | `app/masking.py` | `/api/mask` |
 | **批量导入（B5）**：一次传 N 份，后台处理，进度与失败重试 | `app/batchproc.py` | `/batch`、`/api/batches/*` |
 | **批量金标（AI-24）**：导出 gold 模板、导入比对、结果落盘 | `app/batchgold.py` | `/api/batches/{id}/gold.csv`、`/gold-eval` |
+| **通知（AI-34/38）**：企微群机器人 + 邮件（SMTP），事件订阅、静默、去重 | `app/notify.py`、`scripts/mock_smtp.py` | `/api/config/test/{notify,email}` |
 | **TMS 通用写回（AI-37）**：固定契约 + 发件箱 + 幂等 + 重试；真实接口待客户文档 | `app/tms.py`、`scripts/mock_tms.py` | `/api/tms/*`、确认历史「推送 TMS」 |
 | **分层抽样（B6）**：月份×客户×格式分层，输出可打印清单 | `app/sampling.py` | `/api/sampling/*`、`make sample` |
 | **跨批次失败队列（B7）**：失败项集中可见、一键重排 | `app/store.py` `failed_items` | `/api/batches/failed`、`retry-all` |

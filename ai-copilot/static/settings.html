@@ -382,7 +382,8 @@ async function rollback(id, btn){
 async function testConn(name, btn){
   const res = $('#res-' + CSS.escape(name));
   const target = name === '模型' ? 'llm' : name === '企业微信' ? 'wecom'
-               : name === '通知' ? 'notify' : name === 'TMS' ? 'tms' : 'storage';
+               : name === '通知' ? 'notify' : name === 'TMS' ? 'tms'
+               : name === '邮件（SMTP）' ? 'email' : 'storage';
   btn.disabled = true; if(res){ res.className = 'res'; res.textContent = '测试中…'; }
   try{
     const ctrl = new AbortController();
@@ -399,6 +400,9 @@ async function testConn(name, btn){
         res.textContent = r.ok
           ? `TMS 接收正常 · ${r.elapsed_ms} ms`
           : '失败：' + (r.error || r.status || '未知错误');
+        res.className = 'res ' + (r.ok ? 'ok' : 'err');
+      } else if(target === 'email'){
+        res.textContent = r.ok ? '测试邮件已发送' : ('失败：' + (r.error || '未知错误'));
         res.className = 'res ' + (r.ok ? 'ok' : 'err');
       } else {
         res.textContent = r.ok

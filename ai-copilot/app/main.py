@@ -305,6 +305,20 @@ def api_config_integrations():
                 {"key": "wecom.image_max_mb", "label": "图片上限（MB）",
                  "value": s.wecom_image_max_mb},
             ]},
+            {"name": "邮件（SMTP）", "items": [
+                {"key": "smtp.host", "label": "SMTP 主机",
+                 "value": s.smtp_host, "configured": bool(s.smtp_host)},
+                {"key": "smtp.port", "label": "端口", "value": s.smtp_port},
+                {"key": "smtp.user", "label": "账号",
+                 "value": _mask_value(s.smtp_user, 3), "configured": bool(s.smtp_user)},
+                {"key": "smtp.password", "label": "密码",
+                 "value": _mask_value(s.smtp_password), "configured": bool(s.smtp_password),
+                 "secret": True},
+                {"key": "smtp.from", "label": "发件人", "value": s.smtp_from or "（默认同账号）"},
+                {"key": "smtp.tls", "label": "SSL", "value": "开" if s.smtp_tls else "关"},
+                {"key": "smtp.starttls", "label": "STARTTLS",
+                 "value": "开" if s.smtp_starttls else "关"},
+            ]},
             {"name": "存储", "items": [
                 {"key": "storage.backend", "label": "后端", "value": storage.BACKEND},
                 {"key": "storage.dir", "label": "本地目录", "value": str(storage.BASE)},
@@ -352,6 +366,14 @@ def api_config_test_wecom():
         }
     except Exception as exc:  # noqa: BLE001 — 外部接口失败要给人话
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+
+@app.post("/api/config/test/email")
+def api_config_test_email():
+    from .notify import _send_email
+
+    ok, error = _send_email("智单邮件测试", "收到这封邮件说明 SMTP 配置有效。")
+    return {"ok": ok, "error": error}
 
 
 @app.post("/api/config/test/tms")

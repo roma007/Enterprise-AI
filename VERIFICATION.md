@@ -691,6 +691,22 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 
 ---
 
+### 5.32 邮件告警渠道（AI-38）
+
+- 配置项从 35 项扩到 **37 项**：`notify.channels`（webhook / email 多选）、`notify.email_to`。
+- 部署级：`SMTP_HOST/PORT/USER/PASSWORD/FROM/TLS/STARTTLS/TIMEOUT` 放 `.env`。
+- 实测（本地 `scripts/mock_smtp.py`，`SMTP_HOST=127.0.0.1:8025`）：
+  - 渠道只勾「邮件」、收件人 `ops@example.com,finance@example.com` → 测试发送 `sent=true`。
+  - mock 收到 1 封，收件人两个都在；主题 `[智单] 智单通知测试`。
+  - `/api/config/test/email` 单独测试 → `ok=true`。
+  - 清空收件人 → `sent=false / 未配置邮件收件人`，只记录不抛异常。
+  - 渠道填 `sms` → 422「通知渠道 含未知项：sms」。
+  - 企微 webhook 渠道逻辑保持不变；未配置 webhook 时只报该渠道错误。
+- 顺带修复：列表配置校验支持 `options`，不再只认托书字段（否则 `webhook/email` 会被拒）。
+- `./scripts/smoke.sh` **16/16 通过**。
+
+---
+
 ## 6. 未验证 / 阻塞项
 
 | 项 | 状态 | 说明 |

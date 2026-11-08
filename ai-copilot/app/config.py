@@ -84,6 +84,16 @@ class Settings:
     # 图像增强（D2）：多版本 OCR。关掉可省时间，但糊图识别率会明显下降
     ocr_enhance: bool = os.getenv("OCR_ENHANCE", "1").strip() not in {"0", "false", "off"}
 
+    # 邮件告警（部署级）：SMTP 主机/账号放 .env；收件人放运行级配置
+    smtp_host: str = os.getenv("SMTP_HOST", "").strip()
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user: str = os.getenv("SMTP_USER", "").strip()
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from: str = os.getenv("SMTP_FROM", "").strip()
+    smtp_tls: bool = os.getenv("SMTP_TLS", "0").strip() not in {"0", "false", "off"}
+    smtp_starttls: bool = os.getenv("SMTP_STARTTLS", "1").strip() not in {"0", "false", "off"}
+    smtp_timeout: float = float(os.getenv("SMTP_TIMEOUT", "10"))
+
     # 进程内固定，重启才变；用于网关侧的会话粘性与计费归集
     session_id: str = os.getenv("LLM_SESSION_ID", "").strip() or ("ses_" + uuid.uuid4().hex[:24])
 

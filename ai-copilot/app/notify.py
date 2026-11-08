@@ -1,9 +1,10 @@
-"""站内记录 + 企微群机器人通知。
+"""站内记录 + 企微群机器人 + 邮件通知。
 
 设计边界：
 - 通知是「告知」，不是「审批」；发不出去不能阻断业务主流程。
 - 事件、渠道、静默时段、重复抑制都可配；关闭时只记录不发送。
-- Webhook 属于密钥，导出配置时不带出。
+- Webhook 与 SMTP 密码属于密钥，导出配置时不带出。
+- 邮件主机/账号是部署级配置（.env）；收件人是运行级配置。
 """
 from __future__ import annotations
 
@@ -105,6 +106,44 @@ def recent(limit: int = 20) -> list[dict]:
     return out
 
 
+def _send_email(title: str, detail: str) -> tuple[bool, str]:
+    from .config import settings
+
+    if not settings.smtp_host:
+        return False, "未配置 SMTP_HOST"
+    recipients = [x.strip() for x in th.get_text("notify.email_to").replace("，", ",").split(",")
+                  if x.strip()]
+    if not recipients:
+        return False, "未配置邮件收件人"
+    from_addr = settings.smtp_from or settings.smtp_user or "noreply@zhidan.local"
+    try:
+        import smtplib
+        from email.message import EmailMessage
+
+        msg = EmailMessage()
+        msg["Subject"] = f"[智单] {title}"
+        msg["From"] = from_addr
+        msg["To"] = ", ".join(recipients)
+        msg.set_content(detail or title)
+        if settings.smtp_tls:
+            server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port,
+                                      timeout=settings.smtp_timeout)
+        else:
+            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port,
+                                  timeout=settings.smtp_timeout)
+            if settings.smtp_starttls:
+                server.starttls()
+        try:
+            if settings.smtp_user:
+                server.login(settings.smtp_user, settings.smtp_password)
+            server.send_message(msg)
+        finally:
+            server.quit()
+        return True, ""
+    except Exception as exc:  # noqa: BLE001 — 通知失败不能影响主流程
+        return False, f"{type(exc).__name__}: {exc}"[:200]
+
+
 def _send_webhook(url: str, title: str, detail: str) -> tuple[bool, str]:
     try:
         import httpx
@@ -135,13 +174,31 @@ def notify(event: str, title: str, detail: str = "", key: str = "",
     if not force and not _dedup_ok(dedup_key, int(th.get("notify.dedup_min"))):
         return {"ok": True, "sent": False, "skipped": "dedup"}
 
-    url = th.get_text("notify.webhook").strip()
+    channels = th.get_list("notify.channels")
     quiet = in_quiet() and not force
-    sent, error = False, ""
-    if url and not quiet:
-        sent, error = _send_webhook(url, title, detail)
-    elif not url:
-        error = "未配置 webhook"
+    results: dict[str, dict] = {}
+    if quiet:
+        pass
+    elif not channels:
+        results["_"] = {"ok": False, "error": "未选择通知渠道"}
+    else:
+        for channel in channels:
+            if channel == "webhook":
+                url = th.get_text("notify.webhook").strip()
+                if not url:
+                    results[channel] = {"ok": False, "error": "未配置 webhook"}
+                else:
+                    ok, err = _send_webhook(url, title, detail)
+                    results[channel] = {"ok": ok, "error": err}
+            elif channel == "email":
+                ok, err = _send_email(title, detail)
+                results[channel] = {"ok": ok, "error": err}
+            else:
+                results[channel] = {"ok": False, "error": "未知渠道"}
+
+    sent = any(v.get("ok") for v in results.values())
+    errors = [f"{k}: {v.get('error')}" for k, v in results.items() if v.get("error")]
+    error = "; ".join(errors)[:300]
 
     entry = {
         "ts": _now(),
@@ -153,18 +210,20 @@ def notify(event: str, title: str, detail: str = "", key: str = "",
         "quiet": quiet,
         "sent": sent,
         "error": error,
+        "channels": results,
     }
     with _LOCK:
         _log(entry)
-    return {"ok": not error or not url, "sent": sent, "quiet": quiet,
-            "skipped": "quiet" if quiet else "", "error": error}
+    return {"ok": sent, "sent": sent, "quiet": quiet,
+            "skipped": "quiet" if quiet else "", "error": error,
+            "channels": results}
 
 
 def _bypass_loop() -> None:
     time.sleep(300)
     while True:
         try:
-            if th.get_bool("notify.enabled") and th.get_text("notify.webhook"):
+            if th.get_bool("notify.enabled") and th.get_list("notify.channels"):
                 from .store import metrics
 
                 data = metrics(th.get("metrics.baseline_manual_sec"))

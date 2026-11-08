@@ -180,10 +180,22 @@ SPECS: list[dict] = [
     {"key": "notify.enabled", "group": "通知与告警", "type": "bool", "default": 0.0,
      "label": "启用通知",
      "hint": "关闭时只记录事件，不外发；开启后按下面的事件与渠道发送"},
+    {"key": "notify.channels", "group": "通知与告警", "type": "list",
+     "default": ["webhook"],
+     "options": [
+         {"key": "webhook", "label": "企微群机器人"},
+         {"key": "email", "label": "邮件（SMTP）"},
+     ],
+     "label": "通知渠道",
+     "hint": "可多选；邮件需要 .env 配置 SMTP 主机与账号"},
     {"key": "notify.webhook", "group": "通知与告警", "type": "text", "default": "",
      "secret": True, "max_len": 500,
      "label": "企微群机器人 Webhook",
      "hint": "群机器人地址；导入导出配置时不会带出该值"},
+    {"key": "notify.email_to", "group": "通知与告警", "type": "text", "default": "",
+     "max_len": 500,
+     "label": "邮件收件人",
+     "hint": "多个地址用逗号分隔；仅在勾选「邮件」渠道时使用"},
     {"key": "notify.events", "group": "通知与告警", "type": "list",
      "default": ["batch_failed", "wecom_image_failed", "bypass_alert"],
      "options": [
@@ -467,9 +479,10 @@ def set_many(values: dict, actor: str = "", reason: str = "") -> dict:
             keys = sorted({str(x).strip() for x in items if str(x).strip()})
             if not keys:
                 raise ValueError(f"{spec['label']} 至少要保留 1 项")
-            invalid = [x for x in keys if x not in SPEC_MAP]
+            allowed = {str(o["key"]) for o in spec.get("options", [])} or set(SPEC_MAP)
+            invalid = [x for x in keys if x not in allowed]
             if invalid:
-                raise ValueError(f"{spec['label']} 含未知字段：{', '.join(invalid)}")
+                raise ValueError(f"{spec['label']} 含未知项：{', '.join(invalid)}")
             clean[k] = keys
             continue
         if spec.get("type") == "bool":

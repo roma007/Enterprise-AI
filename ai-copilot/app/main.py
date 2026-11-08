@@ -2189,6 +2189,48 @@ def api_aging_draft(req: dict):
                  overdue=overdue, days=days)
 
 
+@app.post("/api/margin")
+def api_margin(req: dict):
+    """成本归集 + 单车/单票毛利。费用优先按单号，其次车辆+日期。"""
+    from .margin import analyze, parse_costs, parse_revenue
+
+    revenue_text = str(req.get("revenue") or "").strip()
+    cost_text = str(req.get("costs") or "").strip()
+    if not revenue_text or not cost_text:
+        raise HTTPException(status_code=400, detail="应收和费用都不能为空")
+    revenue_rows = parse_revenue(revenue_text)
+    cost_rows = parse_costs(cost_text)
+    if not revenue_rows:
+        raise HTTPException(status_code=422, detail="未解析出应收记录")
+    if not cost_rows:
+        raise HTTPException(status_code=422, detail="未解析出费用记录")
+    return analyze(revenue_rows, cost_rows)
+
+
+@app.get("/api/margin/demo")
+def api_margin_demo():
+    from .margin import demo
+
+    return demo()
+
+
+@app.post("/api/margin/export.csv", response_class=PlainTextResponse)
+def api_margin_export(req: dict):
+    from .margin import analyze, export_csv, parse_costs, parse_revenue
+
+    revenue_text = str(req.get("revenue") or "").strip()
+    cost_text = str(req.get("costs") or "").strip()
+    if not revenue_text or not cost_text:
+        raise HTTPException(status_code=400, detail="应收和费用都不能为空")
+    result = analyze(parse_revenue(revenue_text), parse_costs(cost_text))
+    return export_csv(result)
+
+
+@app.get("/margin")
+def margin_page():
+    return FileResponse(ROOT / "static" / "margin.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

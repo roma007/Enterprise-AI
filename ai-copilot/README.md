@@ -305,6 +305,7 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 | **三单匹配**：订单↔运单↔发票，箱号/金额/客户/箱量四维核对 | `app/threeway.py` | `/threeway`、`/api/threeway/*` |
 | **账单级自动对账**：对账单 ↔ 系统运单双向比对，四类差异定位 | `app/reconcile.py` | `/reconcile`、`/api/reconcile/*` |
 | **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
+| **成本归集 / 单车毛利（C1）**：应收 + 费用 → 单票/单车毛利；单号优先、车辆+日期兜底 | `app/margin.py` | `/margin`、`/api/margin/*` |
 | **账龄与催收**：四档账龄 + 客户风险分级 + 催收话术模板（可选 AI 润色，数字由规则锁定） | `app/aging.py`、`app/advice_ai.py` | `/aging`、`/api/aging/*` |
 | **外协结算**：合同价 × 数量 = 应付，与车队报账比对 | `app/settlement.py` | `/settlement`、`/api/settlement/*` |
 | **对账单/结算单抽取（试点一）**：文本/CSV + PDF/图片 OCR → 标准 JSON；差异解释可接大模型 | `app/statement.py`、`app/settlement_extract.py`、`app/diff_explain.py` | `/api/statement/extract`、`/api/settlement/extract`、`explain=true` |

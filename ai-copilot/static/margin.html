@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 单车毛利</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1240px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px}
+  .box{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .box b{display:block;font-size:12px;padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:180px;border:0;padding:10px;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;outline:none;resize:vertical;background:#fcfcfd;color:var(--ink)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:120px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:19px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag{padding:2px 9px;border-radius:999px;font-size:11.5px;white-space:nowrap}
+  .f-正常{background:#e6f4ea;color:var(--ok)}
+  .f-低毛利{background:#fdf3e2;color:var(--warn)}
+  .f-亏损{background:#fde8e8;color:var(--err)}
+  .f-无成本记录{background:#eef1f4;color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:10px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  .empty{padding:22px;color:var(--muted);text-align:center;font-size:13px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108a" />
+<script src="/static/nav.js?v=20261108a" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>单车毛利</h1>
+  <span class="sub">应收 − 归集成本 → 单票 / 单车毛利</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 应收与费用（CSV / Excel 粘贴）</h2>
+    <div class="grid">
+      <div class="box">
+        <b>应收：日期,单号,车辆,客户,应收</b>
+        <textarea id="revenue" placeholder="日期,单号,车辆,客户,应收"></textarea>
+      </div>
+      <div class="box">
+        <b>费用：日期,车辆,单号,科目,金额（单号可空）</b>
+        <textarea id="costs" placeholder="日期,车辆,单号,科目,金额"></textarea>
+      </div>
+    </div>
+    <div class="bar">
+      <button class="primary" id="btnRun">分析</button>
+      <button id="btnDemo">加载演示数据</button>
+      <button id="btnExport">导出</button>
+      <span class="hint" id="hint"></span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 总览</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="warn" id="warn"></div>
+  </section>
+
+  <section class="card" id="orders" style="display:none">
+    <h2>③ 订单毛利</h2>
+    <div style="padding:0 14px 14px"><table id="orderTable"></table></div>
+  </section>
+
+  <section class="card" id="trucks" style="display:none">
+    <h2>④ 车辆汇总</h2>
+    <div style="padding:0 14px 14px"><table id="truckTable"></table></div>
+  </section>
+
+  <section class="card" id="unalloc" style="display:none">
+    <h2>⑤ 待分摊成本</h2>
+    <div style="padding:0 14px 14px"><table id="unallocTable"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+let LAST = null;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function render(r){
+  LAST = r;
+  const s = r.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${money(s.revenue)}</b><span>应收</span></div>
+    <div><b>${money(s.cost)}</b><span>归集成本</span></div>
+    <div><b style="color:${s.profit<0?'var(--err)':'var(--ok)'}">${money(s.profit)}</b><span>毛利</span></div>
+    <div><b>${(s.margin*100).toFixed(1)}%</b><span>毛利率</span></div>
+    <div><b>${s.orders}</b><span>订单数</span></div>
+    <div><b style="color:${s.unallocated?'var(--warn)':'inherit'}">${money(s.unallocated)}</b><span>待分摊成本</span></div>`;
+  $('#warn').textContent = (r.synthetic ? '【合成演示】' : '') + r.warning;
+
+  $('#orderTable').innerHTML = '<tr><th>日期</th><th>单号</th><th>车辆</th><th>客户</th>'
+    + '<th>应收</th><th>成本</th><th>毛利</th><th>毛利率</th><th>标记</th></tr>' +
+    r.items.map(x=>`<tr>
+      <td>${esc(x.date)}</td><td>${esc(x.order_no)}</td><td>${esc(x.truck)}</td><td>${esc(x.client)}</td>
+      <td>${money(x.revenue)}</td><td>${money(x.cost)}</td>
+      <td style="color:${x.profit<0?'var(--err)':'inherit'}">${money(x.profit)}</td>
+      <td>${(x.margin*100).toFixed(1)}%</td>
+      <td><span class="tag f-${esc(x.flag)}">${esc(x.flag)}</span></td></tr>`).join('');
+
+  $('#truckTable').innerHTML = '<tr><th>车辆</th><th>单数</th><th>应收</th><th>成本</th><th>毛利</th><th>毛利率</th></tr>' +
+    r.trucks.map(x=>`<tr><td>${esc(x.truck)}</td><td>${x.orders}</td><td>${money(x.revenue)}</td>
+      <td>${money(x.cost)}</td><td style="color:${x.profit<0?'var(--err)':'inherit'}">${money(x.profit)}</td>
+      <td>${(x.margin*100).toFixed(1)}%</td></tr>`).join('');
+
+  const un = r.unallocated_items || [];
+  $('#unalloc').style.display = un.length ? 'block' : 'none';
+  $('#unallocTable').innerHTML = '<tr><th>日期</th><th>车辆</th><th>科目</th><th>金额</th><th>原因</th></tr>' +
+    un.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.truck)}</td><td>${esc(x.category)}</td>
+      <td>${money(x.amount)}</td><td style="color:var(--muted)">${esc(x.reason)}</td></tr>`).join('');
+
+  ['out','orders','trucks'].forEach(id => $('#'+id).style.display = 'block');
+}
+
+async function run(){
+  const revenue = $('#revenue').value.trim();
+  const costs = $('#costs').value.trim();
+  if(!revenue || !costs){ toast('应收和费用都要填'); return; }
+  $('#btnRun').disabled = true; $('#hint').textContent = '分析中…';
+  try{
+    const r = await fetch('/api/margin', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({revenue, costs})});
+    if(!r.ok){ toast('分析失败：' + (await r.text()).slice(0,100)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled = false; $('#hint').textContent = ''; }
+}
+
+$('#btnRun').onclick = run;
+
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/margin/demo')).json();
+  $('#revenue').value = d.revenue_text;
+  $('#costs').value = d.cost_text;
+  render(d.result);
+  toast('已加载合成演示数据，不代表真实毛利');
+};
+
+$('#btnExport').onclick = async () => {
+  if(!LAST){ toast('先分析一次'); return; }
+  const r = await fetch('/api/margin/export.csv', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({revenue: $('#revenue').value, costs: $('#costs').value})});
+  const t = await r.text();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], {type:'text/csv;charset=utf-8'}));
+  a.download = '单车毛利.csv'; a.click();
+};
+</script>
+</body>
+</html>

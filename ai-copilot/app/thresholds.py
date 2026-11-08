@@ -160,6 +160,16 @@ SPECS: list[dict] = [
      "label": "AI 润色催款话术（可选）",
      "hint": "模型只改写措辞；金额、天数、客户名由规则锁定，输出不合规自动回退模板"},
 
+    # ---- 成本与毛利 ----
+    {"key": "margin.match_days", "group": "成本与毛利", "default": 1,
+     "min": 0, "max": 7, "step": 1,
+     "label": "车辆+日期匹配窗口（天）",
+     "hint": "费用没写单号时，按车辆和日期前后 N 天找唯一订单；找不到进待分摊"},
+    {"key": "margin.warn_margin", "group": "成本与毛利", "default": 0.10,
+     "min": 0.0, "max": 1.0, "step": 0.01,
+     "label": "低毛利预警线",
+     "hint": "订单毛利率低于该值标「低毛利」，为负标「亏损」"},
+
     # ---- 指标与月报 ----
     {"key": "metrics.baseline_manual_sec", "group": "指标与月报",
      "default": _env_num("BASELINE_MANUAL_SEC", 180), "env_key": "BASELINE_MANUAL_SEC",

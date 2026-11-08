@@ -37,6 +37,10 @@
       items: [{ href: '/aging', label: '账龄催收' }]
     },
     {
+      title: '成本',
+      items: [{ href: '/margin', label: '单车毛利', roles: ['admin', 'finance'] }]
+    },
+    {
       title: '数据与设置',
       items: [
         { href: '/learn', label: '学习队列', roles: ['admin', 'operator', 'finance'] },

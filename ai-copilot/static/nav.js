@@ -37,6 +37,10 @@
       items: [{ href: '/aging', label: '账龄催收' }]
     },
     {
+      title: '执行',
+      items: [{ href: '/events', label: '在途异常', roles: ['admin', 'operator'] }]
+    },
+    {
       title: '成本',
       items: [
         { href: '/margin', label: '单车毛利', roles: ['admin', 'finance'] },

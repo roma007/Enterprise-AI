@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 在途异常</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1180px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:190px;border:0;padding:12px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;outline:none;resize:vertical;background:#fcfcfd;color:var(--ink)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:100px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag{padding:2px 9px;border-radius:999px;font-size:11.5px;white-space:nowrap}
+  .t-提箱{background:#e8f0fb;color:var(--brand)}
+  .t-装柜{background:#e6f4ea;color:var(--ok)}
+  .t-进港{background:#e8f0fb;color:var(--brand)}
+  .t-报关{background:#f3e8ff;color:#6b21a8}
+  .t-放行{background:#e6f4ea;color:var(--ok)}
+  .t-开船{background:#e6f4ea;color:var(--ok)}
+  .t-到港{background:#e6f4ea;color:var(--ok)}
+  .t-压车{background:#fdf3e2;color:var(--warn)}
+  .t-改单{background:#fdf3e2;color:var(--warn)}
+  .t-甩柜{background:#fde8e8;color:var(--err)}
+  .t-异常{background:#fde8e8;color:var(--err)}
+  .t-费用{background:#fdf3e2;color:var(--warn)}
+  .t-其他{background:#eef1f4;color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:10px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.kpi div{min-width:90px}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108c" />
+<script src="/static/nav.js?v=20261108c" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>在途异常</h1>
+  <span class="sub">调度/司机聊天 → 事件卡片（规则先抽，模型补充）</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 粘贴聊天 / 调度群消息</h2>
+    <textarea id="text" placeholder="例如：&#10;11-08 09:12 浙B12345 北滘港已提柜，柜号 MSCU7654329&#10;11-08 17:50 盐田截港提前到明天 12:00，这票可能赶不上"></textarea>
+    <div class="bar">
+      <button class="primary" id="btnRun">抽取事件</button>
+      <button id="btnDemo">加载演示对话</button>
+      <label style="font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="useLlm" checked /> 用模型补充（失败回退规则）
+      </label>
+      <span class="hint" id="hint"></span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 事件总览</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="warn" id="warn"></div>
+  </section>
+
+  <section class="card" id="listCard" style="display:none">
+    <h2>③ 事件明细</h2>
+    <div style="padding:0 14px 14px"><table id="list"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function render(d){
+  const ev = d.events || [];
+  const counts = d.counts || {};
+  const boxes = [...new Set(ev.map(x => x.container_no).filter(Boolean))];
+  const risky = ev.filter(x => ['压车','改单','甩柜','异常','费用'].includes(x.type)).length;
+  $('#kpi').innerHTML = `
+    <div><b>${ev.length}</b><span>事件数</span></div>
+    <div><b>${boxes.length}</b><span>涉及箱号</span></div>
+    <div><b style="color:${risky?'var(--err)':'inherit'}">${risky}</b><span>风险/费用事件</span></div>
+    <div><b>${counts['甩柜']||0}</b><span>甩柜/延误</span></div>
+    <div><b>${counts['改单']||0}</b><span>改单</span></div>
+    <div><b>${counts['费用']||0}</b><span>费用</span></div>`;
+  $('#warn').textContent = (d.warning || '') + ` 引擎：${d.engine || 'rule'}；事件是记录/提示，不自动改单或扣费。`;
+  $('#list').innerHTML = '<tr><th>时间</th><th>类型</th><th>箱号</th><th>单号</th><th>地点</th><th>原文</th><th>影响</th><th>来源</th></tr>' +
+    ev.map(x => `<tr>
+      <td style="white-space:nowrap">${esc(x.time || '—')}</td>
+      <td><span class="tag t-${esc(x.type)}">${esc(x.type)}</span></td>
+      <td>${esc(x.container_no || '')}</td>
+      <td>${esc(x.booking_no || '')}</td>
+      <td>${esc(x.location || '')}</td>
+      <td>${esc(x.detail || '')}</td>
+      <td style="color:${x.impact?'var(--warn)':'var(--muted)'}">${esc(x.impact || '')}</td>
+      <td style="color:var(--muted)">${esc(x.source)}</td></tr>`).join('');
+  $('#out').style.display = 'block';
+  $('#listCard').style.display = 'block';
+}
+
+async function run(){
+  const text = $('#text').value.trim();
+  if(!text){ toast('先贴一段聊天'); return; }
+  $('#btnRun').disabled = true; $('#hint').textContent = '抽取中…';
+  try{
+    const r = await fetch('/api/events', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text, use_llm: $('#useLlm').checked})});
+    if(!r.ok){ toast('抽取失败：' + (await r.text()).slice(0,100)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled = false; $('#hint').textContent = ''; }
+}
+
+$('#btnRun').onclick = run;
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/events/demo')).json();
+  $('#text').value = d.text;
+  render(d.result);
+  toast('已加载合成演示对话');
+};
+</script>
+</body>
+</html>

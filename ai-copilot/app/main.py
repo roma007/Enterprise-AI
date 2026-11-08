@@ -2065,6 +2065,27 @@ def api_reconcile(req: dict):
     return result
 
 
+@app.post("/api/reconcile/file")
+async def api_reconcile_file(file: UploadFile = File(...), explain: bool = Form(False)):
+    """对账单文件：文本直读 + PDF/图片 OCR，再走同一套对账。"""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="文件超过 10MB")
+    try:
+        res = ocr.extract(file.filename or "", data)
+    except ocr.OcrUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"OCR 不可用：{exc}") from exc
+    text = (res.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="未能从对账单中识别出文字，请检查清晰度或改用粘贴")
+    result = api_reconcile({"statement_text": text, "explain": explain})
+    result["ocr_text"] = text
+    result["ocr_engine"] = getattr(res, "engine", "") or "ocr"
+    return result
+
+
 @app.post("/api/reconcile/export.csv", response_class=PlainTextResponse)
 def api_reconcile_export(req: dict):
     from .reconcile import export_csv, parse_statement, reconcile
@@ -2257,6 +2278,31 @@ def api_insight_demo():
 @app.get("/insight")
 def insight_page():
     return FileResponse(ROOT / "static" / "insight.html")
+
+
+@app.post("/api/events")
+def api_events(req: dict):
+    """在途异常事件抽取：规则先抽，模型只补充有原文证据的事件。"""
+    from .events import extract_events
+
+    text = str(req.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="聊天内容为空")
+    if len(text) > 20000:
+        raise HTTPException(status_code=413, detail="文本超过 20000 字")
+    return extract_events(text, use_llm=bool(req.get("use_llm", True)))
+
+
+@app.get("/api/events/demo")
+def api_events_demo():
+    from .events import demo
+
+    return demo()
+
+
+@app.get("/events")
+def events_page():
+    return FileResponse(ROOT / "static" / "events.html")
 
 
 @app.get("/aging")

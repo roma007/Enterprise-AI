@@ -19,6 +19,7 @@
       items: [
         { href: '/invoice', label: '发票识别' },
         { href: '/batch', label: '批量导入' },
+        { href: '/consistency', label: '单证一致性', roles: ['admin', 'operator', 'finance'] },
         { href: '/history', label: '确认历史', roles: ['admin'] }
       ]
     },

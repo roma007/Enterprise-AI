@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 单证一致性</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1240px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px}
+  .box{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .box b{display:block;font-size:12px;padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:170px;border:0;padding:10px;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;outline:none;resize:vertical;background:#fcfcfd;color:var(--ink)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:110px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:9px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag{padding:2px 9px;border-radius:999px;font-size:11.5px;white-space:nowrap}
+  .s-ok{background:#e6f4ea;color:var(--ok)}
+  .s-warn{background:#fdf3e2;color:var(--warn)}
+  .s-skip{background:#eef1f4;color:var(--muted)}
+  .explain{font-size:13.5px;line-height:1.8;white-space:pre-wrap;background:#f8fbfe;border-left:3px solid #bfd7ea;padding:10px 12px;border-radius:4px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108f" />
+<script src="/static/nav.js?v=20261108f" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>单证一致性</h1>
+  <span class="sub">托书 / 发票 / 对账单：单号、箱号、客户、金额交叉核对</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 三份单据（至少托书 + 发票/对账单之一）</h2>
+    <div class="grid">
+      <div class="box"><b>托书</b><textarea id="booking"></textarea></div>
+      <div class="box"><b>发票</b><textarea id="invoice"></textarea></div>
+      <div class="box"><b>对账单</b><textarea id="statement"></textarea></div>
+    </div>
+    <div class="bar">
+      <button class="primary" id="btnRun">开始核对</button>
+      <button id="btnDemo">加载演示单据</button>
+      <label style="font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="useLlm" checked /> 用模型写差异说明（失败回退规则）
+      </label>
+      <span class="hint" id="hint"></span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 核对结果</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="warn" id="warn"></div>
+    <div style="padding:0 14px 14px"><table id="checks"></table></div>
+  </section>
+
+  <section class="card" id="explainCard" style="display:none">
+    <h2>③ 差异说明 <span class="muted" id="engine"></span></h2>
+    <div style="padding:0 14px 14px"><div class="explain" id="explain"></div></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LABEL = {ok:'一致', warn:'需核对', skip:'无法比对'};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function render(d){
+  const s = d.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${s.total}</b><span>检查项</span></div>
+    <div><b style="color:var(--ok)">${s.ok}</b><span>一致</span></div>
+    <div><b style="color:${s.warn?'var(--warn)':'inherit'}">${s.warn}</b><span>需核对</span></div>
+    <div><b>${s.skip}</b><span>无法比对</span></div>`;
+  $('#warn').textContent = (d.warning ? d.warning + ' ' : '') + '客户名只做参考比对；购买方未必等于托书客户。';
+  $('#checks').innerHTML = '<tr><th>字段</th><th>状态</th><th>托书/期望</th><th>发票/对账单</th><th>说明</th></tr>' +
+    (d.checks||[]).map(x=>`<tr>
+      <td>${esc(x.field)}</td>
+      <td><span class="tag s-${esc(x.status)}">${LABEL[x.status]||x.status}</span></td>
+      <td>${esc(x.expected||'')}</td><td>${esc(x.actual||'')}</td>
+      <td style="color:var(--muted)">${esc(x.detail||'')}</td></tr>`).join('');
+  $('#explain').textContent = d.explanation || '';
+  $('#engine').textContent = d.engine ? `引擎：${d.engine}` : '';
+  $('#out').style.display='block'; $('#explainCard').style.display='block';
+}
+
+async function run(){
+  const booking = $('#booking').value.trim();
+  const invoice = $('#invoice').value.trim();
+  const statement = $('#statement').value.trim();
+  if(!booking){ toast('至少填托书'); return; }
+  $('#btnRun').disabled = true; $('#hint').textContent = '核对中…';
+  try{
+    const r = await fetch('/api/consistency', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({booking, invoice, statement, use_llm: $('#useLlm').checked})});
+    if(!r.ok){ toast('核对失败：' + (await r.text()).slice(0,120)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent=''; }
+}
+
+$('#btnRun').onclick = run;
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/consistency/demo')).json();
+  $('#booking').value = d.booking_text;
+  $('#invoice').value = d.invoice_text;
+  $('#statement').value = d.statement_text;
+  render(d.result);
+  toast('已加载合成演示单据：故意有一处金额差异');
+};
+</script>
+</body>
+</html>

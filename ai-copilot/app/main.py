@@ -2423,6 +2423,33 @@ def quote_page():
     return FileResponse(ROOT / "static" / "quote.html")
 
 
+# ---------------------------------------------------------------- 单证一致性
+
+@app.post("/api/consistency")
+def api_consistency(req: dict):
+    from .consistency import check
+
+    try:
+        return check(str(req.get("booking") or ""),
+                     str(req.get("invoice") or ""),
+                     str(req.get("statement") or ""),
+                     use_llm=bool(req.get("use_llm", True)))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/consistency/demo")
+def api_consistency_demo():
+    from .consistency import demo
+
+    return demo()
+
+
+@app.get("/consistency")
+def consistency_page():
+    return FileResponse(ROOT / "static" / "consistency.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

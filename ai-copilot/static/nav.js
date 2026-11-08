@@ -38,7 +38,10 @@
     },
     {
       title: '成本',
-      items: [{ href: '/margin', label: '单车毛利', roles: ['admin', 'finance'] }]
+      items: [
+        { href: '/margin', label: '单车毛利', roles: ['admin', 'finance'] },
+        { href: '/insight', label: '经营洞察', roles: ['admin', 'finance'] }
+      ]
     },
     {
       title: '数据与设置',

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 经营洞察</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1240px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px}
+  .box{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .box b{display:block;font-size:12px;padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--muted)}
+  textarea{width:100%;min-height:150px;border:0;padding:10px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;outline:none;resize:vertical;background:#fcfcfd;color:var(--ink)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .kpi{display:flex;gap:10px;padding:14px;flex-wrap:wrap}
+  .kpi div{flex:1;min-width:110px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:10px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  .ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;padding:14px}
+  .item{border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:8px;padding:10px 12px}
+  .item.high{border-left-color:var(--err);background:#fffafa}
+  .item.warn{border-left-color:var(--warn);background:#fffdf7}
+  .item.ok{border-left-color:var(--ok);background:#fafffb}
+  .item b{display:block;font-size:13.5px;margin-bottom:4px}
+  .item p{margin:0 0 6px;font-size:12.5px;color:var(--muted)}
+  .item span{font-size:12px;color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag{padding:2px 9px;border-radius:999px;font-size:11.5px;white-space:nowrap}
+  .t-亏损{background:#fde8e8;color:var(--err)}
+  .t-低毛利{background:#fdf3e2;color:var(--warn)}
+  .t-重点催收{background:#fde8e8;color:var(--err)}
+  .t-催收{background:#fdf3e2;color:var(--warn)}
+  .t-提醒{background:#e8f0fb;color:var(--brand)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108b" />
+<script src="/static/nav.js?v=20261108b" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>经营洞察</h1>
+  <span class="sub">毛利 · 待分摊 · 逾期 · 风险订单（规则汇总，不是大模型）</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 输入：应收、费用、应收台账</h2>
+    <div class="grid">
+      <div class="box"><b>应收：日期,单号,车辆,客户,应收</b><textarea id="revenue"></textarea></div>
+      <div class="box"><b>费用：日期,车辆,单号,科目,金额</b><textarea id="costs"></textarea></div>
+      <div class="box"><b>台账：客户,单号,应收,已收,到期日</b><textarea id="receivables"></textarea></div>
+    </div>
+    <div class="bar">
+      <button class="primary" id="btnRun">分析</button>
+      <button id="btnDemo">加载演示数据</button>
+      <span class="hint" id="hint"></span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 总览</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="warn" id="warn"></div>
+  </section>
+
+  <section class="card" id="insights" style="display:none">
+    <h2>③ 结论与动作</h2>
+    <div class="ins" id="insBox"></div>
+  </section>
+
+  <section class="card" id="risk" style="display:none">
+    <h2>④ 风险订单</h2>
+    <div style="padding:0 14px 14px"><table id="riskTable"></table></div>
+  </section>
+
+  <section class="card" id="aging" style="display:none">
+    <h2>⑤ 逾期客户</h2>
+    <div style="padding:0 14px 14px"><table id="agingTable"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function render(r){
+  const s = r.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${money(s.revenue)}</b><span>应收</span></div>
+    <div><b>${money(s.cost)}</b><span>成本</span></div>
+    <div><b style="color:${s.profit<0?'var(--err)':'var(--ok)'}">${money(s.profit)}</b><span>毛利</span></div>
+    <div><b>${(s.margin*100).toFixed(1)}%</b><span>毛利率</span></div>
+    <div><b style="color:${s.outstanding?'var(--warn)':'inherit'}">${money(s.outstanding)}</b><span>未收</span></div>
+    <div><b style="color:${s.overdue?'var(--err)':'inherit'}">${money(s.overdue)}</b><span>逾期未收</span></div>
+    <div><b style="color:${s.unallocated?'var(--warn)':'inherit'}">${money(s.unallocated)}</b><span>待分摊</span></div>
+    <div><b>${s.overdue_clients}</b><span>需催客户</span></div>`;
+  $('#warn').textContent = (r.synthetic ? '【合成演示】' : '') + r.warning;
+
+  $('#insBox').innerHTML = r.insights.map(x => `
+    <div class="item ${esc(x.level)}">
+      <b>${esc(x.title)}</b>
+      <p>${esc(x.detail)}</p>
+      <span>→ ${esc(x.action)}</span>
+    </div>`).join('');
+
+  const orders = r.low_margin_orders || [];
+  $('#risk').style.display = orders.length ? 'block' : 'none';
+  $('#riskTable').innerHTML = '<tr><th>单号</th><th>车辆</th><th>应收</th><th>成本</th><th>毛利</th><th>毛利率</th><th>标记</th></tr>' +
+    orders.map(x => `<tr><td>${esc(x.order_no)}</td><td>${esc(x.truck)}</td>
+      <td>${money(x.revenue)}</td><td>${money(x.cost)}</td>
+      <td style="color:${x.profit<0?'var(--err)':'inherit'}">${money(x.profit)}</td>
+      <td>${(x.margin*100).toFixed(1)}%</td>
+      <td><span class="tag t-${esc(x.flag)}">${esc(x.flag)}</span></td></tr>`).join('');
+
+  const clients = r.overdue_clients || [];
+  $('#aging').style.display = clients.length ? 'block' : 'none';
+  $('#agingTable').innerHTML = '<tr><th>客户</th><th>逾期未收</th><th>最长逾期</th><th>等级</th><th>建议</th></tr>' +
+    clients.map(x => `<tr><td>${esc(x.client)}</td><td>${money(x.overdue)}</td>
+      <td>${x.max_overdue_days} 天</td><td><span class="tag t-${esc(x.level)}">${esc(x.level)}</span></td>
+      <td style="color:var(--muted);font-size:12px">${esc(x.advice)}</td></tr>`).join('');
+
+  ['out','insights'].forEach(id => $('#'+id).style.display = 'block');
+}
+
+async function run(){
+  const revenue = $('#revenue').value.trim();
+  const costs = $('#costs').value.trim();
+  const receivables = $('#receivables').value.trim();
+  if(!revenue || !costs || !receivables){ toast('三块内容都要填'); return; }
+  $('#btnRun').disabled = true; $('#hint').textContent = '分析中…';
+  try{
+    const r = await fetch('/api/insight', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({revenue, costs, receivables})});
+    if(!r.ok){ toast('分析失败：' + (await r.text()).slice(0,100)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled = false; $('#hint').textContent = ''; }
+}
+
+$('#btnRun').onclick = run;
+
+$('#btnDemo').onclick = async () => {
+  const d = await (await fetch('/api/insight/demo')).json();
+  $('#revenue').value = d.revenue_text;
+  $('#costs').value = d.cost_text;
+  $('#receivables').value = d.receivables_text;
+  render(d.result);
+  toast('已加载合成演示数据，不代表真实经营结论');
+};
+</script>
+</body>
+</html>

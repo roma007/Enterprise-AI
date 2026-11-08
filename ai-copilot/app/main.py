@@ -2231,6 +2231,34 @@ def margin_page():
     return FileResponse(ROOT / "static" / "margin.html")
 
 
+@app.post("/api/insight")
+def api_insight(req: dict):
+    """经营洞察：规则汇总毛利、待分摊、逾期与风险订单，不调用大模型。"""
+    from .insight import analyze
+
+    revenue = str(req.get("revenue") or "").strip()
+    costs = str(req.get("costs") or "").strip()
+    receivables = str(req.get("receivables") or "").strip()
+    if not revenue or not costs or not receivables:
+        raise HTTPException(status_code=400, detail="应收、费用、应收台账都不能为空")
+    try:
+        return analyze(revenue, costs, receivables)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/insight/demo")
+def api_insight_demo():
+    from .insight import demo
+
+    return demo()
+
+
+@app.get("/insight")
+def insight_page():
+    return FileResponse(ROOT / "static" / "insight.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

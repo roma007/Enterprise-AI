@@ -51,6 +51,7 @@
       title: '数据与设置',
       items: [
         { href: '/learn', label: '学习队列', roles: ['admin', 'operator', 'finance'] },
+        { href: '/kb', label: '知识库' },
         { href: '/settings', label: '阈值配置', roles: ['admin'] },
         { href: '/users', label: '用户管理', roles: ['admin'] },
         { href: '/report', label: '运行月报' },

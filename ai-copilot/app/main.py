@@ -2305,6 +2305,90 @@ def events_page():
     return FileResponse(ROOT / "static" / "events.html")
 
 
+# ---------------------------------------------------------------- 知识库
+
+@app.get("/api/kb/docs")
+def api_kb_docs():
+    from .kb import list_docs
+
+    return {"items": list_docs()}
+
+
+@app.post("/api/kb/docs")
+def api_kb_add(req: dict):
+    from .kb import add_doc
+
+    tags = req.get("tags") or []
+    if isinstance(tags, str):
+        tags = [x.strip() for x in tags.replace("，", ",").split(",") if x.strip()]
+    try:
+        return {"ok": True, "doc": add_doc(str(req.get("title") or ""),
+                                           str(req.get("text") or ""), tags)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/kb/docs/upload")
+async def api_kb_upload(file: UploadFile = File(...), title: str = Form(""),
+                        tags: str = Form("")):
+    from .kb import add_doc
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="文件超过 10MB")
+    name = file.filename or "document"
+    if name.lower().endswith((".txt", ".md", ".csv")):
+        text = data.decode("utf-8-sig", errors="replace")
+    else:
+        try:
+            res = ocr.extract(name, data)
+        except ocr.OcrUnavailable as exc:
+            raise HTTPException(status_code=503, detail=f"OCR 不可用：{exc}") from exc
+        text = res.text or ""
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="未能识别出文字")
+    tag_list = [x.strip() for x in tags.replace("，", ",").split(",") if x.strip()]
+    try:
+        return {"ok": True, "doc": add_doc(title or name, text, tag_list)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.delete("/api/kb/docs/{doc_id}")
+def api_kb_delete(doc_id: str):
+    from .kb import delete_doc
+
+    return {"ok": delete_doc(doc_id)}
+
+
+@app.post("/api/kb/ask")
+def api_kb_ask(req: dict):
+    from .kb import ask
+
+    try:
+        return ask(str(req.get("question") or ""),
+                   top_k=int(req.get("top_k") or 4),
+                   use_llm=bool(req.get("use_llm", True)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/kb/demo")
+def api_kb_demo():
+    from .kb import demo_questions, seed_demo
+
+    data = seed_demo()
+    data["questions"] = demo_questions()
+    return data
+
+
+@app.get("/kb")
+def kb_page():
+    return FileResponse(ROOT / "static" / "kb.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

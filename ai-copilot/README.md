@@ -306,6 +306,7 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 | **账单级自动对账**：对账单 ↔ 系统运单双向比对，四类差异定位 | `app/reconcile.py` | `/reconcile`、`/api/reconcile/*` |
 | **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
 | **对账单文件 OCR（AI-41）**：图片/PDF/CSV → 对账，不用先手抄 | `/api/reconcile/file` | `/reconcile`「上传对账单」 |
+| **企业知识库（AI-44）**：SOP/合同/报关口径检索 + 引用原文问答 | `app/kb.py` | `/kb`、`/api/kb/*` |
 | **在途异常抽取（AI-42）**：调度/司机聊天 → 事件卡片；规则 + 可选模型 | `app/events.py` | `/events`、`/api/events/*` |
 | **经营洞察（AI-40）**：毛利/待分摊/逾期/风险订单 → 结论与动作（规则，不是大模型） | `app/insight.py` | `/insight`、`/api/insight/*` |
 | **成本归集 / 单车毛利（C1）**：应收 + 费用 → 单票/单车毛利；单号优先、车辆+日期兜底 | `app/margin.py` | `/margin`、`/api/margin/*` |

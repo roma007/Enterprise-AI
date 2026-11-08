@@ -2450,6 +2450,48 @@ def consistency_page():
     return FileResponse(ROOT / "static" / "consistency.html")
 
 
+# ---------------------------------------------------------------- 关务 HS
+
+@app.post("/api/customs/hs")
+def api_customs_hs(req: dict):
+    from .customs import suggest
+
+    try:
+        return suggest(str(req.get("description") or ""),
+                       use_llm=bool(req.get("use_llm", True)))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/api/customs/dict")
+def api_customs_dict():
+    from .customs import list_items
+
+    return {"items": list_items()}
+
+
+@app.post("/api/customs/dict/import")
+def api_customs_import(req: dict):
+    from .customs import import_csv
+
+    try:
+        return import_csv(str(req.get("csv") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/customs/demo")
+def api_customs_demo():
+    from .customs import demo
+
+    return demo()
+
+
+@app.get("/customs")
+def customs_page():
+    return FileResponse(ROOT / "static" / "customs.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

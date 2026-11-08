@@ -40,13 +40,18 @@
     },
     {
       title: '执行',
-      items: [{ href: '/events', label: '在途异常', roles: ['admin', 'operator'] }]
+      items: [
+        { href: '/track', label: '客户查询', roles: ['admin', 'operator', 'finance'] },
+        { href: '/events', label: '在途异常', roles: ['admin', 'operator'] },
+        { href: '/dispatch', label: '调度优化', roles: ['admin', 'operator'] }
+      ]
     },
     {
       title: '经营',
       items: [
         { href: '/quote', label: '报价助手', roles: ['admin', 'operator', 'finance'] },
-        { href: '/insight', label: '经营洞察', roles: ['admin', 'finance'] }
+        { href: '/insight', label: '经营洞察', roles: ['admin', 'finance'] },
+        { href: '/forecast', label: '预测信用', roles: ['admin', 'finance'] }
       ]
     },
     {

@@ -2492,6 +2492,55 @@ def customs_page():
     return FileResponse(ROOT / "static" / "customs.html")
 
 
+# ---------------------------------------------------------------- 客户查询/调度/预测
+
+@app.post("/api/track/query")
+def api_track_query(req: dict):
+    from .tracking import answer
+
+    try:
+        return answer(str(req.get("question") or ""),
+                      use_llm=bool(req.get("use_llm", True)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/track/demo")
+def api_track_demo():
+    from .tracking import demo
+
+    return demo()
+
+
+@app.get("/track")
+def track_page():
+    return FileResponse(ROOT / "static" / "track.html")
+
+
+@app.get("/api/dispatch/demo")
+def api_dispatch_demo():
+    from .dispatch import demo
+
+    return demo()
+
+
+@app.get("/dispatch")
+def dispatch_page():
+    return FileResponse(ROOT / "static" / "dispatch.html")
+
+
+@app.get("/api/forecast/demo")
+def api_forecast_demo():
+    from .forecast import demo
+
+    return demo()
+
+
+@app.get("/forecast")
+def forecast_page():
+    return FileResponse(ROOT / "static" / "forecast.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

@@ -306,6 +306,9 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 | **账单级自动对账**：对账单 ↔ 系统运单双向比对，四类差异定位 | `app/reconcile.py` | `/reconcile`、`/api/reconcile/*` |
 | **发票批量导入**：批次建单时选类型，按类型路由到发票抽取器 | `app/batchproc.py` | `/batch` 选「发票」 |
 | **对账单文件 OCR（AI-41）**：图片/PDF/CSV → 对账，不用先手抄 | `/api/reconcile/file` | `/reconcile`「上传对账单」 |
+| **在途查询（AI-47）**：箱号/单号/客户 → 状态、ETA、报关、时间线（合成演示） | `app/tracking.py` | `/track` |
+| **调度优化（AI-48）**：订单/车辆/装箱优化前后对比（合成演示，启发式） | `app/dispatch.py` | `/dispatch` |
+| **预测信用（AI-49）**：客户风险、未来 4 周回款、线路趋势（合成演示） | `app/forecast.py` | `/forecast` |
 | **关务 HS 候选（AI-46）**：商品描述 → 客户词库候选；模型只在候选中选 | `app/customs.py` | `/customs`、`/api/customs/*` |
 | **单证一致性（AI-43）**：托书/发票/对账单交叉核对 | `app/consistency.py` | `/consistency`、`/api/consistency` |
 | **报价助手（AI-45）**：询价 → 历史价/成本 → 建议报价 + 风险 | `app/quote.py` | `/quote`、`/api/quote/*` |

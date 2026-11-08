@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 调度优化</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1180px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+  .kpi div{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:19px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .kpi .good{color:var(--ok)}
+  .kpi .bad{color:var(--err)}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:9px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  .compare{display:flex;gap:10px;padding:0 14px 14px;flex-wrap:wrap}
+  .compare div{flex:1;min-width:240px;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .compare b{display:block;font-size:14px;margin-bottom:4px}
+  .line{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.kpi{grid-template-columns:1fr 1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108h" />
+<script src="/static/nav.js?v=20261108h" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>调度优化</h1>
+  <span class="sub">订单/车辆/装箱 → 优化前后对比（合成演示，启发式，不是大模型）</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 演示数据</h2>
+    <div class="bar">
+      <button class="primary" id="btnRun">重新计算</button>
+      <span class="hint" id="hint">合成 160 单、30 台车；40HQ 装箱演示</span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 优化前后</h2>
+    <div class="warn" id="warn"></div>
+    <div class="kpi" id="kpi"></div>
+    <div class="compare" id="compare"></div>
+  </section>
+
+  <section class="card" id="assignCard" style="display:none">
+    <h2>③ 调度结果（前 12 单）</h2>
+    <div style="padding:0 14px 14px"><table id="assign"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function render(d){
+  const b = d.baseline, o = d.optimized, imp = d.improvement, l = d.loading;
+  $('#warn').textContent = d.warning;
+  $('#kpi').innerHTML = `
+    <div><b>${d.summary.orders}</b><span>订单</span></div>
+    <div><b>${d.summary.vehicles}</b><span>车辆</span></div>
+    <div><b>${d.summary.unassigned}</b><span>未派</span></div>
+    <div><b style="color:var(--ok)">${(imp.empty_km_pct*100).toFixed(1)}%</b><span>空驶下降</span></div>`;
+  $('#compare').innerHTML = `
+    <div><b>空驶里程</b>
+      <div class="line">优化前：${b.empty_km.toLocaleString()} km</div>
+      <div class="line">优化后：${o.empty_km.toLocaleString()} km</div>
+      <div class="line">减少：${imp.empty_km.toLocaleString()} km</div></div>
+    <div><b>准时率</b>
+      <div class="line">优化前：${(b.on_time_rate*100).toFixed(1)}%</div>
+      <div class="line">优化后：${(o.on_time_rate*100).toFixed(1)}%</div>
+      <div class="line">提升：${(imp.on_time_pct*100).toFixed(1)} 个点</div></div>
+    <div><b>40HQ 装箱</b>
+      <div class="line">优化前：${l.naive_bins} 个柜，装载率 ${(l.naive_utilization*100).toFixed(1)}%</div>
+      <div class="line">优化后：${l.bins} 个柜，装载率 ${(l.utilization*100).toFixed(1)}%</div>
+      <div class="line">少用：${l.naive_bins - l.bins} 个柜</div></div>`;
+  $('#assign').innerHTML = '<tr><th>订单</th><th>车辆</th><th>线路</th><th>箱型/数量</th><th>空驶</th><th>重驶</th><th>迟到</th></tr>' +
+    (d.assignments||[]).map(x=>`<tr><td>${esc(x.order_no)}</td><td>${esc(x.truck)}</td>
+      <td>${esc(x.from)}-${esc(x.to)}</td><td>${esc(x.container_type)} × ${x.qty}</td>
+      <td>${x.empty_km} km</td><td>${x.loaded_km} km</td>
+      <td style="color:${x.late_hours>0?'var(--err)':'var(--ok)'}">${x.late_hours>0?x.late_hours+' h':'准时'}</td></tr>`).join('');
+  $('#out').style.display='block'; $('#assignCard').style.display='block';
+}
+
+async function run(){
+  $('#btnRun').disabled = true; $('#hint').textContent='计算中…';
+  try{
+    const d = await (await fetch('/api/dispatch/demo')).json();
+    render(d);
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent='合成 160 单、30 台车；40HQ 装箱演示'; }
+}
+$('#btnRun').onclick = run;
+run();
+</script>
+</body>
+</html>

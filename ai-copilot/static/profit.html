@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 盈利分析</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1200px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .kpi{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:14px}
+  .kpi div{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px}
+  .kpi b{display:block;font-size:17px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:9px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  .ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;padding:14px}
+  .item{border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:8px;padding:9px 11px}
+  .item.high{border-left-color:var(--err);background:#fffafa}
+  .item.warn{border-left-color:var(--warn);background:#fffdf7}
+  .item.ok{border-left-color:var(--ok);background:#fafffb}
+  .item b{display:block;font-size:13px;margin-bottom:3px}
+  .item p{margin:0 0 5px;font-size:12.5px;color:var(--muted)}
+  .item span{font-size:12px;color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag{padding:2px 8px;border-radius:999px;font-size:11px;white-space:nowrap;background:#eef2f7;color:var(--muted)}
+  .tag.high{background:#fde8e8;color:var(--err)}
+  .tag.warn{background:#fdf3e2;color:var(--warn)}
+  .tag.ok{background:#e6f4ea;color:var(--ok)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.kpi{grid-template-columns:1fr 1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<script src="/static/nav.js?v=20261108i" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>盈利分析</h1>
+  <span class="sub">客户 / 线路维度：收入、成本、毛利、集中度与趋势（合成演示）</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 演示数据</h2>
+    <div class="bar">
+      <button class="primary" id="btnRun">重新计算</button>
+      <span class="hint" id="hint">20 客户 × 8 线路 × 24 个月合成历史</span>
+    </div>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 总览</h2>
+    <div class="warn" id="warn"></div>
+    <div class="kpi" id="kpi"></div>
+    <div class="ins" id="ins"></div>
+  </section>
+
+  <section class="card" id="custCard" style="display:none">
+    <h2>③ 客户盈利（按毛利排序）</h2>
+    <div style="padding:0 14px 14px"><table id="customers"></table></div>
+  </section>
+
+  <section class="card" id="routeCard" style="display:none">
+    <h2>④ 线路盈利</h2>
+    <div style="padding:0 14px 14px"><table id="routes"></table></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function render(d){
+  const s = d.summary;
+  $('#warn').textContent = d.warning;
+  $('#kpi').innerHTML = `
+    <div><b>${money(s.revenue)}</b><span>收入</span></div>
+    <div><b>${money(s.cost)}</b><span>成本</span></div>
+    <div><b style="color:var(--ok)">${money(s.profit)}</b><span>毛利</span></div>
+    <div><b>${(s.margin*100).toFixed(1)}%</b><span>毛利率</span></div>
+    <div><b>${(s.top5_share*100).toFixed(1)}%</b><span>前 5 客户占比</span></div>
+    <div><b style="color:${s.low_margin_customers?'var(--warn)':'inherit'}">${s.low_margin_customers}</b><span>低毛利客户</span></div>`;
+  $('#ins').innerHTML = d.insights.map(x=>`<div class="item ${esc(x.level)}">
+      <b>${esc(x.title)}</b><p>${esc(x.detail)}</p><span>→ ${esc(x.action)}</span></div>`).join('');
+  $('#customers').innerHTML = '<tr><th>客户</th><th>收入</th><th>成本</th><th>毛利</th><th>毛利率</th><th>占比</th><th>趋势</th><th>风险</th><th>标记</th></tr>' +
+    d.customers.slice(0,15).map(x=>`<tr><td>${esc(x.customer)}</td><td>${money(x.revenue)}</td>
+      <td>${money(x.cost)}</td><td style="color:${x.profit<0?'var(--err)':'inherit'}">${money(x.profit)}</td>
+      <td>${(x.margin*100).toFixed(1)}%</td><td>${(x.share*100).toFixed(1)}%</td>
+      <td style="color:${x.trend<0?'var(--err)':'var(--ok)'}">${(x.trend*100).toFixed(1)}%</td>
+      <td><span class="tag ${x.risk_level==='高'?'high':x.risk_level==='中'?'warn':'ok'}">${esc(x.risk_level)}</span></td>
+      <td><span class="tag">${esc(x.tag)}</span></td></tr>`).join('');
+  $('#routes').innerHTML = '<tr><th>线路</th><th>收入</th><th>成本</th><th>毛利</th><th>毛利率</th><th>占比</th><th>趋势</th></tr>' +
+    d.routes.map(x=>`<tr><td>${esc(x.route)}</td><td>${money(x.revenue)}</td>
+      <td>${money(x.cost)}</td><td>${money(x.profit)}</td><td>${(x.margin*100).toFixed(1)}%</td>
+      <td>${(x.share*100).toFixed(1)}%</td>
+      <td style="color:${x.trend<0?'var(--err)':'var(--ok)'}">${(x.trend*100).toFixed(1)}%</td></tr>`).join('');
+  ['out','custCard','routeCard'].forEach(id=>$('#'+id).style.display='block');
+}
+
+async function run(){
+  $('#btnRun').disabled = true; $('#hint').textContent='计算中…';
+  try{
+    const d = await (await fetch('/api/profit/demo')).json();
+    render(d);
+  } finally { $('#btnRun').disabled=false; $('#hint').textContent='20 客户 × 8 线路 × 24 个月合成历史'; }
+}
+$('#btnRun').onclick = run;
+run();
+</script>
+</body>
+</html>

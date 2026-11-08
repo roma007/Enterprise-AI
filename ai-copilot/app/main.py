@@ -2541,6 +2541,18 @@ def forecast_page():
     return FileResponse(ROOT / "static" / "forecast.html")
 
 
+@app.get("/api/profit/demo")
+def api_profit_demo():
+    from .profit import demo
+
+    return demo()
+
+
+@app.get("/profit")
+def profit_page():
+    return FileResponse(ROOT / "static" / "profit.html")
+
+
 @app.get("/aging")
 def aging_page():
     return FileResponse(ROOT / "static" / "aging.html")

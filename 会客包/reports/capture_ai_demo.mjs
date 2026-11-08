@@ -20,6 +20,8 @@ async function shot(page, url, action, name, wait = 1400) {
     try { await page.locator(action).click({ timeout: 3000 }); } catch (_) {}
   }
   await page.waitForTimeout(wait);
+  await page.mouse.move(1500, 850);
+  await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(OUT, name), fullPage: false });
   console.log('shot', name);
 }
@@ -32,5 +34,6 @@ await shot(page, '/track', '#btnDemo', 'ai-track.png');
 await shot(page, '/dispatch', '#btnRun', 'ai-dispatch.png', 2000);
 await shot(page, '/forecast', '#btnRun', 'ai-forecast.png', 1800);
 await shot(page, '/customs', '#btnDemo', 'ai-customs.png');
+await shot(page, '/profit', '#btnRun', 'ai-profit.png', 1600);
 
 await browser.close();

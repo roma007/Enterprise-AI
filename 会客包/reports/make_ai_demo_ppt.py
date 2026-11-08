@@ -129,7 +129,20 @@ bullets(s, 8.9, 1.6, 3.9, 4.8, [
 ], 13)
 footer(s)
 
-# 6. boundary
+# 6. profit
+s = prs.slides.add_slide(prs.slide_layouts[6])
+header(s, "盈利分析：哪个客户、哪条线路赚钱", "20 客户 × 8 线路 × 24 个月合成历史；规则/统计，不是生产级 BI")
+image(s, "ai-profit.png", 0.5, 1.5, 8.1, 4.9)
+bullets(s, 8.9, 1.6, 3.9, 4.8, [
+    ("收入 8,080 万，毛利 1,392 万，毛利率 17.2%", DARK),
+    ("前 5 客户占收入 36.1%", DARK),
+    ("2 个客户低毛利，2 条线路收入下滑", WARN),
+    ("每条结论带“先做什么”", GREEN),
+    ("真实口径需客户成本科目与财务数据校准", RED),
+], 13)
+footer(s)
+
+# 7. boundary
 s = prs.slides.add_slide(prs.slide_layouts[6])
 bar = s.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(0.08))
 bar.fill.solid(); bar.fill.fore_color.rgb = BLUE; bar.line.fill.background()

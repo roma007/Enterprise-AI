@@ -170,6 +170,16 @@ SPECS: list[dict] = [
      "label": "低毛利预警线",
      "hint": "订单毛利率低于该值标「低毛利」，为负标「亏损」"},
 
+    # ---- 报价 ----
+    {"key": "quote.target_margin", "group": "报价", "default": 0.15,
+     "min": 0.0, "max": 0.8, "step": 0.01,
+     "label": "目标毛利率",
+     "hint": "报价助手按成本 × (1+目标毛利) 算底线；低于该值提示风险"},
+    {"key": "quote.min_samples", "group": "报价", "default": 3,
+     "min": 1, "max": 20, "step": 1,
+     "label": "最少历史样本",
+     "hint": "同线路同箱型少于该数量时提示样本不足，并放宽到同线路"},
+
     # ---- 指标与月报 ----
     {"key": "metrics.baseline_manual_sec", "group": "指标与月报",
      "default": _env_num("BASELINE_MANUAL_SEC", 180), "env_key": "BASELINE_MANUAL_SEC",

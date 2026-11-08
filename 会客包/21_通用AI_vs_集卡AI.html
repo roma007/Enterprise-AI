@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>通用 AI 员工 vs 集卡 AI 单证员</title>
+<style>
+  @page { size: A4; margin: 11mm; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9ecef;color:#111;font:12px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Heiti SC",sans-serif}
+  .page{width:188mm;min-height:275mm;background:#fff;margin:8mm auto;padding:10mm 11mm;
+        box-shadow:0 2px 12px rgba(0,0,0,.15);position:relative}
+  h1{font-size:21px;margin:0;letter-spacing:.3px}
+  .sub{font-size:11px;color:#666;margin:4px 0 14px}
+  h2{font-size:12px;margin:12px 0 6px;padding:4px 9px;background:#111;color:#fff;
+     border-radius:3px;display:inline-block;letter-spacing:.4px}
+  table{width:100%;border-collapse:collapse;font-size:10.8px}
+  th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;vertical-align:top}
+  th{background:#f2f2f2;font-weight:600}
+  th.us{background:#1f4e79;color:#fff;border-color:#1f4e79}
+  td.us{background:#f5f9fd}
+  .bad{color:#c53030;font-weight:600}
+  .good{color:#2f855a;font-weight:600}
+  .muted{color:#666}
+  .note{border:1px solid #111;border-radius:4px;padding:8px 10px;background:#fafafa;margin-top:10px;font-size:10.5px}
+  .foot{position:absolute;bottom:7mm;left:11mm;right:11mm;display:flex;justify-content:space-between;
+        font-size:9.5px;color:#777;border-top:1px solid #ddd;padding-top:4px}
+  ul{margin:3px 0 0 15px;padding:0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .box{border:1px solid #ccc;border-radius:4px;padding:7px 9px;background:#fcfcfc}
+  .box b{display:block;font-size:11px;margin-bottom:3px}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>通用 AI 员工 vs 集卡 AI 单证员</h1>
+  <div class="sub">不比功能数量，比一件事：在集卡/货代的真实单据上，能不能把活干完、干对、可追溯。</div>
+
+  <h2>一、同一张托书，差别在哪</h2>
+  <table>
+    <tr>
+      <th style="width:19%">维度</th>
+      <th style="width:38%">通用 AI 员工</th>
+      <th class="us" style="width:43%">集卡 AI 单证员 / 对账员</th>
+    </tr>
+    <tr>
+      <td>行业字段</td>
+      <td class="bad">靠提示词和知识库临时教；箱号、截港、箱型、地址没有内置规则</td>
+      <td class="us good">内置 ISO 6346 箱号校验、箱型、截港/装柜时间、箱量一致、地址冲突</td>
+    </tr>
+    <tr>
+      <td>能读什么</td>
+      <td>文本为主；图片/PDF 质量依赖通用 OCR</td>
+      <td class="us good">企微文字、图片、PDF、Excel、批量导入；托书 / 发票 / 对账单 / 结算单</td>
+    </tr>
+    <tr>
+      <td>金额与账龄</td>
+      <td class="bad">可能由模型生成，数字不稳定</td>
+      <td class="us good">金额、税额、账龄、差额全部规则计算，可复算</td>
+    </tr>
+    <tr>
+      <td>对账</td>
+      <td>能解释差异，但匹配和分类要自己搭</td>
+      <td class="us good">运单/合同价匹配、四类差异、总额差额、复核记录</td>
+    </tr>
+    <tr>
+      <td>出错怎么办</td>
+      <td class="bad">重新生成一次，结果可能又不一样</td>
+      <td class="us good">规则先拦；模型失败回退模板；人工确认；修订流水可追溯</td>
+    </tr>
+    <tr>
+      <td>部署</td>
+      <td>云端为主，数据出客户边界</td>
+      <td class="us good">单租户；云上托管 / 客户内网 / 私有化；数据不出门</td>
+    </tr>
+    <tr>
+      <td>怎么证明有效</td>
+      <td class="bad">案例海报、演示视频</td>
+      <td class="us good">用客户 20–50 份真实样本跑字段准确率、修正时间、差异召回</td>
+    </tr>
+    <tr>
+      <td>适合场景</td>
+      <td>内容、客服、销售、私域、通用问答</td>
+      <td class="us good">集卡/货代的单证、对账、应收、费用核查</td>
+    </tr>
+  </table>
+
+  <h2>二、我们只有两个 AI 入口，为什么够</h2>
+  <div class="two">
+    <div class="box">
+      <b>AI 只放在最脏的两个入口</b>
+      <ul>
+        <li>托书：微信、图片、PDF、Excel → 结构化订单</li>
+        <li>发票：票面 → 税号、金额、税额、抬头</li>
+      </ul>
+      <div class="muted">这两个入口决定后面所有账的数据质量。</div>
+    </div>
+    <div class="box">
+      <b>后面用规则把账算清</b>
+      <ul>
+        <li>箱号/截港/地址/箱量校验</li>
+        <li>对账匹配、差异分类、账龄分档</li>
+        <li>费用异常、外协结算、成本归集、毛利</li>
+      </ul>
+      <div class="muted">规则可审计、可复现、不会“编数字”。</div>
+    </div>
+  </div>
+
+  <h2>三、客户真正买到的结果</h2>
+  <table>
+    <tr><th style="width:26%">现在</th><th style="width:30%">之后</th><th>客户感知</th></tr>
+    <tr><td>单证 3 分钟/票</td><td>40 秒/票</td><td>同样的人多处理 3–4 倍单量</td></tr>
+    <tr><td>对账 2 人 × 5 天/月</td><td>几小时出差异表</td><td>财务从抄表变成只看异常</td></tr>
+    <tr><td>逾期靠 Excel</td><td>自动分档 + 催收清单</td><td>回款跟进不漏客户</td></tr>
+    <tr><td>费用归不到车/单</td><td>单号/车辆+日期归集</td><td>知道哪台车、哪条线赚钱</td></tr>
+    <tr><td>错箱/截港靠人记</td><td>规则当场拦</td><td>少罚款、少改单</td></tr>
+  </table>
+
+  <div class="note">
+    <b>一句话：</b>通用 AI 卖“我什么都能做”；我们卖“集卡的单证、对账、催收，我用你们的单据跑给你看”。
+    <br/>不承诺裁人，不承诺 99%，不把规则包装成大模型。
+  </div>
+
+  <div class="foot">
+    <span>会客包 · 21 · 通用 AI vs 集卡 AI</span>
+    <span>当前：4 个模型调用点，其中 2 个在关键路径；其余为规则</span>
+  </div>
+</div>
+</body>
+</html>

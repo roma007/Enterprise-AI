@@ -19,22 +19,23 @@ _CONTAINER = re.compile(r"\b([A-Z]{4}\d{7})\b", re.IGNORECASE)
 _BOOKING = re.compile(r"(SYN\d{6,})", re.IGNORECASE)
 
 
-def find_shipment(query: str) -> dict | None:
+def find_shipment(query: str, ships: list[dict] | None = None) -> dict | None:
     text = (query or "").upper()
+    items = ships if ships is not None else shipments()
     box = _CONTAINER.search(text)
     if box:
         code = box.group(1)
-        for s in shipments():
+        for s in items:
             if s["container_no"] == code:
                 return s
     booking = _BOOKING.search(text)
     if booking:
         no = booking.group(1)
-        for s in shipments():
+        for s in items:
             if s["booking_no"].upper() == no:
                 return s
     # 客户名包含匹配
-    for s in shipments():
+    for s in items:
         if s["customer"] and s["customer"] in query:
             return s
     return None

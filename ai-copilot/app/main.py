@@ -2529,6 +2529,18 @@ def dispatch_page():
     return FileResponse(ROOT / "static" / "dispatch.html")
 
 
+@app.get("/api/ops/eval")
+def api_ops_eval():
+    from .ops_eval import evaluate
+
+    return evaluate()
+
+
+@app.get("/ops-eval")
+def ops_eval_page():
+    return FileResponse(ROOT / "static" / "ops_eval.html")
+
+
 @app.get("/api/forecast/demo")
 def api_forecast_demo():
     from .forecast import demo

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 能力回归</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1180px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:9px 12px;border-radius:8px;font-size:12.5px;margin:14px}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+  .kpi div{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:19px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .kpi .good{color:var(--ok)}
+  .kpi .bad{color:var(--err)}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .pass{background:#e6f4ea;color:var(--ok)}
+  .fail{background:#fde8e8;color:var(--err)}
+  .note{color:var(--muted);font-size:12px;padding:0 14px 14px}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.kpi{grid-template-columns:1fr 1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108i" />
+<script src="/static/nav.js?v=20261108j" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>能力回归</h1>
+  <span class="sub">在途查询 / 调度装箱 / 在途事件 / HS 候选（合成数据，不代表真实客户）</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 合成数据规模</h2>
+    <div class="warn" id="warn">加载中…</div>
+    <div class="kpi" id="kpi"></div>
+  </section>
+
+  <section class="card">
+    <h2>② 回归结果</h2>
+    <div style="padding:0 14px 14px"><table id="result"></table></div>
+    <div class="note" id="note"></div>
+    <div class="bar">
+      <button class="primary" id="btnRun">重新跑一遍</button>
+      <span class="note" id="hint" style="padding:0"></span>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = v => (v * 100).toFixed(1) + '%';
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+function pill(ok){ return `<span class="pill ${ok?'pass':'fail'}">${ok?'通过':'未通过'}</span>`; }
+
+function render(d){
+  $('#warn').textContent = d.warning || '合成数据回归，不代表真实客户效果。';
+  const t = d.tracking, p = d.dispatch, e = d.events, c = d.customs;
+  $('#kpi').innerHTML = `
+    <div><b>${t.shipments}</b><span>在途票数</span></div>
+    <div><b>${p.orders}</b><span>调度订单</span></div>
+    <div><b>${e.lines}</b><span>消息条数</span></div>
+    <div><b>${c.cases}</b><span>HS 描述</span></div>`;
+
+  const rows = [
+    ['在途查询', '箱号命中', pct(t.container_hit), t.container_hit >= 0.99],
+    ['在途查询', '单号命中', pct(t.booking_hit), t.booking_hit >= 0.99],
+    ['在途查询', '客户命中', pct(t.customer_hit), t.customer_hit >= 0.99],
+    ['在途查询', '无数据不乱答', pct(t.no_match_ok), t.no_match_ok >= 0.99],
+    ['调度装箱', '未派订单', String(p.unassigned), p.unassigned === 0],
+    ['调度装箱', '准时率（优化前 → 后）', `${pct(p.on_time_baseline)} → ${pct(p.on_time_optimized)}`, p.on_time_optimized > p.on_time_baseline],
+    ['调度装箱', '空驶里程（优化前 → 后）', `${p.empty_km_baseline.toLocaleString()} → ${p.empty_km_optimized.toLocaleString()} km`, p.empty_km_optimized < p.empty_km_baseline],
+    ['在途事件', '事件抽取 F1', pct(e.f1), e.f1 >= 0.90],
+    ['在途事件', '正确 / 漏 / 误', `${e.tp} / ${e.fn} / ${e.fp}`, e.fn === 0 && e.fp === 0],
+    ['HS 候选', 'Top-1 命中', pct(c.top1), c.top1 >= 0.95],
+    ['HS 候选', 'Top-3 命中', pct(c.top3), c.top3 >= 0.99],
+    ['HS 候选', '无匹配不乱给', pct(c.no_match_ok), c.no_match_ok >= 0.99],
+  ];
+  $('#result').innerHTML = '<tr><th>能力</th><th>指标</th><th>结果</th><th>判定</th></tr>' +
+    rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${pill(r[3])}</td></tr>`).join('');
+  $('#note').textContent = `生成时间：${d.generated_at} ｜ 全部通过：${d.pass ? '是' : '否'} ｜ 合成数据只验证规则/流程，不代表真实客户效果。`;
+}
+
+async function run(){
+  $('#btnRun').disabled = true; $('#hint').textContent = '回归中…';
+  try{
+    const d = await (await fetch('/api/ops/eval')).json();
+    render(d);
+    toast(d.pass ? '回归通过' : '有指标未通过');
+  } catch (e) { toast('回归失败：' + e.message); }
+  finally { $('#btnRun').disabled = false; $('#hint').textContent = '可重复运行；结果写入 data/ops_eval.json'; }
+}
+$('#btnRun').onclick = run;
+run();
+</script>
+</body>
+</html>

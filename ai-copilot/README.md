@@ -99,6 +99,16 @@ make eval
 PYTHONPATH=. .venv/bin/python -m app.evalrun
 ```
 
+运营能力合成回归（在途查询 / 调度 / 在途事件 / HS 候选）：
+
+```bash
+make ops-eval
+# 或
+PYTHONPATH=. .venv/bin/python scripts/eval_ops.py
+```
+
+结果写入 `data/ops_eval.json`，也可在 `/ops-eval` 页面复跑。合成数据只验证规则/流程，不代表真实客户效果。
+
 ### 演示前预热（必做）
 
 ```bash

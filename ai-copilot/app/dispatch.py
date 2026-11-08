@@ -126,18 +126,16 @@ def _loading(orders_: list[dict]) -> dict:
     }
 
 
-def demo() -> dict:
-    os_ = orders()
-    vs = vehicles()
-    baseline_rows = _assign_baseline(os_, vs)
-    optimized_rows = _assign_greedy(os_, vs)
-    baseline = _baseline_metrics(baseline_rows, vs)
+def run(orders_: list[dict], vehicles_: list[dict], loading_count: int = 80) -> dict:
+    baseline_rows = _assign_baseline(orders_, vehicles_)
+    optimized_rows = _assign_greedy(orders_, vehicles_)
+    baseline = _baseline_metrics(baseline_rows, vehicles_)
     optimized = _metrics(optimized_rows)
-    loading = _loading(os_[:80])
+    loading = _loading(orders_[:loading_count])
     return {
         "synthetic": True,
-        "summary": {"orders": len(os_), "vehicles": len(vs),
-                    "unassigned": len(os_) - len(optimized_rows)},
+        "summary": {"orders": len(orders_), "vehicles": len(vehicles_),
+                    "unassigned": len(orders_) - len(optimized_rows)},
         "baseline": baseline,
         "optimized": optimized,
         "improvement": {
@@ -150,3 +148,7 @@ def demo() -> dict:
         "loading": loading,
         "warning": "合成演示数据；调度/装箱为启发式规则，不是大模型，也不代表真实降本。",
     }
+
+
+def demo() -> dict:
+    return run(orders(), vehicles(), 80)

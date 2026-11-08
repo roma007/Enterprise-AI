@@ -28,7 +28,11 @@ VESSELS = [
     "CMA CGM RIVIERA / 305W", "HAPAG BERLIN / 077E",
 ]
 STATUSES = ["已提箱", "已装柜", "已进港", "报关中", "已放行", "已装船", "已到港"]
-TRUCKS = [f"粤B{10000 + i * 137 % 89999:05d}" for i in range(30)]
+def _truck_id(i: int) -> str:
+    return f"粤B{10000 + i * 137 % 89999:05d}"
+
+
+TRUCKS = [_truck_id(i) for i in range(30)]
 COORDS = {
     "北滘": (23.00, 113.20), "顺德": (22.84, 113.29), "佛山": (23.02, 113.12),
     "盐田": (22.58, 114.24), "蛇口": (22.48, 113.92), "南沙": (22.75, 113.60),
@@ -49,10 +53,10 @@ def _dist(a: str, b: str) -> float:
     return round(math.hypot(x1 - x2, y1 - y2) * 111 * 1.15, 1)
 
 
-def shipments() -> list[dict]:
+def shipments(count: int = 120) -> list[dict]:
     rnd = random.Random(20261108)
     out = []
-    for i in range(120):
+    for i in range(count):
         customer = CUSTOMERS[i % len(CUSTOMERS)]
         frm, to = ROUTES[i % len(ROUTES)]
         booking = f"SYN2026{i + 1:04d}"
@@ -90,10 +94,11 @@ def shipments() -> list[dict]:
     return out
 
 
-def vehicles() -> list[dict]:
+def vehicles(count: int = 30) -> list[dict]:
     rnd = random.Random(11)
     out = []
-    for i, truck in enumerate(TRUCKS):
+    for i in range(count):
+        truck = _truck_id(i)
         out.append({
             "truck": truck, "capacity_teu": rnd.choice([1, 1, 1, 2]),
             "cost_per_km": rnd.choice([4.2, 4.5, 4.8, 5.0]),
@@ -103,10 +108,10 @@ def vehicles() -> list[dict]:
     return out
 
 
-def orders() -> list[dict]:
+def orders(count: int = 160) -> list[dict]:
     rnd = random.Random(22)
     out = []
-    for i in range(160):
+    for i in range(count):
         frm, to = ROUTES[i % len(ROUTES)]
         ready = datetime(2026, 11, 8, 8) + timedelta(hours=rnd.randint(0, 36))
         due = ready + timedelta(hours=rnd.choice([6, 8, 10, 12]))

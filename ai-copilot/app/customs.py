@@ -93,13 +93,12 @@ def _tokens(text: str) -> set[str]:
     return set(words + grams)
 
 
-def candidates(description: str, top_k: int = 5) -> list[dict]:
+def _rank(items: list[dict], description: str, top_k: int = 5) -> list[dict]:
     text = (description or "").strip()
     if not text:
         raise ValueError("商品描述不能为空")
-    q = _tokens(text)
     out = []
-    for item in _load():
+    for item in items:
         hits = [k for k in item.get("keywords", []) if k and k.lower() in text.lower()]
         score = len(hits)
         # 只认关键词；不做字面 bigram 兜底，避免「航天器零件」误匹配汽车零件
@@ -108,6 +107,10 @@ def candidates(description: str, top_k: int = 5) -> list[dict]:
                         "confidence": min(0.95, 0.55 + 0.12 * score)})
     out.sort(key=lambda x: (-x["score"], x["code"]))
     return out[:max(1, top_k)]
+
+
+def candidates(description: str, top_k: int = 5) -> list[dict]:
+    return _rank(_load(), description, top_k)
 
 
 def _llm_choose(description: str, items: list[dict]) -> dict:

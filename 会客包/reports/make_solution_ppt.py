@@ -660,18 +660,30 @@ add_notes(s, "这页讲“被看住”。左边是慢慢变坏、能提前算出
 # ================================================================ 15 运行保障
 s = prs.slides.add_slide(prs.slide_layouts[6])
 add_header(s, "运行保障", "每天看什么、坏了找谁、多久练一次",
-           "不是买一套软件就完了；要有人、有节奏、有演练。")
+           "系统做能自动的；判断、决策和演练，还是人做。")
 
 beats = [
-    ("每天", "看一眼", "看 5 件事：备份是否成功、磁盘、证书、AI 额度、未处理报警。", TEAL),
-    ("每周", "清一次清单", "把一周报警归并成 3–5 条真问题，定负责人和截止日。", BLUE),
-    ("每月", "对一次账", "核对备份能不能恢复、权限有没有多余、费用有没有超。", ORANGE),
-    ("每季度", "练一次故障", "选一个场景演练：停掉再恢复，记录用时和卡在哪。", RED),
+    ("每天", "看一眼", "谁来做：系统自动，值班复核",
+     "定时自检、采集、报警由系统做；值班只看未处理项。", TEAL),
+    ("每周", "清一次清单", "谁来做：值班运维 / 负责人",
+     "把一周报警归并成 3–5 条真问题，定人和截止日。", BLUE),
+    ("每月", "对一次账", "谁来做：负责人 + 客户 IT",
+     "跑一次恢复验证，核对权限与费用；系统给数，人判断。", ORANGE),
+    ("每季度", "练一次故障", "谁来做：双方一起",
+     "选一个场景停掉再恢复，记录用时和卡点。", RED),
 ]
-for i, (eyebrow, title, detail, color) in enumerate(beats):
-    add_card(s, 0.7 + i * 3.05, 1.98, 2.85, 2.25, eyebrow, title, detail, color)
+for i, (eyebrow, title, owner, detail, color) in enumerate(beats):
+    x = 0.7 + i * 3.05
+    add_rect(s, x, 1.95, 2.85, 2.2, LIGHT, LIGHT_2)
+    add_text(s, eyebrow, x + 0.2, 2.08, 2.45, 0.24, 8.8, True, color)
+    add_text(s, title, x + 0.2, 2.34, 2.45, 0.33, 13, True, NAVY)
+    add_text(s, owner, x + 0.2, 2.74, 2.45, 0.24, 8.3, True, color)
+    add_text(s, detail, x + 0.2, 3.02, 2.45, 1.0, 8.8, False, GRAY, line_spacing=1.28)
 
-add_text(s, "出事了怎么升级", 0.7, 4.4, 4.0, 0.28, 12.5, True, NAVY)
+add_text(s, "系统自动：定时自检、采集指标、算可撑天数、发提醒　｜　人来做：判断真假问题、定负责人、演练、对外沟通",
+         0.7, 4.24, 11.95, 0.28, 8.8, False, NAVY)
+
+add_text(s, "出事了怎么升级", 0.7, 4.6, 4.0, 0.28, 12.5, True, NAVY)
 chain = [
     ("系统发现", "自检 + 报警"),
     ("值班运维", "5 分钟内认领"),
@@ -681,23 +693,23 @@ chain = [
 ]
 for i, (title, detail) in enumerate(chain):
     x = 0.7 + i * 2.45
-    add_box(s, x, 4.76, 2.15, 0.86, title, detail, LIGHT, LIGHT_2, NAVY,
+    add_box(s, x, 4.94, 2.15, 0.82, title, detail, LIGHT, LIGHT_2, NAVY,
             title_size=10.5, detail_size=8.4)
     if i < len(chain) - 1:
-        add_arrow(s, x + 2.18, 5.06, 0.24, 0.26)
+        add_arrow(s, x + 2.18, 5.22, 0.24, 0.26)
 add_text(s, "没按时认领，自动升到上一级；每一步留时间、留处理人。",
-         0.7, 5.72, 11.9, 0.28, 9.2, False, GRAY)
+         0.7, 5.82, 11.9, 0.26, 9.0, False, GRAY)
 
-add_rect(s, 0.7, 6.08, 6.85, 0.9, RGBColor(0xFD, 0xEC, 0xEC), RGBColor(0xF3, 0xC9, 0xC9))
-add_text(s, "三条不做", 0.94, 6.18, 1.6, 0.26, 10.5, True, RED)
+add_rect(s, 0.7, 6.16, 6.85, 0.82, RGBColor(0xFD, 0xEC, 0xEC), RGBColor(0xF3, 0xC9, 0xC9))
+add_text(s, "三条不做", 0.94, 6.24, 1.6, 0.24, 10.2, True, RED)
 add_text(s, "不替客户改业务数据；不在没人确认时做危险操作；不承诺“永不出事”。",
-         0.94, 6.48, 6.4, 0.4, 9.2, False, GRAY, line_spacing=1.2)
-add_rect(s, 7.72, 6.08, 4.93, 0.9, GREEN_BG, RGBColor(0xBF, 0xE3, 0xCB))
-add_text(s, "给老板的一页", 7.96, 6.18, 2.4, 0.26, 10.5, True, GREEN)
+         0.94, 6.5, 6.4, 0.4, 8.8, False, GRAY, line_spacing=1.2)
+add_rect(s, 7.72, 6.16, 4.93, 0.82, GREEN_BG, RGBColor(0xBF, 0xE3, 0xCB))
+add_text(s, "给老板的一页", 7.96, 6.24, 2.4, 0.24, 10.2, True, GREEN)
 add_text(s, "每月一页：出了几次事、停了多久、谁处理的、下次怎么更快。",
-         7.96, 6.48, 4.5, 0.4, 9.2, False, GRAY, line_spacing=1.2)
+         7.96, 6.5, 4.5, 0.4, 8.8, False, GRAY, line_spacing=1.2)
 add_footer(s)
-add_notes(s, "这页回答“买了以后谁来管”。四个节奏：每天看、每周清、每月对、每季练；五段升级链写清几分钟谁接手；最后用“三条不做”划边界，用“给老板的一页”让管理层每月看到结果。")
+add_notes(s, "这页回答“买了以后谁来管、系统能自动做多少”。每天的自检、采集、报警是系统自动，值班只复核未处理项；每周归并真问题、每月恢复验证与费用判断、每季度演练，都要人。五段升级链写清几分钟谁接手；三条不做划边界；给老板的一页让管理层每月看到结果。")
 
 
 

@@ -10,6 +10,9 @@
 7. 落地预期（四阶段）
 8. 落地协作（人 / 数据 / 条件）
 
+字号：页标题保持 27–34pt；其余正文统一放大一档（8pt 以下提到 9pt，
+8–12pt 加 1pt，12–14pt 加 0.8pt，14–15.5pt 加 0.6pt），由 `body_size()` 统一处理。
+
 边界：
 - 公开资料页只写可查到的信息，并标注“未经现场核实”。
 - 不展示内部工程指标（回归数量、准确率指标、开发进度）。
@@ -54,9 +57,24 @@ prs.slide_height = Inches(7.5)
 
 
 # ------------------------------------------------------------------ 基础组件
+def body_size(size):
+    """正文统一放大一档；各页大标题（>=18pt）保持原样。"""
+    if size >= 18:
+        return size
+    if size <= 8:
+        return 9.0
+    if size <= 12:
+        return size + 1.0
+    if size <= 14:
+        return size + 0.8
+    if size <= 15.5:
+        return size + 0.6
+    return size
+
+
 def set_font(run, size=14, bold=False, color=BLACK, font=FONT):
     run.font.name = font
-    run.font.size = Pt(size)
+    run.font.size = Pt(body_size(size))
     run.font.bold = bold
     run.font.color.rgb = color
 

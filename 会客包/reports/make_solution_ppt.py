@@ -183,6 +183,22 @@ def add_down_arrow(slide, left, top, width=0.28, height=0.22, color=ORANGE):
     return shape
 
 
+def add_two_way_arrow(slide, left, top, width=0.45, height=0.3, color=ORANGE):
+    shape = slide.shapes.add_shape(MSO_SHAPE.LEFT_RIGHT_ARROW, Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.fill.solid(); shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+    shape.shadow.inherit = False
+    return shape
+
+
+def add_updown_arrow(slide, left, top, width=0.34, height=0.72, color=ORANGE):
+    shape = slide.shapes.add_shape(MSO_SHAPE.UP_DOWN_ARROW, Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.fill.solid(); shape.fill.fore_color.rgb = color
+    shape.line.fill.background()
+    shape.shadow.inherit = False
+    return shape
+
+
 def add_header(slide, eyebrow, title, subtitle=None):
     add_text(slide, eyebrow, 0.7, 0.45, 8.0, 0.3, 11, True, TEAL)
     add_text(slide, title, 0.7, 0.78, 11.9, 0.55, 27, True, NAVY)
@@ -396,33 +412,41 @@ s = prs.slides.add_slide(prs.slide_layouts[6])
 add_header(s, "产品目标", "不换系统，长出 AI 能力",
            "基于前面的判断，在现有 TMS（运输管理系统）和财务系统之上，做一层增强。")
 
-# 架构图
-add_box(s, 0.7, 2.0, 2.35, 1.25, "现有 TMS", "运输管理系统\n订单 / 运单 / 车辆 / 客户", LIGHT, LIGHT_2, NAVY)
-add_arrow(s, 3.12, 2.45, 0.32, 0.3)
-add_box(s, 3.55, 2.0, 3.45, 1.25, "智单增强层", "单据入口 · 规则校验 · AI 辅助\n对账 · 账龄 · 成本 · 经营", RGBColor(0xD4, 0xF4, 0xDD), GREEN, NAVY)
-add_arrow(s, 7.08, 2.45, 0.32, 0.3)
-add_box(s, 7.5, 2.0, 2.3, 1.25, "财务系统", "如果有\n应收 / 发票 / 收款 / 科目", LIGHT, LIGHT_2, NAVY)
+# 架构图：智单加在两个现有系统之上，不是夹在中间
+add_rect(s, 0.7, 1.95, 9.1, 0.92, RGBColor(0xD4, 0xF4, 0xDD), GREEN)
+add_text(s, "智单增强层（新）", 0.95, 2.04, 3.2, 0.3, 13.5, True, NAVY)
+add_text(s, "单据入口 · 规则校验 · AI 辅助 · 对账 · 账龄 · 成本 · 经营",
+         0.95, 2.38, 7.2, 0.3, 9.6, False, GRAY)
+add_text(s, "不改 TMS / 财务原流程", 6.55, 2.1, 3.1, 0.26, 8.8, True, GREEN, PP_ALIGN.RIGHT)
 
-add_down_arrow(s, 5.13, 3.35, 0.28, 0.25)
-add_box(s, 3.55, 3.68, 3.45, 0.78, "人确认", "确认 / 修正 / 审批 / 回写 / 导出", RGBColor(0xE8, 0xF0, 0xFB), RGBColor(0x9D, 0xBC, 0xD8), NAVY)
+add_updown_arrow(s, 2.61, 2.87, 0.34, 0.73)
+add_text(s, "读：订单 / 运单 / 车辆\n确认后回写订单 / 对账", 3.04, 2.98, 2.2, 0.55,
+         8.0, False, GRAY, line_spacing=1.2)
+add_updown_arrow(s, 7.56, 2.87, 0.34, 0.73)
+add_text(s, "读：应收 / 发票 / 收款\n确认后导出差异 / 催收", 7.99, 2.98, 1.85, 0.55,
+         8.0, False, GRAY, line_spacing=1.2)
+
+add_box(s, 0.7, 3.62, 4.15, 0.92, "现有 TMS", "运输管理系统 · 订单 / 运单 / 车辆 / 客户", LIGHT, LIGHT_2, NAVY)
+add_box(s, 5.65, 3.62, 4.15, 0.92, "财务系统（如果有）", "应收 / 发票 / 收款 / 科目", LIGHT, LIGHT_2, NAVY)
 
 add_rect(s, 9.95, 1.95, 2.7, 2.6, WHITE, LIGHT_2)
 add_text(s, "三个原则", 10.15, 2.1, 2.3, 0.3, 12, True, NAVY)
 add_bullets(s, ["不换系统", "不双录", "不改审批"], 10.15, 2.5, 2.3, 1.5, 10, BLACK, TEAL, 7)
 add_text(s, "AI 只出草稿；人确认后才入业务。", 10.15, 3.72, 2.25, 0.5, 8.8, False, GRAY, line_spacing=1.25)
 
-add_text(s, "四个好处", 0.7, 4.85, 3.0, 0.3, 12, True, NAVY)
+add_text(s, "四个好处", 0.7, 4.78, 3.0, 0.3, 12, True, NAVY)
 benefits = [("少花时间", "少抄、少翻、少等"), ("少出错", "系统先挑错"), ("算清账", "成本 / 毛利 / 账龄"), ("留下经验", "SOP / 口径 / 难例")]
 for i, (title, detail) in enumerate(benefits):
     x = 0.7 + i * 3.02
-    add_rect(s, x, 5.2, 2.82, 0.9, LIGHT, LIGHT_2)
-    add_text(s, title, x + 0.2, 5.3, 2.4, 0.28, 10.5, True, GREEN)
-    add_text(s, detail, x + 0.2, 5.62, 2.4, 0.28, 9, False, GRAY)
+    add_rect(s, x, 5.12, 2.82, 0.85, LIGHT, LIGHT_2)
+    add_text(s, title, x + 0.2, 5.22, 2.4, 0.28, 10.5, True, GREEN)
+    add_text(s, detail, x + 0.2, 5.54, 2.4, 0.28, 9, False, GRAY)
 
-add_rect(s, 0.7, 6.35, 11.95, 0.45, NAVY, NAVY)
-add_text(s, "产品不是另一套 TMS，也不是财务软件；是夹在中间的 AI 增强层。", 0.95, 6.46, 11.45, 0.26, 11.5, True, WHITE, PP_ALIGN.CENTER)
+add_rect(s, 0.7, 6.18, 11.95, 0.46, NAVY, NAVY)
+add_text(s, "产品不是另一套 TMS，也不是财务软件；是加在现有系统上面的一层，两边都读，确认后才写回。",
+         0.95, 6.29, 11.45, 0.26, 11.2, True, WHITE, PP_ALIGN.CENTER)
 add_footer(s)
-add_notes(s, "先讲清楚定位：不替换、不双录、不改审批。AI 只在增强层里干活，最后还是要人确认。")
+add_notes(s, "这页先把定位讲清楚：智单是加在 TMS 和财务上面的一层，不是夹在中间的中转站，也不替换任何一边。两边都读；回写订单、导出差异都要人确认。TMS 和财务原有的对接不变。")
 
 
 # ================================================================ 06 产品优势
@@ -715,19 +739,19 @@ add_notes(s, "这页回答“买了以后谁来管、系统能自动做多少”
 
 # ================================================================ 16 系统关系 图
 s = prs.slides.add_slide(prs.slide_layouts[6])
-add_header(s, "系统关系", "产品在 TMS 和财务之间，做增强，不做替代",
+add_header(s, "系统关系", "产品接在 TMS 和财务两边，做增强，不做替代",
            "读什么、写什么、怎么接，先讲清楚。")
 
 add_box(s, 0.9, 2.0, 2.2, 1.3, "现有 TMS", "运输管理系统\n订单 / 运单 / 车辆 / 客户", LIGHT, LIGHT_2)
 add_box(s, 4.55, 2.0, 2.8, 1.3, "智单增强层", "单据入口 · 校验 · AI\n对账 · 账龄 · 成本 · 经营", RGBColor(0xD4, 0xF4, 0xDD), GREEN)
 add_box(s, 8.8, 2.0, 2.2, 1.3, "财务系统", "如果有\n应收 / 发票 / 收款 / 科目", LIGHT, LIGHT_2)
-add_arrow(s, 3.12, 2.45, 1.4, 0.3)
-add_arrow(s, 7.38, 2.45, 1.4, 0.3)
+add_two_way_arrow(s, 3.12, 2.45, 1.4, 0.3)
+add_two_way_arrow(s, 7.38, 2.45, 1.4, 0.3)
 
 add_text(s, "读订单 / 运单 / 客户", 3.2, 2.82, 1.25, 0.3, 7.6, True, TEAL, line_spacing=1.1)
-add_text(s, "回写订单 / 对账结果", 3.2, 3.08, 1.25, 0.4, 7.4, True, ORANGE, line_spacing=1.1)
+add_text(s, "确认后回写订单 / 对账", 3.2, 3.08, 1.25, 0.4, 7.4, True, ORANGE, line_spacing=1.1)
 add_text(s, "读应收 / 收款 / 科目", 7.45, 2.82, 1.25, 0.3, 7.6, True, TEAL, line_spacing=1.1)
-add_text(s, "导出差异 / 催收清单", 7.45, 3.08, 1.25, 0.4, 7.4, True, ORANGE, line_spacing=1.1)
+add_text(s, "确认后导出差异 / 催收", 7.45, 3.08, 1.25, 0.4, 7.4, True, ORANGE, line_spacing=1.1)
 
 add_rect(s, 0.7, 4.0, 3.82, 1.3, LIGHT, LIGHT_2)
 add_text(s, "系统对接 / 数据库视图", 0.92, 4.12, 3.0, 0.28, 10.5, True, NAVY)

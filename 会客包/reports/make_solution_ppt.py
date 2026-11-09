@@ -747,26 +747,33 @@ s = prs.slides.add_slide(prs.slide_layouts[6])
 add_header(s, "系统关系", "产品接在 TMS 和财务两边，做增强，不做替代",
            "读什么、写什么、怎么接，先说清楚。")
 
-add_box(s, 0.9, 2.0, 2.2, 1.3, "现有 TMS", "运输管理系统\n订单 / 运单 / 车辆 / 客户", LIGHT, LIGHT_2)
-add_box(s, 4.55, 2.0, 2.8, 1.3, "智单增强层", "单据入口 · 校验 · AI\n对账 · 账龄 · 成本 · 经营", RGBColor(0xD4, 0xF4, 0xDD), GREEN)
-add_box(s, 8.8, 2.0, 2.2, 1.3, "财务系统", "如果有\n应收 / 发票 / 收款 / 科目", LIGHT, LIGHT_2)
-add_two_way_arrow(s, 3.12, 2.45, 1.4, 0.3)
-add_two_way_arrow(s, 7.38, 2.45, 1.4, 0.3)
+add_rect(s, 0.7, 1.92, 11.95, 0.66, RGBColor(0xD4, 0xF4, 0xDD), GREEN)
+add_text(s, "智单增强层（新）", 0.95, 2.0, 3.0, 0.28, 12.5, True, NAVY)
+add_text(s, "单据入口 · 校验 · AI · 对账 · 账龄 · 成本 · 经营", 4.35, 2.03, 7.0, 0.24, 9.2, False, GRAY)
+add_text(s, "不改两边原流程", 10.85, 2.0, 1.65, 0.26, 8.8, True, GREEN, PP_ALIGN.RIGHT)
 
-add_text(s, "读订单 / 运单 / 客户", 3.2, 2.82, 1.25, 0.3, 7.6, True, TEAL, line_spacing=1.1)
-add_text(s, "确认后回写订单 / 对账", 3.2, 3.08, 1.25, 0.4, 7.4, True, ORANGE, line_spacing=1.1)
-add_text(s, "读应收 / 收款 / 科目", 7.45, 2.82, 1.25, 0.3, 7.6, True, TEAL, line_spacing=1.1)
-add_text(s, "确认后导出差异 / 催收", 7.45, 3.08, 1.25, 0.4, 7.4, True, ORANGE, line_spacing=1.1)
+add_updown_arrow(s, 2.96, 2.58, 0.34, 0.62)
+add_text(s, "读：订单 / 运单 / 车辆 / 客户\n确认后回写订单 / 对账", 3.42, 2.62, 2.9, 0.52,
+         8.2, False, GRAY, line_spacing=1.2)
+add_updown_arrow(s, 9.71, 2.58, 0.34, 0.62)
+add_text(s, "读：应收 / 收款 / 科目\n确认后导出差异 / 催收", 10.17, 2.62, 2.35, 0.52,
+         8.2, False, GRAY, line_spacing=1.2)
 
-add_rect(s, 0.7, 4.0, 3.82, 1.3, LIGHT, LIGHT_2)
-add_text(s, "系统对接 / 数据库视图", 0.92, 4.12, 3.0, 0.28, 10.5, True, NAVY)
-add_text(s, "适合有 IT 团队、能开测试环境的客户；读写字段按对接文档约定。", 0.92, 4.45, 3.3, 0.7, 8.8, False, GRAY, line_spacing=1.25)
-add_rect(s, 4.77, 4.0, 3.82, 1.3, LIGHT, LIGHT_2)
-add_text(s, "文件 / 模板", 4.99, 4.12, 3.0, 0.28, 10.5, True, NAVY)
-add_text(s, "没有系统对接时先用 Excel / CSV 导入导出；字段映射一次配好。", 4.99, 4.45, 3.3, 0.7, 8.8, False, GRAY, line_spacing=1.25)
-add_rect(s, 8.84, 4.0, 3.82, 1.3, LIGHT, LIGHT_2)
-add_text(s, "企微 / 手机入口", 9.06, 4.12, 3.0, 0.28, 10.5, True, NAVY)
-add_text(s, "一线不用装新 App；文字、图片、确认都在企微 / 手机里完成。", 9.06, 4.45, 3.3, 0.7, 8.8, False, GRAY, line_spacing=1.25)
+add_box(s, 0.7, 3.22, 4.85, 0.72, "现有 TMS", "运输管理系统 · 订单 / 运单 / 车辆 / 客户", LIGHT, LIGHT_2)
+add_box(s, 7.1, 3.22, 5.55, 0.72, "财务系统（如果有）", "应收 / 发票 / 收款 / 科目", LIGHT, LIGHT_2)
+
+add_text(s, "TMS 与财务之间原有的对接不变；智单只读写自己需要的字段。",
+         0.7, 3.98, 11.95, 0.22, 8.8, True, GRAY)
+
+add_rect(s, 0.7, 4.3, 3.82, 1.15, LIGHT, LIGHT_2)
+add_text(s, "系统对接 / 数据库视图", 0.92, 4.4, 3.0, 0.28, 10.5, True, NAVY)
+add_text(s, "适合有 IT 团队、能开测试环境的客户；读写字段按对接文档约定。", 0.92, 4.72, 3.3, 0.65, 8.8, False, GRAY, line_spacing=1.25)
+add_rect(s, 4.77, 4.3, 3.82, 1.15, LIGHT, LIGHT_2)
+add_text(s, "文件 / 模板", 4.99, 4.4, 3.0, 0.28, 10.5, True, NAVY)
+add_text(s, "没有系统对接时先用 Excel / CSV 导入导出；字段映射一次配好。", 4.99, 4.72, 3.3, 0.65, 8.8, False, GRAY, line_spacing=1.25)
+add_rect(s, 8.84, 4.3, 3.82, 1.15, LIGHT, LIGHT_2)
+add_text(s, "企微 / 手机入口", 9.06, 4.4, 3.0, 0.28, 10.5, True, NAVY)
+add_text(s, "一线不用装新 App；文字、图片、确认都在企微 / 手机里完成。", 9.06, 4.72, 3.3, 0.65, 8.8, False, GRAY, line_spacing=1.25)
 
 add_rect(s, 0.7, 6.1, 11.95, 0.55, NAVY, NAVY)
 add_text(s, "写回 TMS / 财务前，必须经客户确认；不双录、不截断审批、不替客户记账。", 0.95, 6.24, 11.45, 0.26, 11.5, True, WHITE, PP_ALIGN.CENTER)

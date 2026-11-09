@@ -196,4 +196,60 @@ def render() -> str:
     except Exception:  # noqa: BLE001
         pass
 
+    try:
+        from . import llm_usage
+        u = llm_usage.snapshot()
+        lines += _family("copilot_llm_tokens_today", [(None, u["today_tokens"])],
+                         kind="gauge", help_text="今日模型 token 消耗")
+        lines += _family("copilot_llm_avg_tokens_per_day",
+                         [(None, u["avg_tokens_per_day"])], kind="gauge",
+                         help_text="近 7 天平均 token 消耗")
+        lines += _family("copilot_llm_avg_cost_per_day_cny",
+                         [(None, u["avg_cost_per_day"])], kind="gauge",
+                         help_text="近 7 天平均模型费用（人民币）")
+        if u.get("remaining_tokens") is not None:
+            lines += _family("copilot_llm_remaining_tokens",
+                             [(None, u["remaining_tokens"])], kind="gauge",
+                             help_text="剩余 token 额度")
+        if u.get("balance_cny") is not None:
+            lines += _family("copilot_llm_balance_cny",
+                             [(None, u["balance_cny"])], kind="gauge",
+                             help_text="模型账户余额（人民币）")
+        days_left = []
+        if u.get("days_left_balance") is not None:
+            days_left.append(({"kind": "balance"}, u["days_left_balance"]))
+        if u.get("days_left_tokens") is not None:
+            days_left.append(({"kind": "tokens"}, u["days_left_tokens"]))
+        if days_left:
+            lines += _family("copilot_llm_days_left", days_left, kind="gauge",
+                             help_text="按近 7 天消耗估算还能撑几天")
+        if u.get("key_expires_days") is not None:
+            lines += _family("copilot_llm_key_expires_days",
+                             [(None, u["key_expires_days"])], kind="gauge",
+                             help_text="模型 Key/账号剩余天数")
+        if u.get("model_retires_days") is not None:
+            lines += _family("copilot_llm_model_retires_days",
+                             [(None, u["model_retires_days"])], kind="gauge",
+                             help_text="当前模型剩余天数")
+    except Exception:  # noqa: BLE001
+        pass
+
     return "\n".join(lines) + "\n"
+
+
+def http_health() -> dict:
+    """给运维快照用的 HTTP 健康摘要（进程内计数）。"""
+    with _lock:
+        http = dict(_http)
+        dur = {k: list(v) for k, v in _dur.items()}
+    total = sum(http.values())
+    errors = sum(n for (method, route, status), n in http.items()
+                 if 500 <= int(status) < 600)
+    total_ms = sum(v[0] for v in dur.values())
+    n = sum(v[1] for v in dur.values())
+    return {
+        "requests": total,
+        "errors": errors,
+        "http_5xx_ratio": round(errors / total, 4) if total else 0.0,
+        "avg_ms": round(total_ms / n, 1) if n else 0.0,
+    }

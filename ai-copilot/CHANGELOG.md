@@ -13,6 +13,17 @@
 - 修正事件关键词：补“船开”，把“等卸/等装”收紧为“等卸货/等装货”，减少“等卸船”误判为压车
 - 边界不变：合成数据只验证规则/流程，不代表真实客户；真实上线仍需港口/船期/订单/GPS/报关接口
 
+## [0.51.0] · 2026-11-09 · 模型资源进了灰犀牛（AI-52）
+
+- 新增 `app/llm_usage.py`：按天记 token/调用/失败/缓存，算近 7 天日均与可撑天数
+- 新增灰犀牛规则：模型余额不足、token 额度不足、Key/账号到期、模型下线、今日消耗异常放大
+- 余额/额度耗尽、Key/模型过期升级为 P1 事件，带研判与升级对象
+- 新增 Runbook：llm_topup（充值，需审批）、llm_throttle（降级，可自动）、llm_key_renew、llm_model_migrate
+- 新增接口：`GET /api/ops/ai/llm`、`POST /api/ops/ai/llm/budget`、`POST /api/ops/ai/collect`
+- 新增指标 8 个与告警 `CopilotLlmQuotaLow` / `CopilotLlmBalanceZero` / `CopilotLlmKeyExpiring`
+- 新增 `make aiops-collect`（cron 每 5 分钟）与页面“采集本机”
+- `make aiops-test` 扩到 42 项
+
 ## [0.50.0] · 2026-11-09 · 运维智能（AI-51）
 
 - 新增 `app/aiops.py`：灰犀牛风险（容量/趋势/到期）与黑天鹅事故（主机/DB/应用/外部探针/坏发布/模型网关）分轨规则

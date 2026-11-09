@@ -119,6 +119,16 @@ PYTHONPATH=. .venv/bin/python scripts/test_aiops.py
 
 页面：`/ops-ai`；接口：`/api/ops/ai/*`；说明：`docs/AIOps运维能力.md`。
 
+镜像/主机上定时采集（每 5 分钟）：
+
+```bash
+make aiops-collect
+# 或
+PYTHONPATH=. .venv/bin/python scripts/collect_aiops.py
+```
+
+模型余额/额度/到期见同一页面的“模型资源”卡片；可用 `POST /api/ops/ai/llm/budget` 或 `.env` 的 `LLM_BALANCE_CNY` / `LLM_QUOTA_TOKENS` / `LLM_KEY_EXPIRES_AT` 配置。没配置余额就不算“还能撑几天”，不猜。
+
 ### 演示前预热（必做）
 
 ```bash

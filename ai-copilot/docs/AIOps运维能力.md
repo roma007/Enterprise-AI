@@ -1,6 +1,6 @@
 # 运维智能（AIOps）能力说明
 
-> 版本：0.50.0 ｜ 2026-11-09 ｜ 节点：AI-51
+> 版本：0.51.0 ｜ 2026-11-09 ｜ 节点：AI-51 / AI-52
 > 目标：把“灰犀牛”提前发现、把“黑天鹅”快速收敛；规则负责确定性判断，AI 负责解释与建议，不直接执行危险命令。
 
 ---
@@ -43,6 +43,11 @@
 | 内存压力 | 使用率 ≥85% |
 | 错误预算 | 5xx >1% 且最近 30 分钟无发布 |
 | 模型超时 | 5 分钟超时 ≥5 次 |
+| 模型余额不足 | 余额 ≤30 天用量（按近 7 天日均费用） |
+| 模型额度不足 | 剩余 token ≤30 天用量 |
+| 模型 Key 到期 | 剩余 ≤45 天 |
+| 模型下线 | 当前模型剩余 ≤45 天 |
+| 消耗异常放大 | 今日费用 ≥3 倍日均 |
 
 | 黑天鹅 | 触发 |
 |---|---|
@@ -53,6 +58,8 @@
 | 发布后 5xx 飙升 | 5xx ≥5% 且 30 分钟内有发布 |
 | 模型网关连续超时 | 5 分钟超时 ≥10 次 |
 | 疑似勒索 | 安全标记 ransomware_suspected=true |
+| 模型余额/额度耗尽 | 余额 ≤0 或剩余 token ≤0 |
+| 模型 Key/模型已过期 | 到期日已过 |
 
 ### 2. AI 研判
 
@@ -96,6 +103,10 @@
 | service_restart | 中 | 否 | 滚动重启 |
 | rollback_release | 高 | 否 | 回滚最近发布 |
 | failover_host | 高 | 否 | 主机/实例切换 |
+| llm_topup | 中 | 否 | 余额/额度充值续费（资金动作，必须审批） |
+| llm_throttle | 低 | 是 | 关非核心模型调用、降 max_tokens、提高缓存 |
+| llm_key_renew | 中 | 否 | Key/账号续期与切换 |
+| llm_model_migrate | 中 | 否 | 模型下线迁移与回归 |
 
 生产执行器应接 K8s / Ansible / 客户运维平台，带前置条件、幂等、回滚、审计；MVP 只做计划与审批闭环。
 
@@ -111,6 +122,9 @@
   - `POST /api/ops/ai/incidents/{id}/diagnose`
   - `POST /api/ops/ai/incidents/{id}/notify`（按现有企微/邮件配置发送）
   - `POST /api/ops/ai/incidents/{id}/ack|resolve`
+  - `GET /api/ops/ai/llm`：模型用量、余额/额度、可撑天数
+  - `POST /api/ops/ai/llm/budget`：更新余额/额度/到期日
+  - `POST /api/ops/ai/collect`：采集本机真实指标并评估
   - `POST /api/ops/ai/runbooks/{name}/plan`
   - `POST /api/ops/ai/reset`
 - 权限：管理员（`/api/ops/ai` 在 `ADMIN_ONLY_PREFIXES`）。
@@ -132,9 +146,23 @@
           "ocr_fail_ratio": 0.12, "llm_timeout_per_5m": 12},
   "security": {"cert_days_left": 9},
   "probes": {"external_ok": false, "db_ok": true, "llm_ok": false},
-  "recent_change": {"version": "v1.28", "deployed_minutes_ago": 18}
+  "recent_change": {"version": "v1.28", "deployed_minutes_ago": 18},
+  "llm": {
+    "model": "deepseek-v4.1-flash",
+    "balance_cny": 260, "remaining_tokens": 180000,
+    "avg_tokens_per_day": 95000, "avg_cost_per_day": 18.5,
+    "today_cost": 62, "key_expires_days": 12, "model_retires_days": 20
+  }
 }
 ```
+
+### 模型资源怎么来的
+
+- `app/llm.py` 每次调用后写 `data/llm_usage.json`：只记 token 数、调用次数、失败/缓存次数，**不记提示词内容**。
+- 日均消耗按“近 7 天（不含今天）”算，避免早上被 0 拉低。
+- 余额/额度/到期日来自 `.env` 或 `data/llm_budget.json`（用 `POST /api/ops/ai/llm/budget` 更新）。
+- 有余额基准日时，只扣基准日之后的消耗；没有就当作“此刻余额”。
+- 没配余额/额度就不出 ETA，规则直接跳过，不猜。
 
 采集侧建议：
 
@@ -154,7 +182,12 @@
 
 - 页面事故卡：级别、症状、证据、AI 研判、通知值班、认领、解决。
 - 指标：`copilot_aiops_risks_open`、`copilot_aiops_incidents_open{severity}`。
-- 告警：`CopilotAiopsP0Incident`、`CopilotAiopsRiskHigh`。
+- 模型指标：`copilot_llm_tokens_today`、`copilot_llm_avg_tokens_per_day`、
+  `copilot_llm_avg_cost_per_day_cny`、`copilot_llm_balance_cny`、
+  `copilot_llm_remaining_tokens`、`copilot_llm_days_left{kind}`、
+  `copilot_llm_key_expires_days`、`copilot_llm_model_retires_days`。
+- 告警：`CopilotAiopsP0Incident`、`CopilotAiopsRiskHigh`、`CopilotLlmQuotaLow`、
+  `CopilotLlmBalanceZero`、`CopilotLlmKeyExpiring`。
 
 生产接入：
 
@@ -169,8 +202,9 @@
 
 ```bash
 cd ai-copilot
-make aiops-test        # 20 项规则/研判/Runbook/状态自检
+make aiops-test        # 42 项规则/研判/Runbook/状态/模型用量自检
 make ops-eval          # 既有运营能力回归
+make aiops-collect     # 采集本机指标并评估（cron 每 5 分钟跑一次）
 ```
 
 自检覆盖：
@@ -180,7 +214,9 @@ make ops-eval          # 既有运营能力回归
 - 黑天鹅：主机不可达 P0，且不重复报 app/db；
 - AI 研判有结论/证据/动作/升级；
 - Runbook 低风险自动、中高风险审批；
-- 状态持久化、认领、解决。
+- 状态持久化、认领、解决；
+- 模型资源：余额、额度、Key 到期、消耗放大；余额/额度耗尽升级为 P1；
+- 用量账本：今日 token、近 7 天日均、失败计数、可撑天数。
 
 ---
 
@@ -190,6 +226,8 @@ make ops-eval          # 既有运营能力回归
 - 黑天鹅不预测；只承诺更快发现、收敛、升级。
 - 真实自动执行需接客户执行器并审批；MVP 默认只出计划。
 - 指标/日志质量决定 AI 研判质量；没有数据就输出“数据不足”。
+- 模型余额是“账面事实”，不是预测：没配置余额/额度就不出 ETA。
+- 供应商余额接口没有统一标准，先靠人工/脚本更新；不要把“猜的余额”当告警依据。
 - 单租户部署；指标/告警可出客户边界，日志默认不出。
 
 ---
@@ -201,3 +239,4 @@ make ops-eval          # 既有运营能力回归
 3. 接 K8s/Ansible 执行器，先开放低风险 Runbook。
 4. 加事故时间线、复盘、Runbook 成功率统计。
 5. 每月做一次恢复/切换演练，按灰犀牛/黑天鹅分开复盘。
+6. 模型余额：能用供应商接口就定时拉，不能就每日人工/脚本更新一次，别让它过期才发现。

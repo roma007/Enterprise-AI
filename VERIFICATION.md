@@ -1031,6 +1031,31 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 
 ---
 
+### 5.50 模型资源灰犀牛：余额 / 额度 / 到期（AI-52）
+
+- 目标：把“模型还能用几天”变成可算的账面事实，而不是等报错才发现。仍属灰犀牛：有余额、有日均消耗，就能算 ETA。
+- 代码：
+  - `ai-copilot/app/llm_usage.py`：按天记账（token/调用/失败/缓存）、近 7 天日均、余额/额度/到期、可撑天数；只记数量，不记提示词。
+  - `ai-copilot/app/llm.py`：`chat_json()` 每次调用后写账本；缓存命中不计 token。
+  - `ai-copilot/app/aiops.py`：新增 5 类灰犀牛（余额、token 额度、Key 到期、模型下线、消耗放大）与 4 类 P1（余额/额度耗尽、Key/模型过期）。
+  - `ai-copilot/app/metrics.py`：8 个模型资源指标 + `http_health()`。
+  - `ai-copilot/ops/prometheus-alerts.yml`：`CopilotLlmQuotaLow`、`CopilotLlmBalanceZero`、`CopilotLlmKeyExpiring`。
+  - `ai-copilot/scripts/collect_aiops.py`、`make aiops-collect`：采集本机指标并评估，可挂 cron。
+  - `/ops-ai`：新增“模型资源”卡片与“采集本机”按钮。
+- 接口：`GET /api/ops/ai/llm`、`POST /api/ops/ai/llm/budget`、`POST /api/ops/ai/collect`。
+- 实测（登录后，端口 8792）：
+  - `POST /api/ops/ai/llm/budget` 设置余额 260 元、额度 5,000,000、Key 到期 12 天后、模型 20 天后 → 返回一致。
+  - `POST /api/ops/ai/collect` → 采集到本机磁盘使用率；按真实账本给出 Key/模型到期两条风险。
+  - `/metrics` 输出 `copilot_llm_tokens_today`、`copilot_llm_avg_tokens_per_day`、`copilot_llm_balance_cny`、`copilot_llm_remaining_tokens`、`copilot_llm_key_expires_days` 等。
+  - Playwright 打开 `/ops-ai` → 灰犀牛演示 14 条，其中模型相关 5 条；卡片显示余额、剩余 token、Key 到期、今日/日均消耗。
+- 自检：`make aiops-test` **42/42 通过**（新增模型余额、额度、Key 到期、模型到期、消耗放大、账本日均、可撑天数、耗尽升 P1、本机采集）。
+- 边界：
+  - 余额/额度是人工或脚本更新的事实，不是预测；没配置就不出 ETA。
+  - 暂未直连供应商余额接口（无统一标准）；多实例共用文件账本需改数据库表。
+  - “模型到期”同时覆盖 Key/账号到期与模型下线日，分别配 `LLM_KEY_EXPIRES_AT`、`LLM_MODEL_RETIRES_AT`。
+
+---
+
 ## 6. 未验证 / 阻塞项
 
 | 项 | 状态 | 说明 |

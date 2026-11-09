@@ -94,6 +94,14 @@ class Settings:
     smtp_starttls: bool = os.getenv("SMTP_STARTTLS", "1").strip() not in {"0", "false", "off"}
     smtp_timeout: float = float(os.getenv("SMTP_TIMEOUT", "10"))
 
+    # 模型资源（灰犀牛）：余额/额度/有效期由人工或供应商接口更新，见 app/llm_usage.py
+    llm_quota_tokens: int = int(os.getenv("LLM_QUOTA_TOKENS", "0") or 0)
+    llm_balance_cny: float = float(os.getenv("LLM_BALANCE_CNY", "0") or 0)
+    llm_balance_asof: str = os.getenv("LLM_BALANCE_ASOF", "").strip()
+    llm_price_per_1k: float = float(os.getenv("LLM_PRICE_PER_1K", "0") or 0)
+    llm_key_expires_at: str = os.getenv("LLM_KEY_EXPIRES_AT", "").strip()
+    llm_model_retires_at: str = os.getenv("LLM_MODEL_RETIRES_AT", "").strip()
+
     # 进程内固定，重启才变；用于网关侧的会话粘性与计费归集
     session_id: str = os.getenv("LLM_SESSION_ID", "").strip() or ("ses_" + uuid.uuid4().hex[:24])
 

@@ -84,6 +84,33 @@ groups:
           summary: "灰犀牛风险数超过 5 条"
           description: "去 /ops-ai 看风险债；按 ETA 排期，不要只告警不处理。"
 
+      - alert: CopilotLlmQuotaLow
+        expr: copilot_llm_days_left{job="ai-copilot"} < 7
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "模型余额/额度按当前消耗不足 7 天"
+          description: "先按 /ops-ai 的“模型用量降级”Runbook 关非核心调用，再走充值审批。"
+
+      - alert: CopilotLlmBalanceZero
+        expr: copilot_llm_balance_cny{job="ai-copilot"} <= 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "模型账户余额已用完"
+          description: "模型增强已不可用，解析/问答会回退规则；立即充值或切备用 Key。"
+
+      - alert: CopilotLlmKeyExpiring
+        expr: copilot_llm_key_expires_days{job="ai-copilot"} < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "模型 Key/账号 14 天内到期"
+          description: "提前续期并验证；到期后所有模型增强停用。"
+
       - alert: CopilotNoTraffic
         expr: increase(copilot_runs_total{job="ai-copilot"}[1h]) == 0
         for: 2h

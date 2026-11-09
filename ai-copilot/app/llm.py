@@ -104,6 +104,8 @@ def chat_json(system: str, user: str) -> LLMResult:
     cache = _load_cache()
     if key in cache:
         item = cache[key]
+        from . import llm_usage
+        llm_usage.record(0, ok=True, cached=True)
         return LLMResult(text=item["text"], tokens=int(item.get("tokens", 0)), ok=True, cached=True)
 
     base = {
@@ -125,6 +127,8 @@ def chat_json(system: str, user: str) -> LLMResult:
     if res.ok and res.text:
         cache[key] = {"text": res.text, "tokens": res.tokens}
         _save_cache()
+    from . import llm_usage
+    llm_usage.record(res.tokens, ok=res.ok)
     return res
 
 

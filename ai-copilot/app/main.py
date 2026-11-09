@@ -2529,6 +2529,34 @@ def dispatch_page():
     return FileResponse(ROOT / "static" / "dispatch.html")
 
 
+@app.get("/api/ops/ai/llm")
+def api_aiops_llm():
+    from . import llm_usage
+
+    return {"usage": llm_usage.stats(7), "budget": llm_usage.budget(),
+            "snapshot": llm_usage.snapshot()}
+
+
+@app.post("/api/ops/ai/llm/budget")
+def api_aiops_llm_budget(req: dict):
+    from . import llm_usage
+
+    return llm_usage.set_budget(
+        balance_cny=req.get("balance_cny"),
+        quota_tokens=req.get("quota_tokens"),
+        key_expires_at=req.get("key_expires_at"),
+        model_retires_at=req.get("model_retires_at"),
+        price_per_1k=req.get("price_per_1k"),
+    )
+
+
+@app.post("/api/ops/ai/collect")
+def api_aiops_collect():
+    from . import aiops
+
+    return aiops.collect()
+
+
 @app.get("/api/ops/ai/state")
 def api_aiops_state():
     from . import aiops

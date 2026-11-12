@@ -345,7 +345,7 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 | **报价助手（AI-45）**：询价 → 历史价/成本 → 建议报价 + 风险 | `app/quote.py` | `/quote`、`/api/quote/*` |
 | **企业知识库（AI-44）**：SOP/合同/报关口径检索 + 引用原文问答 | `app/kb.py` | `/kb`、`/api/kb/*` |
 | **在途异常抽取（AI-42）**：调度/司机聊天 → 事件卡片；规则 + 可选模型 | `app/events.py` | `/events`、`/api/events/*` |
-| **经营洞察（AI-40）**：毛利/待分摊/逾期/风险订单 → 结论与动作（规则，不是大模型） | `app/insight.py` | `/insight`、`/api/insight/*` |
+| **经营洞察（AI-40/53）**：规则算毛利/待分摊/逾期/风险订单；可选 AI 写简报、排优先级、生成动作草稿（数字锁定，不合规回退模板） | `app/insight.py`、`app/insight_ai.py` | `/insight`、`/api/insight/*` |
 | **成本归集 / 单车毛利（C1）**：应收 + 费用 → 单票/单车毛利；单号优先、车辆+日期兜底 | `app/margin.py` | `/margin`、`/api/margin/*` |
 | **账龄与催收**：四档账龄 + 客户风险分级 + 催收话术模板（可选 AI 润色，数字由规则锁定） | `app/aging.py`、`app/advice_ai.py` | `/aging`、`/api/aging/*` |
 | **外协结算**：合同价 × 数量 = 应付，与车队报账比对 | `app/settlement.py` | `/settlement`、`/api/settlement/*` |

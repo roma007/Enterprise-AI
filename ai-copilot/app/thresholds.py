@@ -170,6 +170,11 @@ SPECS: list[dict] = [
      "label": "低毛利预警线",
      "hint": "订单毛利率低于该值标「低毛利」，为负标「亏损」"},
 
+    # ---- 经营洞察 ----
+    {"key": "insight.ai_brief", "group": "经营洞察", "type": "bool", "default": 1.0,
+     "label": "经营洞察 AI 解读（可选）",
+     "hint": "模型只写 3–5 句简报、排优先级、生成动作草稿；数字由规则锁定，输出不合规自动回退模板"},
+
     # ---- 报价 ----
     {"key": "quote.target_margin", "group": "报价", "default": 0.15,
      "min": 0.0, "max": 0.8, "step": 0.01,

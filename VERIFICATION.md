@@ -1,7 +1,7 @@
 # 全项目核验报告
 
-> 核验日期：2026-11-08
-> 基线提交：`cb90a05` + 客户现场实施图重构
+> 核验日期：2026-11-12
+> 基线提交：`3e152c2` + 经营洞察 AI 解读（AI-53）
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -15,7 +15,7 @@
 | 数据库 | **通过**：59 个迁移全部应用；85 张表；81 张业务表启用 RLS；82 条策略 |
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
-| ai-copilot | **通过（内部样例）**：8 个专项测试 + 16 项 smoke 通过；规则评测通过 |
+| ai-copilot | **通过（内部样例）**：9 个专项测试 + 17 项 smoke 通过；规则评测通过 |
 | CI | **通过**：GitHub Actions 4 个 job 全部通过（`cb90a05`，run #202） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
@@ -1087,6 +1087,22 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 几何检查：所有形状在 13.333×7.5 画布内；按字体度量估算文本高度，全部文本框无溢出。
   - 页码由 `add_footer()` 自动生成，读回第 14/15 页为 `14 / 21`、`15 / 21`；末页为深色收尾页，沿用原设计不显示页码。
 
+### 5.53 经营洞察 AI 解读（AI-53，2026-11-12）
+
+- 新增 `ai-copilot/app/insight_ai.py` + `POST /api/insight/brief`：规则先算指标，模型只写 3–5 句老板简报、异常优先级、动作草稿。
+- 边界：金额、客户名、异常编号由 `insight.build()` 锁定；模型输出要过数字白名单、异常 ID 全覆盖、责任人/时间枚举、法律与付款承诺检查，不合规回退规则模板。
+- 页面：`/insight` 新增「AI 解读」按钮与「⑥ AI 经营简报」区；合成数据标注 `【合成演示】`，模型未配置/失败时仍展示规则版并说明原因。
+- 配置：`insight.ai_brief` 默认开启，只在点击按钮时调用模型。
+- 修正规则洞察“最长逾期”取金额最高客户天数的问题：演示数据下由 `134 天` 改为全部客户全局最长 `150 天`。
+- 实测（本机 8799 + `.env` 已配置模型 `deepseek-v4.1-flash`）：
+  - `POST /api/insight/brief` 返回 `source=llm+rule`、`ok=true`、`fallback=false`、`tokens=2024`、`cached=false`。
+  - 简报 4 句；优先级覆盖 3 条异常（逾期未收 → 亏损单 → 成本未归集）；动作均带责任人、时间和可执行动作；数字与规则结果一致。
+- 自检：`scripts/test_insight_ai.py` **12/12 通过**（回退、合法输出、编造数字、未知异常 ID、付款承诺、全局最长逾期）。
+- `./scripts/smoke.sh` **17/17 通过**（新增“经营洞察 AI 解读自检”）。
+- 口径：真实经营数据仍未接，**AI-29 保持 `[ ]`**；当前为合成数据演示，不把规则指标或 AI 解读写成真实客户经营结论。
+
+---
+
 ---
 
 ## 6. 未验证 / 阻塞项
@@ -1130,7 +1146,7 @@ PW_CHANNEL=msedge npx playwright test
 # ai-copilot
 cd ../ai-copilot
 make smoke
-for t in test_address test_fees test_metrics test_delivery test_hardening test_wecom_crypto test_storage; do
+for t in test_address test_fees test_metrics test_delivery test_hardening test_wecom_crypto test_storage test_insight_ai; do
   PYTHONPATH=. .venv/bin/python scripts/$t.py
 done
 ```

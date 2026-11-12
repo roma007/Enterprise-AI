@@ -7,7 +7,8 @@
 - 动作：先核对什么、先催谁、先补什么
 
 边界：
-- 全部规则生成，可复现、可审计；不调用大模型。
+- 本模块全部规则生成，可复现、可审计；不调用大模型。
+- 可选的 AI 解读在 `app/insight_ai.py`：只写简报、排序和动作草稿，数字仍由本模块锁定。
 - 合成演示数据只用于验证汇总逻辑，不代表客户真实经营结论。
 """
 from __future__ import annotations
@@ -71,12 +72,14 @@ def build(margin_result: dict, aging_result: dict) -> dict:
         })
 
     if asum.get("total_overdue", 0) > 0:
-        top = (aging_result.get("clients") or [{}])[0]
+        clients = aging_result.get("clients") or []
+        top = clients[0] if clients else {}
+        max_days = max((int(c.get("max_overdue_days") or 0) for c in clients), default=0)
         insights.append({
             "level": "high",
             "title": f"逾期未收 {asum['total_overdue']:,.0f} 元",
             "detail": f"重点催收 {counts.get('重点催收', 0)} 家、催收 {counts.get('催收', 0)} 家；"
-                      f"最长逾期 {top.get('max_overdue_days', 0)} 天。",
+                      f"全部客户最长逾期 {max_days} 天。",
             "action": f"先催 {top.get('client', '逾期最多的客户')}；话术在 /aging 复制",
         })
 

@@ -47,7 +47,17 @@
   .t-提醒{background:#e8f0fb;color:var(--brand)}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
   .toast.show{opacity:1}
-  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+  .warn.ok{background:#f0f9f3;border-color:#c6e6d1;color:#256b41}
+  .ai-brief{padding:0 14px 12px;font-size:14px;line-height:1.75}
+  .ai-cols{display:grid;grid-template-columns:1fr 1.25fr;gap:12px;padding:0 14px 12px}
+  .ai-col{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .ai-col h3{font-size:12px;margin:0;padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600}
+  .ai-col ol{margin:0;padding:10px 12px 10px 30px}
+  .ai-col li{font-size:12.8px;margin-bottom:8px}
+  .ai-col li b{display:block;margin-bottom:2px}
+  .ai-col li span{color:var(--muted);font-size:12px}
+  .ai-foot{padding:0 14px 14px;color:var(--muted);font-size:12px}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}.ai-cols{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="/static/nav.css?v=20261108l" />
 <script src="/static/nav.js?v=20261108k" defer></script>
@@ -55,7 +65,7 @@
 <body class="app-shell">
 <header>
   <h1>经营洞察</h1>
-  <span class="sub">毛利 · 待分摊 · 逾期 · 风险订单（规则汇总，不是大模型）</span>
+  <span class="sub">毛利 · 待分摊 · 逾期 · 风险订单（规则算指标；AI 只做解读，不改数）</span>
 </header>
 
 <div class="wrap">
@@ -69,6 +79,7 @@
     <div class="bar">
       <button class="primary" id="btnRun">分析</button>
       <button id="btnDemo">加载演示数据</button>
+      <button id="btnAi" disabled>AI 解读</button>
       <span class="hint" id="hint"></span>
     </div>
   </section>
@@ -92,6 +103,23 @@
   <section class="card" id="aging" style="display:none">
     <h2>⑤ 逾期客户</h2>
     <div style="padding:0 14px 14px"><table id="agingTable"></table></div>
+  </section>
+
+  <section class="card" id="aiCard" style="display:none">
+    <h2>⑥ AI 经营简报</h2>
+    <div class="warn" id="aiNote"></div>
+    <div class="ai-brief" id="aiBrief"></div>
+    <div class="ai-cols">
+      <div class="ai-col">
+        <h3>先处理什么</h3>
+        <ol id="aiPriorities"></ol>
+      </div>
+      <div class="ai-col">
+        <h3>动作草稿</h3>
+        <table id="aiActions"></table>
+      </div>
+    </div>
+    <div class="ai-foot" id="aiFoot"></div>
   </section>
 </div>
 <div class="toast" id="toast"></div>
@@ -139,6 +167,32 @@ function render(r){
       <td style="color:var(--muted);font-size:12px">${esc(x.advice)}</td></tr>`).join('');
 
   ['out','insights'].forEach(id => $('#'+id).style.display = 'block');
+  $('#btnAi').disabled = false;
+  $('#aiCard').style.display = 'none';
+}
+
+function renderAi(ai){
+  const fallback = !!ai.fallback;
+  $('#aiNote').className = 'warn' + (fallback ? '' : ' ok');
+  $('#aiNote').textContent = (ai.synthetic ? '【合成演示】' : '')
+    + (fallback
+        ? '未使用模型，已回退规则模板：' + (ai.error || '模型不可用')
+        : 'AI 只做解读和排序；金额、客户名、异常由规则计算，未改数。');
+  $('#aiBrief').textContent = ai.brief || '';
+
+  const priorities = ai.priorities || [];
+  $('#aiPriorities').innerHTML = priorities.map((x, i) => `
+    <li><b>${esc(x.title || x.id)}</b><span>${esc(x.why || '')}</span></li>`).join('');
+
+  const actions = ai.actions || [];
+  $('#aiActions').innerHTML = '<tr><th>事项</th><th>找谁</th><th>何时</th><th>动作</th></tr>' +
+    actions.map(x => `<tr><td>${esc(x.title || x.id)}</td><td>${esc(x.owner)}</td>
+      <td>${esc(x.when)}</td><td>${esc(x.action)}</td></tr>`).join('');
+
+  const source = ai.source === 'llm+rule' ? '规则指标 + 大模型解读' : '规则指标 + 规则模板';
+  const usage = ai.tokens ? `；本次 ${ai.tokens} tokens${ai.cached ? '（缓存）' : ''}` : '';
+  $('#aiFoot').textContent = `来源：${source}${usage}。${ai.boundary || ''}`;
+  $('#aiCard').style.display = 'block';
 }
 
 async function run(){
@@ -157,6 +211,24 @@ async function run(){
 
 $('#btnRun').onclick = run;
 
+$('#btnAi').onclick = async () => {
+  const revenue = $('#revenue').value.trim();
+  const costs = $('#costs').value.trim();
+  const receivables = $('#receivables').value.trim();
+  if(!revenue || !costs || !receivables){ toast('三块内容都要填'); return; }
+  const btn = $('#btnAi');
+  btn.disabled = true; $('#hint').textContent = 'AI 解读中…';
+  try{
+    const r = await fetch('/api/insight/brief', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({revenue, costs, receivables})});
+    if(!r.ok){ toast('AI 解读失败：' + (await r.text()).slice(0,100)); return; }
+    const d = await r.json();
+    render(d.result);
+    renderAi(d.ai);
+    if(d.ai && d.ai.fallback) toast('模型未参与，已回退规则模板');
+  } finally { btn.disabled = false; $('#hint').textContent = ''; }
+};
+
 $('#btnDemo').onclick = async () => {
   const d = await (await fetch('/api/insight/demo')).json();
   $('#revenue').value = d.revenue_text;
@@ -165,6 +237,10 @@ $('#btnDemo').onclick = async () => {
   render(d.result);
   toast('已加载演示数据，不代表真实经营结论');
 };
+
+['revenue','costs','receivables'].forEach(id => {
+  $('#'+id).addEventListener('input', () => { $('#aiCard').style.display = 'none'; });
+});
 </script>
 </body>
 </html>

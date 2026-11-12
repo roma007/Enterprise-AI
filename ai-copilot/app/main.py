@@ -2696,6 +2696,29 @@ def forecast_page():
     return FileResponse(ROOT / "static" / "forecast.html")
 
 
+@app.get("/api/fleet/demo")
+def api_fleet_demo():
+    """车队能源/线路决策演示：公开资料 + 合成运营数据，规则测算。"""
+    from .fleet import demo
+
+    return demo()
+
+
+@app.post("/api/fleet/brief")
+def api_fleet_brief():
+    """车队能源/线路决策 AI 解读：规则先算，模型只写简报、排序和动作草稿。"""
+    from .fleet import demo
+    from .fleet_ai import explain
+
+    result = demo()
+    return {"result": result, "ai": explain(result)}
+
+
+@app.get("/fleet")
+def fleet_page():
+    return FileResponse(ROOT / "static" / "fleet.html")
+
+
 @app.get("/api/profit/demo")
 def api_profit_demo():
     from .profit import demo

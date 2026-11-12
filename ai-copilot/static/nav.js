@@ -51,6 +51,7 @@
       items: [
         { href: '/quote', label: '报价助手', roles: ['admin', 'operator', 'finance'] },
         { href: '/insight', label: '经营洞察', roles: ['admin', 'finance'] },
+        { href: '/fleet', label: '能源决策', roles: ['admin', 'operator', 'finance'] },
         { href: '/profit', label: '盈利分析', roles: ['admin', 'finance'] },
         { href: '/forecast', label: '预测信用', roles: ['admin', 'finance'] }
       ]

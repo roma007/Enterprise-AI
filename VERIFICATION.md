@@ -1,7 +1,7 @@
 # 全项目核验报告
 
 > 核验日期：2026-11-12
-> 基线提交：`3e152c2` + 经营洞察 AI 解读（AI-53）
+> 基线提交：`9f106be` + 车队能源/线路决策（AI-54）
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -15,7 +15,7 @@
 | 数据库 | **通过**：59 个迁移全部应用；85 张表；81 张业务表启用 RLS；82 条策略 |
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
-| ai-copilot | **通过（内部样例）**：9 个专项测试 + 17 项 smoke 通过；规则评测通过 |
+| ai-copilot | **通过（内部样例）**：10 个专项测试 + 18 项 smoke 通过；规则评测通过 |
 | CI | **通过**：GitHub Actions 4 个 job 全部通过（`cb90a05`，run #202） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
@@ -1103,6 +1103,21 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 
 ---
 
+### 5.54 车队能源与线路决策（AI-54，2026-11-12）
+
+- 新增 `ai-copilot/app/fleet.py`：3 条线路 × 4 类车型（柴油大/小马力、LNG、电动）合成运营数据；按趟计算能源、路桥、维修、司机、装卸成本，汇总线路/车型/线路×车型。
+- 新增 `ai-copilot/app/fleet_ai.py` + `POST /api/fleet/brief`：规则先算，模型只写 3–5 句简报、排优先级、生成动作草稿；数字/异常 ID/责任人/时间锁定，必须说明“示例/假设”，不合规回退模板。
+- 新增 `/fleet` 页面：公开来源、KPI、线路成本、车型/能源对比、人力自动化、AI 解读、示例假设。
+- 新增 `scripts/fetch_xiefeng_public.py` + `make xiefeng-public`：抓取 5 个公开来源，缓存 `data/xiefeng_public.json`，仓库种子 `samples/xiefeng_public.json`；本轮 5/5 来源抓取成功（界面新闻、腾讯新闻、企业信息页、协会名单）；离线/CI 自动回退种子。
+- 实测（本机 8799 + `deepseek-v4.1-flash`）：
+  - `/api/fleet/demo`：360 趟、691 TEU、3 条线路、4 类车型；单箱综合成本 566 元、毛利率 13.5%、能源占比 30.8%、空驶率 10.5%、月度工时 1,820 小时、可减少重复工时 673 小时/月。
+  - `/api/fleet/brief`：`source=llm+rule`、`ok=true`、`fallback=false`、`tokens=6649`；简报明确“示例假设”，7 条优先级/7 条动作；盐田线电动重卡标记“需补能”，不直接建议替换。
+- 浏览器实测：KPI、线路 3 行、线路×车型 12 行、人力 7 行、AI 7 条优先级/7 条动作正常渲染；无 JS 报错（仅 favicon 404）。
+- 自检：`scripts/test_fleet.py` **23/23 通过**；`./scripts/smoke.sh` **18/18 通过**。
+- 边界：运营数据为合成，成本参数为示例假设；**未计车辆购置/电池折旧、充电设施、保险、残值、司机社保**，当前是运营成本对比，不是换车/采购结论；公开资料只用于会前研究，事实需客户确认。AI-54 真实数据仍未接。
+
+---
+
 ---
 
 ## 6. 未验证 / 阻塞项
@@ -1146,7 +1161,7 @@ PW_CHANNEL=msedge npx playwright test
 # ai-copilot
 cd ../ai-copilot
 make smoke
-for t in test_address test_fees test_metrics test_delivery test_hardening test_wecom_crypto test_storage test_insight_ai; do
+for t in test_address test_fees test_metrics test_delivery test_hardening test_wecom_crypto test_storage test_insight_ai test_fleet; do
   PYTHONPATH=. .venv/bin/python scripts/$t.py
 done
 ```

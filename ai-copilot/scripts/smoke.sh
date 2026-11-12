@@ -94,6 +94,12 @@ if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     chk "经营洞察 AI 解读自检（数字锁定/回退）" 0
   fi
 
+  if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_fleet.py >/dev/null 2>&1); then
+    chk "车队能源/线路决策自检（公开资料/合成口径/回退）" 1
+  else
+    chk "车队能源/线路决策自检（公开资料/合成口径/回退）" 0
+  fi
+
   if (cd "$ROOT_DIR" && PYTHONPATH=. .venv/bin/python scripts/test_hardening.py >/dev/null 2>&1); then
     chk "上生产加固自检（WAL/外键/登录锁定/清理/备份）" 1
   else

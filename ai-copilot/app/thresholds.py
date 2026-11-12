@@ -174,6 +174,9 @@ SPECS: list[dict] = [
     {"key": "insight.ai_brief", "group": "经营洞察", "type": "bool", "default": 1.0,
      "label": "经营洞察 AI 解读（可选）",
      "hint": "模型只写 3–5 句简报、排优先级、生成动作草稿；数字由规则锁定，输出不合规自动回退模板"},
+    {"key": "fleet.ai_brief", "group": "经营洞察", "type": "bool", "default": 1.0,
+     "label": "车队能源决策 AI 解读（可选）",
+     "hint": "模型只解读线路/能源/车型/人力测算；数字由规则锁定，必须说明示例假设，输出不合规回退模板"},
 
     # ---- 报价 ----
     {"key": "quote.target_margin", "group": "报价", "default": 0.15,

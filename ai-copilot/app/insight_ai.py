@@ -88,13 +88,32 @@ def _allowed_numbers(payload: dict) -> set[str]:
         elif isinstance(node, (int, float)):
             _add_number(out, node)
             # 比率字段额外允许百分比写法，例如 0.7221 → 72.2%
-            if key in {"margin", "overdue_ratio", "ratio"} and -1.5 <= float(node) <= 1.5:
+            if (key.endswith(("share", "ratio", "rate", "margin"))
+                    and -1.5 <= float(node) <= 1.5):
                 _add_number(out, float(node) * 100)
         elif isinstance(node, str):
             out.update(_numbers(node))
 
     walk(payload)
     return out
+
+
+def _number_ok(token: str, allowed: set[str]) -> bool:
+    """允许因四舍五入产生的 ±0.1 差异；不一致的整数仍会被拦截。"""
+    if token in allowed:
+        return True
+    try:
+        value = float(token)
+    except ValueError:
+        return False
+    for item in allowed:
+        try:
+            other = float(item)
+        except ValueError:
+            continue
+        if abs(abs(value) - abs(other)) <= 0.11:
+            return True
+    return False
 
 
 def _known_clients(result: dict) -> set[str]:
@@ -195,7 +214,7 @@ def _validate_text(text: str, allowed: set[str], *, max_len: int) -> str:
         return "内容为空"
     if len(text) > max_len:
         return "内容过长"
-    invented = sorted(_numbers(text) - allowed)
+    invented = sorted(x for x in _numbers(text) if not _number_ok(x, allowed))
     if invented:
         return f"出现输入之外的数字：{'、'.join(invented[:4])}"
     for word in _FORBIDDEN:

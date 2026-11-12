@@ -40,8 +40,8 @@ def _save_cache() -> None:
     _CACHE_PATH.write_text(json.dumps(_cache, ensure_ascii=False), encoding="utf-8")
 
 
-def _cache_key(system: str, user: str) -> str:
-    raw = f"{settings.model}\x00{system}\x00{user}"
+def _cache_key(system: str, user: str, max_tokens: int | None = None) -> str:
+    raw = f"{settings.model}\x00{system}\x00{user}\x00{max_tokens or settings.max_tokens}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
@@ -94,13 +94,14 @@ def _post(payload: dict) -> LLMResult:
         return LLMResult(text="", tokens=0, ok=False, error=f"{type(exc).__name__}: {exc}")
 
 
-def chat_json(system: str, user: str) -> LLMResult:
+def chat_json(system: str, user: str,
+              max_tokens: int | None = None) -> LLMResult:
     if not settings.llm_enabled:
         return LLMResult(text="", tokens=0, ok=False, error="llm_disabled")
 
     # 演示现场必须秒出：同一份托书 + 同一模型 + 同一提示词，直接命中缓存。
     # key 包含 prompt 全文，改了提示词自动失效，不会拿旧结果骗人。
-    key = _cache_key(system, user)
+    key = _cache_key(system, user, max_tokens)
     cache = _load_cache()
     if key in cache:
         item = cache[key]
@@ -115,7 +116,7 @@ def chat_json(system: str, user: str) -> LLMResult:
             {"role": "user", "content": user},
         ],
         "temperature": 0,
-        "max_tokens": settings.max_tokens,
+        "max_tokens": max_tokens or settings.max_tokens,
     }
 
     # 先要求 JSON 模式；部分网关不认 response_format，失败再去掉重试一次。

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 能源与线路决策</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f;--teal:#0f766e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1320px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
+  .chip{padding:3px 9px;border-radius:999px;background:#eef4f8;color:#28516f;font-size:11.5px}
+  .chip.src{background:#f0f9f3;color:#256b41}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+  .kpi div{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px}
+  .kpi b{display:block;font-size:18px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .warn{background:#fff8e8;border:1px solid #f1dcae;color:#7a5200;padding:9px 12px;border-radius:8px;font-size:12.5px;margin:0 14px 12px}
+  .warn.ok{background:#f0f9f3;border-color:#c6e6d1;color:#256b41}
+  .ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;padding:14px}
+  .item{border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:8px;padding:9px 11px}
+  .item.high{border-left-color:var(--err);background:#fffafa}
+  .item.warn{border-left-color:var(--warn);background:#fffdf7}
+  .item.ok{border-left-color:var(--ok);background:#fafffb}
+  .item b{display:block;font-size:13px;margin-bottom:3px}
+  .item p{margin:0 0 5px;font-size:12.5px;color:var(--muted)}
+  .item span{font-size:12px;color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag{padding:2px 8px;border-radius:999px;font-size:11px;white-space:nowrap;background:#eef2f7;color:var(--muted)}
+  .tag.high{background:#fde8e8;color:var(--err)}
+  .tag.warn{background:#fdf3e2;color:var(--warn)}
+  .tag.ok{background:#e6f4ea;color:var(--ok)}
+  .tag.blue{background:#e8f0fb;color:var(--brand)}
+  .num{font-variant-numeric:tabular-nums}
+  .neg{color:var(--err)}
+  .pos{color:var(--ok)}
+  .src-list{padding:0 14px 14px;font-size:12.5px}
+  .src-list a{color:var(--brand);text-decoration:none}
+  .src-list li{margin:5px 0;color:var(--muted)}
+  .src-list b{color:var(--ink);font-weight:600}
+  .ai-brief{padding:0 14px 12px;font-size:14px;line-height:1.75}
+  .ai-cols{display:grid;grid-template-columns:1fr 1.25fr;gap:12px;padding:0 14px 12px}
+  .ai-col{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .ai-col h3{font-size:12px;margin:0;padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600}
+  .ai-col ol{margin:0;padding:10px 12px 10px 30px}
+  .ai-col li{font-size:12.8px;margin-bottom:8px}
+  .ai-col li b{display:block;margin-bottom:2px}
+  .ai-col li span{color:var(--muted);font-size:12px}
+  .ai-foot{padding:0 14px 14px;color:var(--muted);font-size:12px}
+  .assump{margin:0;padding:0 28px 14px;color:var(--muted);font-size:12.3px}
+  .assump li{margin:5px 0}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:980px){.kpi{grid-template-columns:1fr 1fr}.ai-cols{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108l" />
+<script src="/static/nav.js?v=20261108k" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>能源与线路决策</h1>
+  <span class="sub">公开资料 + 合成运营数据；成本由规则测算，AI 只做解读，不改数</span>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <h2>① 数据来源与口径</h2>
+    <div class="bar">
+      <button class="primary" id="btnRun">重新计算</button>
+      <button id="btnAi" disabled>AI 解读</button>
+      <span class="hint" id="hint">公开资料只用于会前研究；运营数据为合成演示</span>
+    </div>
+    <div class="chips" id="srcChips"></div>
+    <div class="warn" id="warn"></div>
+    <ul class="src-list" id="srcList"></ul>
+  </section>
+
+  <section class="card" id="out" style="display:none">
+    <h2>② 总览</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="ins" id="ins"></div>
+  </section>
+
+  <section class="card" id="routeCard" style="display:none">
+    <h2>③ 线路成本</h2>
+    <div style="padding:0 14px 14px"><table id="routes"></table></div>
+  </section>
+
+  <section class="card" id="vehicleCard" style="display:none">
+    <h2>④ 车型与能源对比</h2>
+    <div class="bar" style="border-top:0;padding-top:0">
+      <label style="font-size:12px;color:var(--muted)">按线路筛选：</label>
+      <select id="routeFilter" style="font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid var(--line);border-radius:6px"></select>
+      <span class="hint">负数＝比柴油大马力便宜；电动重卡还要看续航/补能</span>
+    </div>
+    <div style="padding:0 14px 14px"><table id="pairs"></table></div>
+    <div style="padding:0 14px 14px"><table id="vehicles"></table></div>
+  </section>
+
+  <section class="card" id="laborCard" style="display:none">
+    <h2>⑤ 人力与自动化</h2>
+    <div style="padding:0 14px 14px"><table id="labor"></table></div>
+  </section>
+
+  <section class="card" id="aiCard" style="display:none">
+    <h2>⑥ AI 解读</h2>
+    <div class="warn" id="aiNote"></div>
+    <div class="ai-brief" id="aiBrief"></div>
+    <div class="ai-cols">
+      <div class="ai-col">
+        <h3>先验证什么</h3>
+        <ol id="aiPriorities"></ol>
+      </div>
+      <div class="ai-col">
+        <h3>动作草稿</h3>
+        <table id="aiActions"></table>
+      </div>
+    </div>
+    <div class="ai-foot" id="aiFoot"></div>
+  </section>
+
+  <section class="card" id="assumpCard" style="display:none">
+    <h2>⑦ 示例假设（真实项目必须替换为客户数据）</h2>
+    <ul class="assump" id="assump"></ul>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+const pct = n => (Number(n || 0) * 100).toFixed(1) + '%';
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+let last = null;
+
+function renderSource(p){
+  const mode = {live:'实时抓取缓存', seed:'仓库种子', fallback:'内置兜底'}[p.source_mode] || p.source_mode;
+  $('#srcChips').innerHTML = [
+    `<span class="chip src">${esc(mode)}</span>`,
+    `<span class="chip">公开来源 ${p.source_ok}/${p.source_total}</span>`,
+    p.fetched_at ? `<span class="chip">抓取 ${esc(p.fetched_at)}</span>` : '',
+    ...(p.signals?.ports || []).map(x => `<span class="chip">${esc(x)}</span>`),
+    ...(p.signals?.routes || []).map(x => `<span class="chip">${esc(x)}</span>`),
+    ...(p.signals?.business || []).slice(0, 8).map(x => `<span class="chip">${esc(x)}</span>`),
+  ].filter(Boolean).join('');
+  $('#srcList').innerHTML = (p.sources || []).map(s => `
+    <li>${s.ok ? '✓' : '✗'} <b>${esc(s.name)}</b>
+      ${s.url ? `· <a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.url)}</a>` : ''}
+      ${s.title ? `· ${esc(s.title)}` : ''}
+      ${s.signals?.length ? `· 命中：${esc(s.signals.join('、'))}` : ''}
+      ${s.error ? `· ${esc(s.error)}` : ''}
+    </li>`).join('');
+}
+
+function render(d){
+  last = d;
+  renderSource(d.public || {});
+  $('#warn').textContent = (d.synthetic ? '【合成演示】' : '') + d.warning;
+  const s = d.summary;
+  $('#kpi').innerHTML = `
+    <div><b>${s.fleet_total} 台 / ${s.vehicle_types} 类</b><span>示例车队结构（${s.routes} 条线路）</span></div>
+    <div><b>${pct(s.new_energy_share)}</b><span>新能源车辆占比（LNG+电）</span></div>
+    <div><b>${money(s.cost_per_teu)} 元</b><span>单箱综合成本</span></div>
+    <div><b class="${s.margin < 0.1 ? 'neg' : 'pos'}">${pct(s.margin)}</b><span>示例毛利率</span></div>
+    <div><b>${pct(s.energy_share)}</b><span>能源成本占运输成本</span></div>
+    <div><b>${pct(s.empty_ratio)}</b><span>空驶里程占比</span></div>
+    <div><b>${money(s.labor_hours)} h</b><span>示例月度工时</span></div>
+    <div><b>${money(s.release_hours)} h</b><span>可减少的重复工时/月</span></div>`;
+
+  $('#ins').innerHTML = (d.insights || []).map(x => `
+    <div class="item ${esc(x.level)}">
+      <b>${esc(x.title)}</b>
+      <p>${esc(x.detail)}</p>
+      <span>→ ${esc(x.action)}</span>
+    </div>`).join('');
+
+  $('#routes').innerHTML = '<tr><th>线路</th><th>单程</th><th>趟次</th><th>单箱成本</th><th>空驶率</th><th>毛利率</th><th>成本</th></tr>' +
+    (d.routes || []).map(x => `<tr>
+      <td><b>${esc(x.route)}</b></td><td>${x.distance_km} km</td><td>${x.trips}</td>
+      <td class="num">${money(x.cost_per_teu)} 元</td><td>${pct(x.empty_ratio)}</td>
+      <td class="${x.margin < 0.1 ? 'neg' : 'pos'}">${pct(x.margin)}</td><td class="num">${money(x.cost)}</td></tr>`).join('');
+
+  const options = ['全部线路', ...(d.routes || []).map(x => x.route)];
+  $('#routeFilter').innerHTML = options.map(x => `<option>${esc(x)}</option>`).join('');
+  renderPairs(d, '全部线路');
+
+  $('#vehicles').innerHTML = '<tr><th>车型</th><th>能源</th><th>马力</th><th>台数</th><th>单趟成本</th><th>单箱成本</th><th>能源成本/趟</th><th>能源占比</th><th>毛利率</th></tr>' +
+    (d.vehicles || []).map(x => `<tr>
+      <td><b>${esc(x.vehicle)}</b></td><td>${esc(x.energy)}</td><td>${x.hp}</td><td>${x.fleet}</td>
+      <td class="num">${money(x.cost_per_trip)}</td><td class="num">${money(x.cost_per_teu)}</td>
+      <td class="num">${money(x.energy_cost_per_trip)}</td><td>${pct(x.energy_share)}</td>
+      <td class="${x.margin < 0.1 ? 'neg' : 'pos'}">${pct(x.margin)}</td></tr>`).join('');
+
+  $('#labor').innerHTML = '<tr><th>环节</th><th>月工时</th><th>人数</th><th>自动化判断</th><th>可减少重复工时</th><th>说明</th></tr>' +
+    (d.labor || []).map(x => `<tr>
+      <td><b>${esc(x.task)}</b></td><td class="num">${money(x.hours)}</td><td>${x.people}</td>
+      <td><span class="tag ${x.mode === '可自动' ? 'ok' : x.mode === '需人工' ? 'high' : 'warn'}">${esc(x.mode)}</span></td>
+      <td class="num">${money(x.release_hours)}</td><td style="color:var(--muted)">${esc(x.detail)}</td></tr>`).join('');
+
+  $('#assump').innerHTML = (d.assumptions || []).map(x => `<li>${esc(x)}</li>`).join('');
+  ['out','routeCard','vehicleCard','laborCard','assumpCard'].forEach(id => $('#'+id).style.display = 'block');
+  $('#btnAi').disabled = false;
+  $('#aiCard').style.display = 'none';
+}
+
+function renderPairs(d, route){
+  const rows = (d.pairs || []).filter(x => route === '全部线路' || x.route === route);
+  $('#pairs').innerHTML = '<tr><th>线路</th><th>车型</th><th>能源</th><th>单箱成本</th><th>比柴油大马力</th><th>续航判断</th><th>单趟能源</th></tr>' +
+    rows.map(x => `<tr>
+      <td>${esc(x.route)}</td><td><b>${esc(x.vehicle)}</b></td><td>${esc(x.energy)}</td>
+      <td class="num">${money(x.cost_per_teu)} 元</td>
+      <td class="num ${x.delta_per_teu < 0 ? 'pos' : 'neg'}">${x.delta_per_teu < 0 ? '' : '+'}${money(x.delta_per_teu)} 元</td>
+      <td><span class="tag ${x.feasible === '可跑' ? 'ok' : x.feasible === '需补能' ? 'warn' : 'high'}">${esc(x.feasible)}</span></td>
+      <td class="num">${money(x.energy_cost_per_trip)}</td></tr>`).join('');
+}
+
+async function load(){
+  $('#btnRun').disabled = true; $('#hint').textContent = '计算中…';
+  try{
+    const r = await fetch('/api/fleet/demo');
+    if(!r.ok){ toast('计算失败：' + (await r.text()).slice(0,100)); return; }
+    render(await r.json());
+  } finally { $('#btnRun').disabled = false; $('#hint').textContent = '公开资料只用于会前研究；运营数据为合成演示'; }
+}
+
+function renderAi(ai){
+  const fallback = !!ai.fallback;
+  $('#aiNote').className = 'warn' + (fallback ? '' : ' ok');
+  $('#aiNote').textContent = fallback
+    ? '未使用模型，已回退规则模板：' + (ai.error || '模型不可用')
+    : 'AI 只做解读和排序；成本、能耗、工时由规则测算，未改数。';
+  $('#aiBrief').textContent = ai.brief || '';
+  $('#aiPriorities').innerHTML = (ai.priorities || []).map(x => `
+    <li><b>${esc(x.title || x.id)}</b><span>${esc(x.why || '')}</span></li>`).join('');
+  $('#aiActions').innerHTML = '<tr><th>事项</th><th>找谁</th><th>何时</th><th>动作</th></tr>' +
+    (ai.actions || []).map(x => `<tr><td>${esc(x.title || x.id)}</td><td>${esc(x.owner)}</td>
+      <td>${esc(x.when)}</td><td>${esc(x.action)}</td></tr>`).join('');
+  const source = ai.source === 'llm+rule' ? '规则测算 + 大模型解读' : '规则测算 + 规则模板';
+  const usage = ai.tokens ? `；本次 ${ai.tokens} tokens${ai.cached ? '（缓存）' : ''}` : '';
+  $('#aiFoot').textContent = `来源：${source}${usage}。${ai.boundary || ''}`;
+  $('#aiCard').style.display = 'block';
+}
+
+$('#btnRun').onclick = load;
+$('#routeFilter').onchange = () => { if(last) renderPairs(last, $('#routeFilter').value); };
+$('#btnAi').onclick = async () => {
+  const btn = $('#btnAi'); btn.disabled = true; $('#hint').textContent = 'AI 解读中…';
+  try{
+    const r = await fetch('/api/fleet/brief', {method:'POST'});
+    if(!r.ok){ toast('AI 解读失败：' + (await r.text()).slice(0,100)); return; }
+    const d = await r.json();
+    render(d.result);
+    renderAi(d.ai);
+    if(d.ai?.fallback) toast('模型未参与，已回退规则模板');
+  } finally { btn.disabled = false; $('#hint').textContent = '公开资料只用于会前研究；运营数据为合成演示'; }
+};
+
+load();
+</script>
+</body>
+</html>

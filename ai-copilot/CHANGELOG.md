@@ -5,6 +5,16 @@
 
 ---
 
+## [未发布] · 2026-11-12 · 车队能源与线路决策（AI-54）
+
+- 新增 `app/fleet.py`：公开资料 + 合成运营数据，测算 3 条线路 × 4 类车型（柴油大/小马力、LNG、电动）的单箱成本、能源占比、空驶率和人力工时
+- 新增 `app/fleet_ai.py` + `POST /api/fleet/brief`：模型只写 3–5 句简报、排优先级、生成动作草稿；数字/异常 ID/责任人/时间锁定，必须说明“示例/假设”，不合规回退模板
+- 新增 `scripts/fetch_xiefeng_public.py` + `make xiefeng-public`：抓取协丰公开网页（界面新闻、腾讯新闻、企业信息页、协会名单），缓存到 `data/xiefeng_public.json`，仓库种子在 `samples/xiefeng_public.json`
+- 新增 `/fleet` 页面：公开来源、KPI、线路成本、车型/能源对比、人力自动化、AI 解读、示例假设
+- 修正 LLM 缓存 key：把 `max_tokens` 纳入，避免同一提示词复用被截断的旧结果
+- 边界：运营数据是合成的，成本参数是示例假设，且未计车辆折旧/充电设施；真实结论需客户提供能耗、工时、路桥、合同价和 TCO 参数
+- 自检：`scripts/test_fleet.py` 23 项；`smoke.sh` 扩到 18 项
+
 ## [未发布] · 2026-11-12 · 经营洞察 AI 解读（AI-53）
 
 - 新增 `app/insight_ai.py` + `POST /api/insight/brief`：规则先算指标，模型只写 3–5 句老板简报、异常优先级、动作草稿

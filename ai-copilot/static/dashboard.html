@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>智单 · 经营驾驶舱</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e3e6ea;--ink:#1b2430;--muted:#6b7684;--brand:#1f4e79;--err:#c53030;--ok:#2f855a;--warn:#b7791f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{padding:16px;max-width:1320px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .card h2{font-size:13px;margin:0;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+  .banner{background:#fff4e5;border:1px solid #f1dcae;color:#7a5200;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;line-height:1.6}
+  .banner b{color:#8a4b00}
+  .bar{display:flex;gap:10px;align-items:center;padding:12px 14px;flex-wrap:wrap}
+  button{font:inherit;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12px;margin-left:auto}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+  .kpi div{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .kpi b{display:block;font-size:20px}
+  .kpi span{font-size:11px;color:var(--muted)}
+  .dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;padding:14px}
+  .item{border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:8px;padding:10px 12px}
+  .item.high{border-left-color:var(--err);background:#fffafa}
+  .item.warn{border-left-color:var(--warn);background:#fffdf7}
+  .item.ok{border-left-color:var(--ok);background:#fafffb}
+  .item .src{font-size:11px;color:var(--muted);margin-bottom:4px}
+  .item b{display:block;font-size:13.5px;margin-bottom:3px}
+  .item p{margin:0 0 6px;font-size:12.5px;color:var(--muted)}
+  .item .do{font-size:12px;color:var(--brand)}
+  .item .meta{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .mods{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}
+  .mod{border:1px solid var(--line);border-radius:9px;padding:12px;background:#fcfcfd}
+  .mod .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .mod h3{font-size:13.5px;margin:0}
+  .mod .tag{font-size:10.5px;padding:2px 8px;border-radius:999px;background:#fdf3e2;color:var(--warn);white-space:nowrap}
+  .mod .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .mod .grid div{background:#fff;border:1px solid var(--line);border-radius:6px;padding:7px}
+  .mod .grid b{display:block;font-size:14.5px}
+  .mod .grid span{font-size:10.5px;color:var(--muted)}
+  .mod a{display:inline-block;margin-top:10px;font-size:12px;color:var(--brand);text-decoration:none}
+  table{width:100%;border-collapse:collapse;font-size:12.6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);background:#fafbfc;font-weight:600;white-space:nowrap}
+  .tag-ok{color:var(--ok);background:#e6f4ea;padding:2px 8px;border-radius:999px;font-size:11px}
+  .tag-demo{color:var(--warn);background:#fdf3e2;padding:2px 8px;border-radius:999px;font-size:11px}
+  .ai-brief{padding:0 14px 12px;font-size:14px;line-height:1.75}
+  .ai-cols{display:grid;grid-template-columns:1fr 1.3fr;gap:12px;padding:0 14px 12px}
+  .ai-col{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .ai-col h3{font-size:12px;margin:0;padding:8px 10px;background:#fafbfc;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600}
+  .ai-col ol{margin:0;padding:10px 12px 10px 30px}
+  .ai-col li{font-size:12.8px;margin-bottom:8px}
+  .ai-col li b{display:block;margin-bottom:2px}
+  .ai-col li span{color:var(--muted);font-size:12px}
+  .ai-foot{padding:0 14px 14px;color:var(--muted);font-size:12px}
+  .links{display:flex;gap:0 18px;flex-wrap:wrap;padding:0 14px 14px}
+  .links a{color:var(--brand);text-decoration:none;font-size:12.8px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:980px){.kpi{grid-template-columns:1fr 1fr}.mods{grid-template-columns:1fr}.ai-cols{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/static/nav.css?v=20261108l" />
+<script src="/static/nav.js?v=20261108k" defer></script>
+</head>
+<body class="app-shell">
+<header>
+  <h1>经营驾驶舱</h1>
+  <span class="sub">老板视图 · 演示样张；经营结果、客户/线路、能源/线路三块独立展示</span>
+</header>
+
+<div class="wrap">
+  <div class="banner">
+    <b>演示样张 · 含合成数据。</b>
+    经营结果、客户/线路、能源/线路分别来自独立演示数据集，<b>不可加总</b>。
+    页面只用于对齐“老板会看到什么”，不是贵司真实经营结论；真实结论要等客户数据接入。
+  </div>
+
+  <section class="card">
+    <h2>① 经营结果</h2>
+    <div class="kpi" id="kpi"></div>
+  </section>
+
+  <section class="card">
+    <h2>② 先看这几件事</h2>
+    <div class="dec" id="decisions"></div>
+  </section>
+
+  <section class="card">
+    <h2>③ 模块快照</h2>
+    <div class="mods" id="modules"></div>
+  </section>
+
+  <section class="card">
+    <h2>④ 数据接入状态</h2>
+    <div style="padding:0 14px 14px"><table id="status"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>⑤ AI 经营摘要</h2>
+    <div class="bar" style="border-top:0;padding-top:0">
+      <button class="primary" id="btnAi">生成 AI 摘要</button>
+      <span class="hint" id="hint">模型只写摘要/排序/动作草稿；数字由规则汇总</span>
+    </div>
+    <div class="ai-brief" id="aiBrief" style="display:none"></div>
+    <div class="ai-cols" id="aiCols" style="display:none">
+      <div class="ai-col">
+        <h3>先处理什么</h3>
+        <ol id="aiPriorities"></ol>
+      </div>
+      <div class="ai-col">
+        <h3>动作草稿</h3>
+        <table id="aiActions"></table>
+      </div>
+    </div>
+    <div class="ai-foot" id="aiFoot"></div>
+  </section>
+
+  <section class="card">
+    <h2>⑥ 快速入口</h2>
+    <div class="links" id="links"></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+const pct = n => (Number(n || 0) * 100).toFixed(1) + '%';
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+let last = null;
+
+function render(d){
+  last = d;
+  const h = d.headline;
+  $('#kpi').innerHTML = `
+    <div><b>${money(h.revenue)}</b><span>应收</span></div>
+    <div><b>${money(h.cost)}</b><span>成本</span></div>
+    <div><b class="${h.profit < 0 ? 'neg' : 'pos'}">${money(h.profit)}</b><span>毛利</span></div>
+    <div><b>${pct(h.margin)}</b><span>毛利率</span></div>
+    <div><b>${h.orders}</b><span>订单数</span></div>
+    <div><b>${money(h.overdue)}</b><span>逾期未收</span></div>
+    <div><b>${h.overdue_clients}</b><span>需催客户</span></div>
+    <div><b>${money(h.unallocated)}</b><span>成本未归集</span></div>`;
+
+  $('#decisions').innerHTML = (d.decisions || []).map(x => `
+    <div class="item ${esc(x.level)}">
+      <div class="src">${esc(x.source)} · ${esc(x.owner)} · ${esc(x.when)}</div>
+      <b>${esc(x.title)}</b>
+      <p>${esc(x.detail)}</p>
+      <div class="do">→ ${esc(x.action)}</div>
+      <div class="meta"><a href="${esc(x.link)}" style="color:var(--brand)">查看详情</a></div>
+    </div>`).join('');
+
+  $('#modules').innerHTML = (d.modules || []).map(m => `
+    <div class="mod">
+      <div class="top"><h3>${esc(m.title)}</h3><span class="tag">${esc(m.tag)}</span></div>
+      <div class="grid">${(m.kpis || []).map(k => {
+        const val = k.kind === 'pct' ? pct(k.value)
+          : k.kind === 'count' ? Number(k.value || 0)
+          : money(k.value);
+        return `<div><b>${val}</b><span>${esc(k.label)}</span></div>`;
+      }).join('')}
+      </div>
+      <a href="${esc(m.link)}">进入 ${esc(m.title)} →</a>
+    </div>`).join('');
+
+  $('#status').innerHTML = '<tr><th>模块</th><th>状态</th><th>来源</th><th>还缺什么</th></tr>' +
+    (d.data_status || []).map(x => `<tr>
+      <td><b>${esc(x.module)}</b></td>
+      <td><span class="${x.status.includes('合成') ? 'tag-demo' : 'tag-ok'}">${esc(x.status)}</span></td>
+      <td style="color:var(--muted)">${esc(x.source)}</td>
+      <td style="color:var(--muted)">${esc(x.gap)}</td></tr>`).join('');
+
+  $('#links').innerHTML = (d.links || []).map(x => `<a href="${esc(x.href)}">${esc(x.label)} →</a>`).join('');
+  $('#btnAi').disabled = false;
+  $('#aiBrief').style.display = 'none';
+  $('#aiCols').style.display = 'none';
+  $('#aiFoot').textContent = d.warning || '';
+}
+
+function renderAi(ai, d){
+  const fallback = !!ai.fallback;
+  $('#aiBrief').style.display = 'block';
+  $('#aiBrief').textContent = (fallback ? '【规则模板】' : '【AI 摘要】') + ai.brief;
+  $('#aiCols').style.display = 'grid';
+  $('#aiPriorities').innerHTML = (ai.priorities || []).map(x => `
+    <li><b>${esc(x.title || x.id)}</b><span>${esc(x.why || '')}</span></li>`).join('');
+  $('#aiActions').innerHTML = '<tr><th>事项</th><th>找谁</th><th>何时</th><th>动作</th></tr>' +
+    (ai.actions || []).map(x => `<tr><td>${esc(x.title || x.id)}</td><td>${esc(x.owner)}</td>
+      <td>${esc(x.when)}</td><td>${esc(x.action)}</td></tr>`).join('');
+  const source = ai.source === 'llm+rule' ? '规则汇总 + 大模型摘要' : '规则汇总 + 规则模板';
+  const usage = ai.tokens ? `；本次 ${ai.tokens} tokens${ai.cached ? '（缓存）' : ''}` : '';
+  $('#aiFoot').textContent = `来源：${source}${usage}。${ai.boundary || ''} ${d.warning || ''}`;
+  if(fallback) toast('模型未参与，已回退规则模板');
+}
+
+async function load(){
+  const r = await fetch('/api/dashboard/demo');
+  if(!r.ok){ toast('加载失败：' + (await r.text()).slice(0,100)); return; }
+  render(await r.json());
+}
+
+$('#btnAi').onclick = async () => {
+  const btn = $('#btnAi'); btn.disabled = true; $('#hint').textContent = '生成中…';
+  try{
+    const r = await fetch('/api/dashboard/brief', {method:'POST'});
+    if(!r.ok){ toast('生成失败：' + (await r.text()).slice(0,100)); return; }
+    const d = await r.json();
+    render(d.result);
+    renderAi(d.ai, d.result);
+  } finally { btn.disabled = false; $('#hint').textContent = '模型只写摘要/排序/动作草稿；数字由规则汇总'; }
+};
+
+load();
+</script>
+</body>
+</html>

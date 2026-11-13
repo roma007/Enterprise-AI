@@ -2696,6 +2696,29 @@ def forecast_page():
     return FileResponse(ROOT / "static" / "forecast.html")
 
 
+@app.get("/api/dashboard/demo")
+def api_dashboard_demo():
+    """经营驾驶舱演示：老板视图，聚合经营结果/客户线路/能源线路三个演示模块。"""
+    from .dashboard import demo
+
+    return demo()
+
+
+@app.post("/api/dashboard/brief")
+def api_dashboard_brief():
+    """经营驾驶舱 AI 摘要：规则汇总，模型只写摘要、排序和动作草稿。"""
+    from .dashboard import demo
+    from .dashboard_ai import explain
+
+    result = demo()
+    return {"result": result, "ai": explain(result)}
+
+
+@app.get("/dashboard")
+def dashboard_page():
+    return FileResponse(ROOT / "static" / "dashboard.html")
+
+
 @app.get("/api/fleet/demo")
 def api_fleet_demo():
     """车队能源/线路决策演示：公开资料 + 合成运营数据，规则测算。"""

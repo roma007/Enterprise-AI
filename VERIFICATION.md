@@ -1,7 +1,7 @@
 # 全项目核验报告
 
 > 核验日期：2026-11-12
-> 基线提交：`9f106be` + 车队能源/线路决策（AI-54）
+> 基线提交：`12ddead` + 经营驾驶舱（AI-55）
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -15,7 +15,7 @@
 | 数据库 | **通过**：59 个迁移全部应用；85 张表；81 张业务表启用 RLS；82 条策略 |
 | API | **通过**：源码声明 336 个操作，OpenAPI 336 个，无缺失/多余 |
 | 文档与流程图 | **通过（语法/口径）**：8 个 Mermaid 图全部可解析；51 个相对链接无断链 |
-| ai-copilot | **通过（内部样例）**：10 个专项测试 + 18 项 smoke 通过；规则评测通过 |
+| ai-copilot | **通过（内部样例）**：11 个专项测试 + 19 项 smoke 通过；规则评测通过 |
 | CI | **通过**：GitHub Actions 4 个 job 全部通过（`cb90a05`，run #202） |
 | 生产/试点就绪 | **未通过（配置）**：本地缺 `AUTH_REQUIRED` / `AUTH_SECRET` / `METRICS_TOKEN` |
 | 真实外部联调 | **未验证**：真实客户、K8s、支付、模型、Alertmanager、真实 S3 仍阻塞 |
@@ -1118,6 +1118,19 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 
 ---
 
+### 5.55 经营驾驶舱（AI-55，2026-11-13）
+
+- 新增 `ai-copilot/app/dashboard.py` + `/dashboard`：老板/客户演示样张，聚合经营结果（`/insight`）、客户/线路（`/profit`）、能源/线路（`/fleet`）三个独立演示模块。
+- 新增 `ai-copilot/app/dashboard_ai.py` + `POST /api/dashboard/brief`：模型只写 3–5 句老板摘要、排优先级、生成动作草稿；数字/异常 ID/责任人/时间锁定，必须说明示例/合成，不合规回退模板。
+- 页面明确标注：三个模块使用独立合成数据，**不可加总**；含“数据接入状态”表，区分合成演示、公开资料缓存、真实本机运行指标。
+- 实测（本机 8799 + `deepseek-v4.1-flash`）：
+  - `/api/dashboard/demo`：8 项经营指标、3 个模块快照、6 条决策卡、5 行数据状态。
+  - `/api/dashboard/brief`：`source=llm+rule`、`ok=true`、`fallback=false`、`tokens=2810`；摘要明确“示例/合成”，覆盖 6 条决策。
+- 自检：`scripts/test_dashboard.py` **18/18 通过**；`./scripts/smoke.sh` **19/19 通过**。
+- 边界：驾驶舱只读聚合，不替代业务页；三个演示模块不可加总；真实经营数据仍未接，AI-29/AI-55 保持演示定位。
+
+---
+
 ---
 
 ## 6. 未验证 / 阻塞项
@@ -1161,7 +1174,7 @@ PW_CHANNEL=msedge npx playwright test
 # ai-copilot
 cd ../ai-copilot
 make smoke
-for t in test_address test_fees test_metrics test_delivery test_hardening test_wecom_crypto test_storage test_insight_ai test_fleet; do
+for t in test_address test_fees test_metrics test_delivery test_hardening test_wecom_crypto test_storage test_insight_ai test_fleet test_dashboard; do
   PYTHONPATH=. .venv/bin/python scripts/$t.py
 done
 ```

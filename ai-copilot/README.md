@@ -338,6 +338,7 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 | **对账单文件 OCR（AI-41）**：图片/PDF/CSV → 对账，不用先手抄 | `/api/reconcile/file` | `/reconcile`「上传对账单」 |
 | **客户/线路盈利（AI-50）**：客户/线路收入、成本、毛利、集中度、趋势（合成演示） | `app/profit.py` | `/profit` |
 | **能源与线路决策（AI-54）**：公开资料 + 合成运营数据；油/电、大/小马力、空驶、人力工时对比；规则测算 + 可选 AI 解读 | `app/fleet.py`、`app/fleet_ai.py` | `/fleet`、`/api/fleet/*`、`make xiefeng-public` |
+| **经营驾驶舱（AI-55）**：老板/客户演示样张；聚合经营结果、客户线路、能源线路 + 先看几件事 + 数据接入状态；三模块独立合成、不可加总 | `app/dashboard.py`、`app/dashboard_ai.py` | `/dashboard`、`/api/dashboard/*` |
 | **在途查询（AI-47）**：箱号/单号/客户 → 状态、ETA、报关、时间线（合成演示） | `app/tracking.py` | `/track` |
 | **调度优化（AI-48）**：订单/车辆/装箱优化前后对比（合成演示，启发式） | `app/dispatch.py` | `/dispatch` |
 | **预测信用（AI-49）**：客户风险、未来 4 周回款、线路趋势（合成演示） | `app/forecast.py` | `/forecast` |

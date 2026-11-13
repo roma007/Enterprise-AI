@@ -97,9 +97,12 @@ bad["brief"] = bad["brief"] + "我们保证回款。"
 out = run_llm(bad)
 chk("付款承诺被拦截", out["source"] == "rule" and "不允许" in out["error"])
 
-# 6. 规则结果里的“最长逾期”应为全局最长（150 天），不是金额最高客户（134 天）
+# 6. 规则结果里的“最长逾期”应为全局最长，不是金额最高客户的天数
 overdue = next(x for x in RESULT["insights"] if "逾期未收" in x["title"])
-chk("最长逾期取全局值", "150 天" in overdue["detail"] and "134 天" not in overdue["detail"])
+global_max = max(c["max_overdue_days"] for c in RESULT["overdue_clients"])
+top_max = RESULT["overdue_clients"][0]["max_overdue_days"]
+chk("最长逾期取全局值", f"{global_max} 天" in overdue["detail"]
+    and (top_max == global_max or f"{top_max} 天" not in overdue["detail"]))
 
 print()
 print("全部通过" if ok else "有失败项")

@@ -49,6 +49,7 @@
     {
       title: '经营',
       items: [
+        { href: '/dashboard', label: '经营驾驶舱', roles: ['admin', 'operator', 'finance'] },
         { href: '/quote', label: '报价助手', roles: ['admin', 'operator', 'finance'] },
         { href: '/insight', label: '经营洞察', roles: ['admin', 'finance'] },
         { href: '/fleet', label: '能源决策', roles: ['admin', 'operator', 'finance'] },

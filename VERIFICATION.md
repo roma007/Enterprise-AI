@@ -1201,13 +1201,13 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - `make pack-test-freight` 27 项（含 `extract` 跨包不崩、不注入 `client`、必填仍校验）；
 - `make pack-hotswap-test` 30 项（含 `_containers` 独立于 `multi` 配置）；
 - `make pack-state-test` 13 项（含 `rollback_target`）；
+- `make pack-normalize-test` 20 项：金额/日期/箱号/名称按 pack `normalize` 归一；
+  trucking 的 `freight`/`closing_time`/`client`，freight_audit 的 `amount`/`contract_rate`/`carrier_invoice_no` 均通过；
 - `PACK_ID=freight_audit` 临时实例：`/api/extract` 200，`/api/{reconcile,consistency,aging,margin,settlement}/demo` 409；
 - 默认 `trucking`：`smoke.sh` 19/19，上述 demo 200，`make eval` 结果不变。
 
 仍遗留（未在本轮修）：
 
-- `normalize_for_compare` 仍按字段名硬编码，未使用 pack 的 `normalize` 元数据；第二包的金额/日期对比可能按文本比。
-- `normalize.py` 的 `_NORMALIZERS` 仍是集卡字段名映射。
 - `settlement_extract.py` 仍有一套硬编码 `LINE_HINTS`。
 - 多实例广播、任务入队锁定 `pack_id`。
 

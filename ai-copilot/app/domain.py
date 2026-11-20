@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 # 字段类型 / 归一化器 / 校验器只允许固定枚举；pack 不能写任意代码。
 FIELD_KINDS = frozenset({"text", "datetime", "number", "enum"})
 NORMALIZERS = frozenset({
-    "text", "number", "amount", "datetime",
+    "text", "text_name", "number", "quantity", "amount", "datetime",
     "container_list", "container_type", "so_no", "alnum_upper",
 })
 VALIDATOR_TYPES = frozenset({

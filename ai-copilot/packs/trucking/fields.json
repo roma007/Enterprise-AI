@@ -9,7 +9,7 @@
         "example": "宏远国际货代",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "booking_no",
@@ -54,7 +54,7 @@
         "example": "2",
         "blocking": false,
         "kind": "number",
-        "normalize": "number"
+        "normalize": "quantity"
       },
       {
         "key": "container_no",
@@ -81,7 +81,7 @@
         "example": "北仑港区二期堆场",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "delivery_addr",
@@ -90,7 +90,7 @@
         "example": "宁波北仑春晓工业园 3 号仓",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "factory_contact",
@@ -135,7 +135,7 @@
         "example": "COSCO SHIPPING ARIES / 042E",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "depot",
@@ -153,7 +153,7 @@
         "example": "家用电器",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "gross_weight",
@@ -180,7 +180,7 @@
         "example": "需报关，周五前必须进港",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       }
     ]
   },
@@ -230,7 +230,7 @@
         "example": "宁波宏运集卡运输有限公司",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "buyer_tax_id",
@@ -248,7 +248,7 @@
         "example": "宁波北仑中石化加油站",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "seller_tax_id",
@@ -302,7 +302,7 @@
         "example": "0# 柴油",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "check_code",
@@ -320,7 +320,7 @@
         "example": "",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       }
     ]
   }

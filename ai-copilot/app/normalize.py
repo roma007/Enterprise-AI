@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 
+from .schema import SPEC_MAP
+
 TYPE_MAP = {
     "40H": "40HQ", "45H": "45HQ", "20H": "20HQ",
     "40HC": "40HQ", "45HC": "45HQ",
@@ -94,25 +96,34 @@ def canon_number(v: str | None) -> str | None:
     return s or v
 
 
-_NORMALIZERS = {
+def canon_alnum_upper(v: str | None) -> str | None:
+    if not v:
+        return v
+    return re.sub(r"[^0-9A-Za-z]", "", v).upper()
+
+
+# 只归一结构性字段；text/text_name/so_no 保持原值，避免改变客户原文展示。
+_CANON_BY_KIND = {
+    "container_list": canon_container_no,
     "container_type": canon_container_type,
-    "container_no": canon_container_no,
-    "seal_no": canon_container_no,
-    "container_qty": canon_qty,
-    "closing_time": canon_datetime,
-    "loading_window": canon_datetime,
-    "gross_weight": canon_number,
-    "freight": canon_number,
-    "factory_phone": lambda v: re.sub(r"[^\d]", "", v) if v else v,
+    "number": canon_number,
+    "quantity": canon_qty,
+    "amount": canon_number,      # 存储保留用户写法，只去币种/千分位
+    "datetime": canon_datetime,
+    "alnum_upper": canon_alnum_upper,
 }
 
 
 def canonicalize(fields: dict) -> list[str]:
-    """原地归一并返回被改动的字段名（用于留痕）。"""
+    """按字段声明的 normalize 原地归一，返回被改动的字段名（用于留痕）。"""
     changed: list[str] = []
-    for key, fn in _NORMALIZERS.items():
-        fv = fields.get(key)
+    for key, fv in fields.items():
         if not fv or not fv.value:
+            continue
+        spec = SPEC_MAP.get(key)
+        kind = spec.normalize if spec else "text"
+        fn = _CANON_BY_KIND.get(kind)
+        if fn is None:
             continue
         new = fn(fv.value)
         if new and new != fv.value:

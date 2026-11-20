@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from decimal import Decimal, InvalidOperation
 
 from .domain import Check, Draft, FieldSpec, FieldValue  # noqa: F401  （兼容旧 import）
 from .pack import current_pack, register_listener
@@ -58,27 +59,82 @@ def empty_draft() -> Draft:
     )
 
 
-# 用于评测的字段归一化目标
+# ---------- 字段归一化（normalize 元数据驱动） ----------
+# pack 的 fields.json 里每个字段声明 normalize；这里只实现固定几种归一化器。
+# 旧版按字段名硬编码，导致第二行业包的 amount/日期仍按文本比较。
+
+def _norm_text(v: str) -> str:
+    return v
+
+
+def _norm_text_name(v: str) -> str:
+    # 名称/地址类：空格、全半角、标点差异不该算错
+    v = re.sub(r"\s+", "", v)
+    return v.replace("（", "(").replace("）", ")").replace("、", ",").replace("，", ",")
+
+
+def _norm_number(v: str) -> str:
+    return "".join(ch for ch in v if ch.isdigit())
+
+
+def _norm_amount(v: str) -> str:
+    s = re.sub(r"[^\d.\-]", "", v)
+    if not s or s in {"-", "."}:
+        return v
+    try:
+        return str(Decimal(s).quantize(Decimal("0.01")))
+    except InvalidOperation:
+        return v
+
+
+def _norm_datetime(v: str) -> str:
+    # 局部 import：rules 依赖 schema，避免顶层循环
+    from .rules import fmt, parse_datetime
+
+    dt = parse_datetime(v)
+    return fmt(dt) if dt else v
+
+
+def _norm_container_list(v: str) -> str:
+    v = v.replace(" ", "").replace("，", ",").replace("、", ",").upper()
+    return ",".join(sorted(x for x in v.split(",") if x))
+
+
+def _norm_container_type(v: str) -> str:
+    return v.replace(" ", "").upper().replace("HC", "HQ")
+
+
+def _norm_so_no(v: str) -> str:
+    v = re.sub(r"^(SO|S/O)[-\s]?", "", v.upper())
+    return re.sub(r"[^A-Z0-9]", "", v)
+
+
+def _norm_alnum_upper(v: str) -> str:
+    return re.sub(r"[^0-9A-Za-z]", "", v).upper()
+
+
+_NORMALIZER_FNS = {
+    "text": _norm_text,
+    "text_name": _norm_text_name,
+    "number": _norm_number,
+    "quantity": _norm_number,
+    "amount": _norm_amount,
+    "datetime": _norm_datetime,
+    "container_list": _norm_container_list,
+    "container_type": _norm_container_type,
+    "so_no": _norm_so_no,
+    "alnum_upper": _norm_alnum_upper,
+}
+
+
 def normalize_for_compare(key: str, value: str | None) -> str:
+    """按当前包字段声明的 normalize 归一，用于评测/比对。"""
     if value is None:
         return ""
     v = unicodedata.normalize("NFKC", str(value)).strip()
-    if key in {"container_no", "seal_no"}:
-        v = v.replace(" ", "").replace("，", ",").replace("、", ",").upper()
-        v = ",".join(sorted(x for x in v.split(",") if x))
-    elif key in {"container_type"}:
-        v = v.replace(" ", "").upper().replace("HC", "HQ")
-    elif key in {"gross_weight", "freight", "container_qty", "factory_phone"}:
-        v = "".join(ch for ch in v if ch.isdigit())
-    elif key in {"so_no"}:
-        v = re.sub(r"^(SO|S/O)[-\s]?", "", v.upper())
-        v = re.sub(r"[^A-Z0-9]", "", v)
-    elif key in {"pickup_addr", "delivery_addr", "client", "cargo_desc",
-                 "vessel_voyage", "remark"}:
-        # 地址/名称类：空格、全半角、标点差异不该算错
-        v = re.sub(r"\s+", "", v)
-        v = v.replace("（", "(").replace("）", ")").replace("、", ",").replace("，", ",")
-    return v
+    spec = SPEC_MAP.get(key)
+    kind = spec.normalize if spec else "text"
+    return _NORMALIZER_FNS.get(kind, _norm_text)(v)
 
 
 __all__ = [

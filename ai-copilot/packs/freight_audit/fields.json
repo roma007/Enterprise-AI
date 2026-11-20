@@ -9,7 +9,7 @@
         "example": "顺达车队",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "carrier_invoice_no",
@@ -18,7 +18,7 @@
         "example": "CI-2026-1101",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "alnum_upper"
       },
       {
         "key": "shipment_no",
@@ -27,7 +27,7 @@
         "example": "SHP-1001",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "alnum_upper"
       },
       {
         "key": "charge_code",
@@ -36,7 +36,7 @@
         "example": "FREIGHT",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "alnum_upper"
       },
       {
         "key": "charge_name",
@@ -45,7 +45,7 @@
         "example": "干线运费",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "amount",
@@ -81,7 +81,7 @@
         "example": "待确认",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "remark",
@@ -90,7 +90,7 @@
         "example": "",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       }
     ]
   },
@@ -140,7 +140,7 @@
         "example": "宁波宏运集卡运输有限公司",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "buyer_tax_id",
@@ -158,7 +158,7 @@
         "example": "宁波北仑中石化加油站",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "seller_tax_id",
@@ -212,7 +212,7 @@
         "example": "0# 柴油",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       },
       {
         "key": "check_code",
@@ -230,7 +230,7 @@
         "example": "",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text_name"
       }
     ]
   }

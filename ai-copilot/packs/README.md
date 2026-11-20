@@ -11,7 +11,8 @@
   `packs/trucking/` 现在是托书、发票、校验、对账、账龄、费用、成本、地域的运行时源。
 - **Step 3 已完成**：新增 `packs/freight_audit/`（买方运费审计 dry-run），
   同一套 `app/` 内核不改代码可跑通；`packdiff` 证明差异只在配置。
-- **Step 4 待做**：`/api/packs`、激活/回滚、审计、设置页“行业包”页签。
+- **Step 4 已完成**：`/api/packs` 查看/激活/回滚、切换历史、设置页“行业包”页签。
+  v1 **保存后重启生效**，不做热切换。
 
 ## 目录
 
@@ -62,7 +63,23 @@ make pack-snapshot   # pack 加载 / 代码接线与 JSON 源对照
 make pack-test       # 固定时间跑 schema/invoice/rules 行为断言
 make pack-test-freight  # 买方运费审计 dry-run（PACK_ID=freight_audit）
 make pack-diff       # trucking -> freight_audit 的差异
+make pack-state-test # 激活/回滚历史自检（临时目录，不碰 data/）
 ```
+
+## 激活与回滚
+
+- 设置页 → “行业包”：查看运行中/已保存、切换、回滚；
+- 或 API：
+  ```bash
+  GET  /api/packs
+  POST /api/packs/activate  {"id":"freight_audit","reason":"客户 A 试点"}
+  POST /api/packs/rollback  {"reason":"试点暂停"}
+  GET  /api/packs/history
+  ```
+- 优先级：页面激活状态 > `PACK_ID` 环境变量 > 默认 `trucking`；
+- v1 只写指针，**重启服务后生效**；运行中的模块级常量不在请求中替换，避免半状态；
+- SQLite 落 `data/active_pack.json` / `data/pack_history.json`；
+  PostgreSQL 落 `app_settings` 的 `active_pack` / `pack_history`。
 
 ## 规则
 

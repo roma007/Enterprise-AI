@@ -12,7 +12,7 @@
   - [x] Step 1：`domain.py` / `pack.py`，`schema` / `invoice` / `rules` 读 pack → **2026-11-20 完成（AI-57）**
   - [x] Step 2：`reconcile` / `aging` / `fees` / `margin` / `geo` 读 pack → **2026-11-20 完成（AI-58）**
   - [x] Step 3：`packs/freight_audit/` dry-run + `packdiff`，证明换行业只换配置 → **2026-11-20 完成（AI-59）**
-  - [ ] Step 4：`/api/packs`、激活/回滚、审计、设置页“行业包”页签
+  - [x] Step 4：`/api/packs`、激活/回滚、审计、设置页“行业包”页签 → **2026-11-20 完成（AI-60）**
 
 - [ ] **诊断平台多租户 / HA 改造（供应商内部，不涉及智单）**
   - [x] 租户模型：`organizations` 增加 slug / status / settings

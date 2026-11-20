@@ -264,6 +264,82 @@ def api_settings_rollback(req: dict, request: Request):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+# ---------------------------------------------------------------- 行业包
+
+@app.get("/api/packs")
+def api_packs():
+    """当前运行包、已保存的激活目标、可选包列表。"""
+    from . import pack, pack_state, schema
+
+    available = pack.list_packs()
+    active_id = pack_state.get_active_id()
+    running = schema.PACK_ID
+    state = pack_state.get_state()
+    env_id = os.getenv("PACK_ID", "").strip()
+    if active_id:
+        active, source = active_id, "state"
+    elif env_id:
+        active, source = env_id, "env"
+    else:
+        active, source = pack.DEFAULT_PACK_ID, "default"
+    return {
+        "running": running,
+        "active": active,
+        "source": source,
+        "restart_required": active != running,
+        "updated_at": state.get("updated_at", ""),
+        "updated_by": state.get("updated_by", ""),
+        "available": available,
+    }
+
+
+@app.post("/api/packs/activate")
+def api_packs_activate(req: dict, request: Request):
+    """保存“下次启动使用的包”；不热切换运行中的模块。"""
+    from . import pack, pack_state
+
+    pack_id = str(req.get("id") or "").strip()
+    if not pack_id:
+        raise HTTPException(status_code=400, detail="id 不能为空")
+    try:
+        pack.load_pack(pack_id)
+    except pack.PackError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    change = pack_state.set_active(
+        pack_id, actor=_uid(request), reason=str(req.get("reason") or "")[:200])
+    return {"ok": True, "restart_required": True, **api_packs(), "change": change}
+
+
+@app.post("/api/packs/rollback")
+def api_packs_rollback(req: dict, request: Request):
+    """回滚到某次切换之前；不传 id 时撤销最近一次切换。"""
+    from . import pack_state
+
+    try:
+        change = pack_state.rollback(
+            str(req.get("id") or "").strip() or None,
+            actor=_uid(request), reason=str(req.get("reason") or "")[:200],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "restart_required": True, **api_packs(), "change": change}
+
+
+@app.get("/api/packs/history")
+def api_packs_history(limit: int = 50):
+    from . import pack_state
+
+    items = pack_state.history(limit)
+    names: dict[str, str] = {}
+    for item in items:
+        actor = str(item.get("actor") or "")
+        if actor and actor not in names:
+            user = get_user(actor) or {}
+            names[actor] = user.get("name") or user.get("email") or actor
+        item["actor_name"] = names.get(actor, actor or "system")
+    return {"items": items}
+
+
 def _mask_value(value: str, head: int = 0) -> str:
     if not value:
         return ""

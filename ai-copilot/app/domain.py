@@ -65,6 +65,7 @@ class Pack:
     geo: dict[str, Any]
     acceptance: dict[str, Any]
     settings_refs: tuple[str, ...] = ()
+    description: str = ""
 
 
 class FieldValue(BaseModel):

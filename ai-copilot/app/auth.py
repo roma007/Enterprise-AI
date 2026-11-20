@@ -151,6 +151,10 @@ def allowed(role: str, method: str, path: str) -> tuple[bool, str]:
     if role == "admin":
         return True, ""
 
+    # 行业包：查看对所有登录用户开放；切换/回滚仅管理员。
+    if path.startswith("/api/packs") and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        return (role == "admin"), "仅管理员可切换行业包"
+
     for p in ADMIN_ONLY_PREFIXES:
         if path.startswith(p):
             return False, "仅管理员可操作"

@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from . import pack_state
 from .config import ROOT
 from .domain import (
     FIELD_KINDS,
@@ -138,12 +139,25 @@ def _load_pack_dir(path: Path) -> Pack:
         geo=geo,
         acceptance=acceptance,
         settings_refs=tuple(meta.get("settings_refs") or ()),
+        description=str(meta.get("description") or ""),
     )
+
+
+def resolve_pack_id() -> tuple[str, str]:
+    """返回 (pack_id, 来源)。页面激活状态 > PACK_ID 环境变量 > 默认包。"""
+    state_id = pack_state.get_active_id()
+    if state_id:
+        return state_id, "state"
+    env_id = os.getenv("PACK_ID", "").strip()
+    if env_id:
+        return env_id, "env"
+    return DEFAULT_PACK_ID, "default"
 
 
 def load_pack(pack_id: str | None = None) -> Pack:
     """按 id 加载行业包；指定的包不存在时回退默认包。"""
-    requested = (pack_id or os.getenv("PACK_ID") or DEFAULT_PACK_ID).strip() or DEFAULT_PACK_ID
+    requested, _source = (pack_id.strip(), "explicit") if pack_id else resolve_pack_id()
+    requested = requested or DEFAULT_PACK_ID
     path = PACKS_DIR / requested
     if not path.is_dir():
         if requested == DEFAULT_PACK_ID:
@@ -156,19 +170,57 @@ def load_pack(pack_id: str | None = None) -> Pack:
     return _load_pack_dir(path)
 
 
+def list_packs() -> list[dict]:
+    """列出 `packs/` 下所有可加载的包（供设置页/API 使用）。"""
+    out: list[dict] = []
+    for path in sorted(PACKS_DIR.iterdir()):
+        if not (path / "pack.json").is_file():
+            continue
+        try:
+            pack = _load_pack_dir(path)
+        except PackError as exc:
+            out.append({
+                "id": path.name, "name": path.name, "version": "?",
+                "description": f"加载失败：{exc}", "fields": 0, "rules": 0,
+                "domains": [], "error": str(exc),
+            })
+            continue
+        out.append({
+            "id": pack.id,
+            "name": pack.name,
+            "version": pack.version,
+            "description": pack.description,
+            "fields": sum(len(v) for v in pack.documents.values()),
+            "rules": len(pack.validations),
+            "domains": [
+                key for key in ("reconcile", "aging", "fees", "cost", "geo", "acceptance")
+                if getattr(pack, key)
+            ],
+        })
+    return out
+
+
 _cache: Pack | None = None
 
 
 def active_pack() -> Pack:
-    """当前进程使用的行业包（`PACK_ID` 环境变量，默认 trucking）。"""
+    """当前进程使用的行业包。
+
+    优先级：`data/active_pack.json`（页面激活）> `PACK_ID` 环境变量 > `trucking`。
+    注意：页面激活/回滚只写指针，运行中的模块级常量在进程启动时生成，
+    所以**重启后生效**；不要在这里偷偷换缓存，否则会出现半状态。
+    """
     global _cache
     if _cache is None:
         _cache = load_pack()
     return _cache
 
 
-def reload_pack() -> Pack:
-    """清缓存并重新加载；测试或切换 pack 后使用。"""
+def reload_pack(pack_id: str | None = None) -> Pack:
+    """清缓存并重新加载；测试或多进程 worker 启动时使用。"""
     global _cache
     _cache = None
+    if pack_id:
+        _cache = load_pack(pack_id)
+        return _cache
     return active_pack()

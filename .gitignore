@@ -31,8 +31,8 @@ autopilot/.run.lock/
 # 试点值班表含真实联系人，不提交
 ops/oncall.yml
 
-# 会客包报告导出物（PDF/PPTX）：只保留本地，不入库
-会客包/reports/企业AI化方案_*
+# 会客包：整体只在本地保留，不入库（客户/售前材料不随代码仓库分发）
+会客包/
 
 # Python 缓存
 __pycache__/

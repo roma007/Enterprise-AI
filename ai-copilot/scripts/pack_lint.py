@@ -32,10 +32,11 @@ def chk(name: str, cond: bool, extra: str = "") -> None:
     ok = ok and cond
 
 
-def load(pack_dir: Path, name: str) -> dict:
+def load(pack_dir: Path, name: str, required: bool = True) -> dict:
     path = pack_dir / name
     if not path.exists():
-        chk(f"{name} 存在", False)
+        if required:
+            chk(f"{name} 存在", False)
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -52,11 +53,11 @@ def main() -> None:
     fields = load(pack_dir, "fields.json")
     rules = load(pack_dir, "rules.json")
     reconcile = load(pack_dir, "reconcile.json")
-    aging = load(pack_dir, "aging.json")
-    fees = load(pack_dir, "fees.json")
-    cost = load(pack_dir, "cost.json")
-    geo = load(pack_dir, "geo.json")
-    acceptance = load(pack_dir, "acceptance.json")
+    aging = load(pack_dir, "aging.json", required=False)
+    fees = load(pack_dir, "fees.json", required=False)
+    cost = load(pack_dir, "cost.json", required=False)
+    geo = load(pack_dir, "geo.json", required=False)
+    acceptance = load(pack_dir, "acceptance.json", required=False)
 
     # ---- pack.json ----
     print("\n[pack.json]")
@@ -146,39 +147,44 @@ def main() -> None:
         chk("display.no 非空", bool(display.get("no")))
         chk("display.container 非空", bool(display.get("container")))
 
-    # ---- aging / fees / cost ----
-    print("\n[aging.json / fees.json / cost.json]")
-    chk("aging.header_hints 非空", bool(aging.get("header_hints")))
-    chk("fees.header_hints 非空", bool(fees.get("header_hints")))
-    chk("fees.builtin_fees 非空", bool(fees.get("builtin_fees")))
-    settlement = fees.get("settlement") or {}
-    if settlement:
-        chk("fees.settlement.rate_hints 非空", bool(settlement.get("rate_hints")))
-        chk("fees.settlement.bill_hints 非空", bool(settlement.get("bill_hints")))
-    chk("cost.revenue_hints 非空", bool(cost.get("revenue_hints")))
-    chk("cost.cost_hints 非空", bool(cost.get("cost_hints")))
+    # ---- aging / fees / cost（可选） ----
+    print("\n[aging.json / fees.json / cost.json（可选）]")
+    if aging:
+        chk("aging.header_hints 非空", bool(aging.get("header_hints")))
+    if fees:
+        chk("fees.header_hints 非空", bool(fees.get("header_hints")))
+        chk("fees.builtin_fees 非空", bool(fees.get("builtin_fees")))
+        settlement = fees.get("settlement") or {}
+        if settlement:
+            chk("fees.settlement.rate_hints 非空", bool(settlement.get("rate_hints")))
+            chk("fees.settlement.bill_hints 非空", bool(settlement.get("bill_hints")))
+    if cost:
+        chk("cost.revenue_hints 非空", bool(cost.get("revenue_hints")))
+        chk("cost.cost_hints 非空", bool(cost.get("cost_hints")))
 
-    # ---- geo.json ----
-    print("\n[geo.json]")
-    cities = geo.get("cities") or {}
-    chk("cities 非空", bool(cities))
-    chk("terminals 是字典", isinstance(geo.get("terminals"), dict))
-    for district in geo.get("ambiguous") or []:
-        hit = any(district in names for names in cities.values())
-        chk(f"ambiguous {district} 能在 cities 找到", hit)
+    # ---- geo.json（可选） ----
+    print("\n[geo.json（可选）]")
+    if geo:
+        cities = geo.get("cities") or {}
+        chk("cities 非空", bool(cities))
+        chk("terminals 是字典", isinstance(geo.get("terminals"), dict))
+        for district in geo.get("ambiguous") or []:
+            hit = any(district in names for names in cities.values())
+            chk(f"ambiguous {district} 能在 cities 找到", hit)
 
-    # ---- acceptance.json ----
-    print("\n[acceptance.json]")
-    for key in ("field_accuracy", "correction_seconds", "diff_recall", "false_positive_rate"):
-        item = acceptance.get(key) or {}
-        target = item.get("target")
-        chk(f"{key}.target 是数字", isinstance(target, (int, float)), str(target))
-        if key != "correction_seconds" and isinstance(target, (int, float)):
-            chk(f"{key}.target 在 [0,1]", 0 <= target <= 1, str(target))
-        if key == "correction_seconds" and isinstance(target, (int, float)):
-            chk(f"{key}.target > 0", target > 0, str(target))
-    for name, item in (acceptance.get("samples") or {}).items():
-        chk(f"samples.{name}.min > 0", float((item or {}).get("min") or 0) > 0)
+    # ---- acceptance.json（可选） ----
+    print("\n[acceptance.json（可选）]")
+    if acceptance:
+        for key in ("field_accuracy", "correction_seconds", "diff_recall", "false_positive_rate"):
+            item = acceptance.get(key) or {}
+            target = item.get("target")
+            chk(f"{key}.target 是数字", isinstance(target, (int, float)), str(target))
+            if key != "correction_seconds" and isinstance(target, (int, float)):
+                chk(f"{key}.target 在 [0,1]", 0 <= target <= 1, str(target))
+            if key == "correction_seconds" and isinstance(target, (int, float)):
+                chk(f"{key}.target > 0", target > 0, str(target))
+        for name, item in (acceptance.get("samples") or {}).items():
+            chk(f"samples.{name}.min > 0", float((item or {}).get("min") or 0) > 0)
 
     print()
     if ok:

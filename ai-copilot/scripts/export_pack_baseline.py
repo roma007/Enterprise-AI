@@ -60,11 +60,16 @@ def main() -> None:
     })
 
     write("reconcile.json", pack.reconcile)
-    write("aging.json", pack.aging)
-    write("fees.json", pack.fees)
-    write("cost.json", pack.cost)
-    write("geo.json", pack.geo)
-    write("acceptance.json", pack.acceptance)
+    # 可选领域：为空就不写文件，保持“部分 pack”形态。
+    for name, payload in (
+        ("aging.json", pack.aging),
+        ("fees.json", pack.fees),
+        ("cost.json", pack.cost),
+        ("geo.json", pack.geo),
+        ("acceptance.json", pack.acceptance),
+    ):
+        if payload:
+            write(name, payload)
 
     print(f"已导出 {pack_dir}")
 

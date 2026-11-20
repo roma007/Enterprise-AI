@@ -1,0 +1,25 @@
+{
+  "field_accuracy": {
+    "target": 0.9,
+    "scope": "blocking"
+  },
+  "correction_seconds": {
+    "target": 60
+  },
+  "diff_recall": {
+    "target": 0.95
+  },
+  "false_positive_rate": {
+    "target": 0.1
+  },
+  "samples": {
+    "booking": {
+      "min": 20,
+      "recommended": 50
+    },
+    "statement": {
+      "min": 1,
+      "unit": "month"
+    }
+  }
+}

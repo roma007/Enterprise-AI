@@ -1,0 +1,74 @@
+{
+  "statement": {
+    "header_hints": {
+      "carrier_invoice_no": [
+        "承运商账单号",
+        "账单号",
+        "Invoice No",
+        "发票号"
+      ],
+      "shipment_no": [
+        "运单号",
+        "Shipment No",
+        "提单号"
+      ],
+      "charge_code": [
+        "费用代码",
+        "费用项",
+        "Charge Code",
+        "计费项"
+      ],
+      "amount": [
+        "账单金额",
+        "金额",
+        "Amount",
+        "应收"
+      ]
+    },
+    "line_hints": {
+      "waybill_no": ["账单号", "承运商账单号", "Invoice No", "发票号"],
+      "container_no": ["运单号", "Shipment No", "提单号"],
+      "amount": ["账单金额", "金额", "Amount", "应收"],
+      "remark": ["费用代码", "费用项", "Charge Code", "计费项"]
+    },
+    "line_map": {
+      "carrier_invoice_no": "waybill_no",
+      "shipment_no": "container_no",
+      "charge_code": "remark",
+      "amount": "amount"
+    },
+    "positional": [
+      "carrier_invoice_no",
+      "shipment_no",
+      "charge_code",
+      "amount"
+    ],
+    "amount_field": "amount",
+    "amount_fields": [
+      "contract_rate",
+      "contract_amount",
+      "rate"
+    ],
+    "display": {
+      "no": "carrier_invoice_no",
+      "container": "shipment_no",
+      "no_label": "账单号",
+      "container_label": "运单号"
+    }
+  },
+  "match": {
+    "keys": [
+      "carrier_invoice_no",
+      "shipment_no",
+      "charge_code"
+    ],
+    "multi": [],
+    "normalize": "alnum_upper"
+  },
+  "statuses": {
+    "ok": "一致",
+    "amount_diff": "金额不符",
+    "missing_in_system": "账单有、合同/系统无",
+    "missing_in_statement": "系统有、账单未报"
+  }
+}

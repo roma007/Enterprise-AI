@@ -8,9 +8,11 @@ import re
 import time
 from decimal import Decimal
 
+from .pack import active_pack
 from .table_extract import find_table_header, norm_date, parse_header_lines, parse_table, to_decimal
 
-LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
+# 明细列同义词来自 pack.reconcile.statement.line_hints；没配时退回集卡默认。
+_DEFAULT_LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("waybill_no", ("运单号", "客户单号", "提单号", "单号")),
     ("container_no", ("箱号", "柜号", "集装箱号")),
     ("container_type", ("箱型", "柜型")),
@@ -20,6 +22,13 @@ LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("due_date", ("到期", "付款日", "应收日期")),
     ("remark", ("备注", "说明")),
 ]
+
+_STATEMENT_SPEC = (active_pack().reconcile.get("statement") or {})
+_raw_line_hints = _STATEMENT_SPEC.get("line_hints") or {}
+LINE_HINTS: list[tuple[str, tuple[str, ...]]] = (
+    [(str(key), tuple(values)) for key, values in _raw_line_hints.items()]
+    if _raw_line_hints else _DEFAULT_LINE_HINTS
+)
 
 _WAYBILL_RE = re.compile(r"[A-Z]{2,4}\d{6,}")
 _CONTAINER_RE = re.compile(r"[A-Z]{4}\d{7}")
@@ -200,19 +209,26 @@ def parse_statement_text(
 
 
 def to_reconcile_rows(document: dict) -> list[dict]:
-    """转成现有 reconcile 需要的行格式。"""
+    """转成 reconcile 需要的行格式。
+
+    Step 3：匹配键与金额字段来自 pack；`line_map` 负责把 StatementDocument
+    的固定字段（waybill_no / container_no / amount）映射到当前行业包。
+    """
+    from .reconcile import _AMOUNT_FIELD, _MATCH_KEYS
+
+    line_map = _STATEMENT_SPEC.get("line_map") or {}
     rows = []
     for line in document.get("lines", []):
-        amount = line.get("total_amount")
+        row = {}
+        for key in _MATCH_KEYS:
+            src = line_map.get(key, key)
+            row[key] = line.get(src) or ""
+        amount_key = line_map.get(_AMOUNT_FIELD, _AMOUNT_FIELD)
+        amount = line.get(amount_key)
         if amount is None:
             amount = line.get("amount")
-        rows.append(
-            {
-                "booking_no": line.get("waybill_no") or "",
-                "container_no": line.get("container_no") or "",
-                "amount": amount,
-            }
-        )
+        row[_AMOUNT_FIELD] = amount
+        rows.append(row)
     return rows
 
 

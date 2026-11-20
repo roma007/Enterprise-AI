@@ -28,6 +28,21 @@
         "抬头"
       ]
     },
+    "line_hints": {
+      "waybill_no": ["运单号", "客户单号", "提单号", "单号"],
+      "container_no": ["箱号", "柜号", "集装箱号"],
+      "container_type": ["箱型", "柜型"],
+      "total_amount": ["价税合计", "合计金额", "总额"],
+      "amount": ["金额", "运费", "应收"],
+      "tax_amount": ["税额", "税金"],
+      "due_date": ["到期", "付款日", "应收日期"],
+      "remark": ["备注", "说明"]
+    },
+    "line_map": {
+      "booking_no": "waybill_no",
+      "container_no": "container_no",
+      "amount": "amount"
+    },
     "positional": [
       "booking_no",
       "container_no",

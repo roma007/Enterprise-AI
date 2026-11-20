@@ -1,0 +1,55 @@
+{
+  "validations": [
+    {
+      "id": "required",
+      "type": "builtin.required",
+      "level": "error",
+      "code": "E_REQUIRED",
+      "message": "缺少必填字段：{label}",
+      "fallback_fields": [
+        "carrier",
+        "carrier_invoice_no",
+        "shipment_no",
+        "charge_code",
+        "amount"
+      ]
+    },
+    {
+      "id": "low_confidence",
+      "type": "builtin.low_confidence",
+      "level": "warn",
+      "code": "W_LOW_CONF",
+      "message": "{label} 置信度偏低（{confidence:.0%}），请人工核对",
+      "threshold_from": "review.low_conf_warn"
+    },
+    {
+      "id": "amount_format",
+      "type": "builtin.regex",
+      "level": "warn",
+      "code": "W_AMOUNT_FORMAT",
+      "message": "金额格式可疑：{value}",
+      "field": "amount",
+      "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+      "strip": "[,\\s]"
+    },
+    {
+      "id": "contract_rate_format",
+      "type": "builtin.regex",
+      "level": "warn",
+      "code": "W_RATE_FORMAT",
+      "message": "合同价格式可疑：{value}",
+      "field": "contract_rate",
+      "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+      "strip": "[,\\s]"
+    }
+  ],
+  "review": {
+    "risk_fields": [
+      "carrier_invoice_no",
+      "shipment_no",
+      "charge_code",
+      "amount"
+    ],
+    "low_conf_warn": 0.6
+  }
+}

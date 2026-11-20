@@ -1,0 +1,14 @@
+{
+  "id": "freight_audit",
+  "name": "买方运费审计（dry-run）",
+  "version": "0.1.0",
+  "description": "货主/制造企业审计承运商账单：账单行 vs 合同价/运单；合成样例，不代表真实客户",
+  "documents": [
+    "booking",
+    "invoice",
+    "statement"
+  ],
+  "settings_refs": [
+    "reconcile.tolerance"
+  ]
+}

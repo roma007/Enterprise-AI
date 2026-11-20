@@ -51,7 +51,11 @@ def main() -> None:
     base = PACKS_DIR / pack.id
     print(f"快照对照：{base}")
 
-    raw = {name: json.loads((base / name).read_text(encoding="utf-8")) for name in RAW_FILES}
+    raw = {
+        name: json.loads((base / name).read_text(encoding="utf-8"))
+        if (base / name).exists() else {}
+        for name in RAW_FILES
+    }
 
     print("\n[加载 round-trip / 字段]")
     eq("booking 字段", [asdict(s) for s in pack.documents["booking"]],
@@ -94,11 +98,17 @@ def main() -> None:
     print("\n[代码接线 / rules]")
     by_id = {r.id: r for r in pack.validations}
     eq("rules.RISK_KEYS", list(rules.RISK_KEYS), list(pack.review.get("risk_fields") or []))
-    eq("rules.VALID_TYPES", set(rules.VALID_TYPES),
-       set(by_id["container_type"].params.get("values") or []))
-    eq("rules.SEAL_RE", rules.SEAL_RE.pattern, by_id["seal_format"].params.get("pattern"))
-    eq("rules.PHONE_RE", rules.PHONE_RE.pattern, by_id["phone_format"].params.get("pattern"))
-    eq("rules.CLOSING_WARN_HOURS", rules.CLOSING_WARN_HOURS, float(by_id["closing"].params.get("warn_hours")))
+    # 这些规则只在集卡/拖车包里存在；第二行业包可以没有。
+    if "container_type" in by_id:
+        eq("rules.VALID_TYPES", set(rules.VALID_TYPES),
+           set(by_id["container_type"].params.get("values") or []))
+    if "seal_format" in by_id:
+        eq("rules.SEAL_RE", rules.SEAL_RE.pattern, by_id["seal_format"].params.get("pattern"))
+    if "phone_format" in by_id:
+        eq("rules.PHONE_RE", rules.PHONE_RE.pattern, by_id["phone_format"].params.get("pattern"))
+    if "closing" in by_id:
+        eq("rules.CLOSING_WARN_HOURS", rules.CLOSING_WARN_HOURS,
+           float(by_id["closing"].params.get("warn_hours")))
     eq("rules.LOW_CONF_WARN", rules.LOW_CONF_WARN, float(pack.review.get("low_conf_warn")))
     chk("rules.VALIDATORS 覆盖 pack 类型", all(r.type in rules.VALIDATORS for r in pack.validations))
 
@@ -111,28 +121,31 @@ def main() -> None:
        pack.reconcile["statement"]["amount_fields"])
     eq("reconcile statuses", dict(reconcile.STATUS_LABELS), pack.reconcile["statuses"])
     eq("aging header_hints", {k: list(v) for k, v in aging._HINTS.items()},
-       pack.aging["header_hints"])
+       pack.aging.get("header_hints") or {})
     eq("fees header_hints", {k: list(v) for k, v in fees._HINTS.items()},
-       pack.fees["header_hints"])
-    eq("fees builtin_fees", sorted(fees.BUILTIN_FEES), pack.fees["builtin_fees"])
+       pack.fees.get("header_hints") or {})
+    eq("fees builtin_fees", sorted(fees.BUILTIN_FEES),
+       pack.fees.get("builtin_fees") or [])
     eq("settlement rate_hints", {k: list(v) for k, v in settlement._RATE_HINTS.items()},
-       (pack.fees.get("settlement") or {}).get("rate_hints"))
+       (pack.fees.get("settlement") or {}).get("rate_hints") or {})
     eq("settlement bill_hints", {k: list(v) for k, v in settlement._BILL_HINTS.items()},
-       (pack.fees.get("settlement") or {}).get("bill_hints"))
+       (pack.fees.get("settlement") or {}).get("bill_hints") or {})
     eq("cost revenue_hints", {k: list(v) for k, v in margin._REVENUE_HINTS.items()},
-       pack.cost["revenue_hints"])
+       pack.cost.get("revenue_hints") or {})
     eq("cost cost_hints", {k: list(v) for k, v in margin._COST_HINTS.items()},
-       pack.cost["cost_hints"])
+       pack.cost.get("cost_hints") or {})
     eq("geo cities", {k: list(v) for k, v in address_check.DISTRICTS.items()},
-       pack.geo["cities"])
+       pack.geo.get("cities") or {})
     eq("geo city_aliases", {k: list(v) for k, v in address_check.CITY_ALIASES.items()},
-       pack.geo["city_aliases"])
+       pack.geo.get("city_aliases") or {})
     eq("geo terminals", {k: sorted(v) for k, v in address_check.TERMINALS.items()},
-       pack.geo["terminals"])
-    eq("geo ambiguous", sorted(address_check._AMBIGUOUS), pack.geo["ambiguous"])
-    eq("geo typos", dict(address_check.TYPOS), pack.geo["typos"])
-    eq("geo place_words", list(address_check.PLACE_WORDS), pack.geo["place_words"])
-    eq("geo towns", list(address_check.TOWNS), pack.geo["towns"])
+       pack.geo.get("terminals") or {})
+    eq("geo ambiguous", sorted(address_check._AMBIGUOUS),
+       pack.geo.get("ambiguous") or [])
+    eq("geo typos", dict(address_check.TYPOS), pack.geo.get("typos") or {})
+    eq("geo place_words", list(address_check.PLACE_WORDS),
+       pack.geo.get("place_words") or [])
+    eq("geo towns", list(address_check.TOWNS), pack.geo.get("towns") or [])
 
     print()
     if ok:

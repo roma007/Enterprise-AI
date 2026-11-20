@@ -31,28 +31,22 @@ from .domain import (
 
 PACKS_DIR = ROOT / "packs"
 DEFAULT_PACK_ID = "trucking"
-PACK_FILES = (
-    "pack.json",
-    "fields.json",
-    "rules.json",
-    "reconcile.json",
-    "aging.json",
-    "fees.json",
-    "cost.json",
-    "geo.json",
-    "acceptance.json",
-)
+# 核心文件必须有；领域文件可省略（例如买方运费审计不需要 geo / aging）。
+REQUIRED_FILES = ("pack.json", "fields.json", "rules.json", "reconcile.json")
+OPTIONAL_FILES = ("aging.json", "fees.json", "cost.json", "geo.json", "acceptance.json")
 
 
 class PackError(RuntimeError):
     """行业包缺失、损坏或包含不支持的声明。"""
 
 
-def _read_json(path: Path) -> dict:
+def _read_json(path: Path, required: bool = True) -> dict:
+    if not path.exists():
+        if required:
+            raise PackError(f"行业包缺少文件：{path}")
+        return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise PackError(f"行业包缺少文件：{path}") from exc
     except json.JSONDecodeError as exc:
         raise PackError(f"行业包 JSON 无法解析：{path}（{exc}）") from exc
 
@@ -114,18 +108,18 @@ def _parse_rules(raw: dict) -> tuple[tuple[ValidationSpec, ...], dict[str, Any]]
 
 
 def _load_pack_dir(path: Path) -> Pack:
-    for name in PACK_FILES:
+    for name in REQUIRED_FILES:
         if not (path / name).is_file():
             raise PackError(f"行业包 {path.name} 缺少 {name}")
     meta = _read_json(path / "pack.json")
     fields = _read_json(path / "fields.json")
     rules = _read_json(path / "rules.json")
     reconcile = _read_json(path / "reconcile.json")
-    aging = _read_json(path / "aging.json")
-    fees = _read_json(path / "fees.json")
-    cost = _read_json(path / "cost.json")
-    geo = _read_json(path / "geo.json")
-    acceptance = _read_json(path / "acceptance.json")
+    aging = _read_json(path / "aging.json", required=False)
+    fees = _read_json(path / "fees.json", required=False)
+    cost = _read_json(path / "cost.json", required=False)
+    geo = _read_json(path / "geo.json", required=False)
+    acceptance = _read_json(path / "acceptance.json", required=False)
 
     documents = _parse_fields(fields)
     validations, review = _parse_rules(rules)

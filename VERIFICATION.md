@@ -1087,6 +1087,19 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - 几何检查：所有形状在 13.333×7.5 画布内；按字体度量估算文本高度，全部文本框无溢出。
   - 页码由 `add_footer()` 自动生成，读回第 14/15 页为 `14 / 21`、`15 / 21`；末页为深色收尾页，沿用原设计不显示页码。
 
+---
+
+### 5.52 本机启动脚本修复 + 测试环境登录页预填（2026-11-12）
+
+- `scripts/devctl.mjs` 启动即崩：`createWriteStream` 的 `open` 是异步的，`spawn` 时 `stdio` 里的 fd 还是 `null` → `ERR_INVALID_ARG_VALUE`。
+  - 修复：改用 `openSync` + `writeSync` 拿日志 fd，进程组与 PID 文件逻辑不变。
+  - 复验：`node scripts/devctl.mjs start` → backend `http://127.0.0.1:8788`、frontend `http://127.0.0.1:5173` 均就绪，`/api/health` 200。
+- 新增 `LOGIN_PREFILL`（默认 `0`，仅测试/演示）：为 `1` 时 `/login` 注入 `.env` 的 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 并预填，页面显示「测试环境：已预填演示账号」。
+  - 影响文件：`ai-copilot/app/config.py`、`ai-copilot/app/main.py`（`/login` 改为读模板注入，`Cache-Control: no-store`）、`ai-copilot/static/login.html`、`.env.example`。
+  - 安全边界：口令来自 `.env`（不进版本库），`static/` 与仓库内无明文；生产必须 `LOGIN_PREFILL=0`。
+  - 复验：`curl /login` 返回 `window.__PREFILL__ = {"email": "admin@local", ...}`；浏览器打开登录页 → 账号已填、密码已填（长度 11）→ 点「登录」直接进入「智单 · 托书录入」。
+  - 文档：`ai-copilot/docs/运维手册.md` 登录章节、`ai-copilot/CHANGELOG.md`。
+
 ### 5.53 经营洞察 AI 解读（AI-53，2026-11-12）
 
 - 新增 `ai-copilot/app/insight_ai.py` + `POST /api/insight/brief`：规则先算指标，模型只写 3–5 句老板简报、异常优先级、动作草稿。
@@ -1101,8 +1114,6 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - `./scripts/smoke.sh` **17/17 通过**（新增“经营洞察 AI 解读自检”）。
 - 口径：真实经营数据仍未接，**AI-29 保持 `[ ]`**；当前为合成数据演示，不把规则指标或 AI 解读写成真实客户经营结论。
 
----
-
 ### 5.54 车队能源与线路决策（AI-54，2026-11-12）
 
 - 新增 `ai-copilot/app/fleet.py`：3 条线路 × 4 类车型（柴油大/小马力、LNG、电动）合成运营数据；按趟计算能源、路桥、维修、司机、装卸成本，汇总线路/车型/线路×车型。
@@ -1116,8 +1127,6 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 自检：`scripts/test_fleet.py` **23/23 通过**；`./scripts/smoke.sh` **18/18 通过**。
 - 边界：运营数据为合成，成本参数为示例假设；**未计车辆购置/电池折旧、充电设施、保险、残值、司机社保**，当前是运营成本对比，不是换车/采购结论；公开资料只用于会前研究，事实需客户确认。AI-54 真实数据仍未接。
 
----
-
 ### 5.55 经营驾驶舱（AI-55，2026-11-13）
 
 - 新增 `ai-copilot/app/dashboard.py` + `/dashboard`：老板/客户演示样张，聚合经营结果（`/insight`）、客户/线路（`/profit`）、能源/线路（`/fleet`）三个独立演示模块。
@@ -1128,8 +1137,6 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
   - `/api/dashboard/brief`：`source=llm+rule`、`ok=true`、`fallback=false`、`tokens=2810`；摘要明确“示例/合成”，覆盖 6 条决策。
 - 自检：`scripts/test_dashboard.py` **18/18 通过**；`./scripts/smoke.sh` **19/19 通过**。
 - 边界：驾驶舱只读聚合，不替代业务页；三个演示模块不可加总；真实经营数据仍未接，AI-29/AI-55 保持演示定位。
-
----
 
 ---
 

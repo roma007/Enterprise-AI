@@ -9,7 +9,7 @@
  *   node scripts/devctl.mjs logs backend
  */
 import { execSync, spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { connect } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -101,8 +101,9 @@ async function start(name) {
     process.exitCode = 1;
     return;
   }
-  const out = createWriteStream(logFile(name), { flags: 'a' });
-  out.write(`\n=== ${new Date().toISOString()} start ${name} ===\n`);
+  // 直接用同步 fd：createWriteStream 的 open 是异步的，spawn 时 fd 可能还是 null
+  const out = openSync(logFile(name), 'a');
+  writeSync(out, `\n=== ${new Date().toISOString()} start ${name} ===\n`);
   const child = spawn('npm', svc.args, {
     cwd: svc.cwd,
     detached: true,

@@ -68,6 +68,8 @@ class Settings:
     login_max_failures: int = int(os.getenv("LOGIN_MAX_FAILURES", "5"))
     login_lock_seconds: int = int(os.getenv("LOGIN_LOCK_SECONDS", "900"))
     login_window_seconds: int = int(os.getenv("LOGIN_WINDOW_SECONDS", "900"))
+    # 仅测试/演示环境：登录页预填 ADMIN_EMAIL / ADMIN_PASSWORD，生产必须为 0
+    login_prefill: bool = os.getenv("LOGIN_PREFILL", "0").strip() not in {"0", "false", "off"}
 
     # 企业微信入口（D3）：留空则跳过签名校验，便于本地调试
     wecom_token: str = os.getenv("WECOM_TOKEN", "").strip()

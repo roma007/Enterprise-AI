@@ -542,7 +542,21 @@ def users_page():
 
 @app.get("/login")
 def login_page():
-    return FileResponse(ROOT / "static" / "login.html")
+    """登录页。
+
+    LOGIN_PREFILL=1（仅测试/演示环境）时，把 ADMIN_EMAIL / ADMIN_PASSWORD 注入页面并预填，
+    方便直接点登录；默认关闭，生产环境不要开——那等于把管理员口令写在页面里。
+    """
+    html = (ROOT / "static" / "login.html").read_text(encoding="utf-8")
+    prefill: dict[str, str] = {"email": "", "password": ""}
+    if settings.login_prefill:
+        prefill = {
+            "email": os.getenv("ADMIN_EMAIL", "admin@local").strip() or "admin@local",
+            "password": os.getenv("ADMIN_PASSWORD", "").strip(),
+        }
+    payload = json.dumps(prefill, ensure_ascii=False).replace("</", "<\\/")
+    html = html.replace("__PREFILL_JSON__", payload)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 class LoginReq(BaseModel):

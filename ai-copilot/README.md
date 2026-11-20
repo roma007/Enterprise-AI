@@ -65,7 +65,7 @@ PYTHONPATH=. .venv/bin/python scripts/make_test_image.py
 ```env
 LLM_BASE_URL=https://opencode.ai/inference/go/openai/v1
 LLM_API_KEY=<你的 OpenCode Go Key>
-LLM_MODEL=claude-haiku-5-5
+LLM_MODEL=deepseek-v4.1-flash
 LLM_USER_AGENT=ai-copilot/1.0
 LLM_SESSION_HEADER=x-opencode-session
 ```
@@ -77,15 +77,17 @@ LLM_SESSION_HEADER=x-opencode-session
 | `HTTP 403: error code 1010` | Cloudflare 拦截默认 UA（如 python-urllib） | 设置非空 `LLM_USER_AGENT` |
 | `HTTP 400: MissingSessionID` | 网关要求会话头 | 设置 `LLM_SESSION_HEADER=x-opencode-session`（值自动生成） |
 
-模型选型依据（2 份最难的样本实测）：
+模型选型依据（2 份最难的样本实测，历史记录）：
 
 | 模型 | 准确率 | 单条耗时 |
 |---|---|---|
-| **claude-haiku-5-5** | **92%** | **5.2s** ← 选它 |
+| **claude-haiku-5-5** | **92%** | **5.2s**（2026-11-01 选型） |
 | mimo-v2.6-flash | 92% | 10.2s |
 | gemini-4-argon | 92% | 14.4s |
 | minimax-m3.1-flash | 38% | 11.1s |
 | gpt-6-luna | 0%（返回空） | 2.0s |
+
+> **2026-11-08 调整**：按使用方要求，默认模型从 `claude-haiku-5-5` 切换为 OpenCode Go 的 `deepseek-v4.1-flash`。上表是切换前的历史实测，**新模型尚未重跑 `make eval` / `make simday`**；在重跑并记录结果前，不得把新模型的准确率、耗时当作已验证结论。
 
 其他平台（DeepSeek / 通义 / 智谱 / 本地 vLLM）直接改 `LLM_BASE_URL` + `LLM_MODEL` 即可，不需要那两个额外头。
 
@@ -186,7 +188,7 @@ samples/synthetic_batch50.jsonl  50 份合成托书（格式/批量回归，不�
 > 客户模拟集也一样：修完 bug 之后它变成了调优集，不再具备盲测价值。
 > **现在唯一有意义的数字，是拿到客户真实样本之后跑出来的那一个。**
 
-三模式对照（留出集，`claude-haiku-5-5`）：
+三模式对照（留出集，切换前 `claude-haiku-5-5`；新模型结果待重跑）：
 
 | 引擎 | 字段级 | 说明 |
 |---|---|---|

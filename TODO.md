@@ -1,11 +1,18 @@
 # 待办
 
-> 更新时间：2026-11-08
+> 更新时间：2026-11-20
 > 原则：主线一次只推进一件事；待办项在主线需要的顺手做掉，不为了"清列表"而做。
 > 全系统分阶段计划见 [企业AI化项目管理系统/06_实施计划.md](./企业AI化项目管理系统/06_实施计划.md)；本文件只记当前执行队列。
 > **现场实施总图见 [实施全景图.md](./实施全景图.md)**，内部开发/CI 见 [内部开发与发布.md](./内部开发与发布.md)：任何改动前先定位节点，提交前复核并同提交更新；进度约定：完成一项即在本文、06 计划和对应文档条目打勾；未验证的项不勾。
 
 ## 进行中
+
+- [ ] **行业包（先验证深度，再复制宽度；设计见 `ai-copilot/docs/行业包设计.md`）**
+  - [x] Step 0：冻结 `packs/trucking/` + `make pack-lint` / `make pack-snapshot` → **2026-11-20 完成（AI-56）**
+  - [ ] Step 1：`domain.py` / `pack.py`，`schema` / `invoice` / `rules` 读 pack
+  - [ ] Step 2：`reconcile` / `aging` / `fees` / `margin` / `geo` 读 pack
+  - [ ] Step 3：`packs/freight_audit/` dry-run + `packdiff`，证明换行业只换配置
+  - [ ] Step 4：`/api/packs`、激活/回滚、审计、设置页“行业包”页签
 
 - [ ] **诊断平台多租户 / HA 改造（供应商内部，不涉及智单）**
   - [x] 租户模型：`organizations` 增加 slug / status / settings

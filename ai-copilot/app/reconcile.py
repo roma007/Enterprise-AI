@@ -47,6 +47,14 @@ def _containers(v) -> set[str]:
     return {_norm(x) for x in re.split(r"[,，、;；\s]+", str(v)) if _norm(x)}
 
 
+def _system_amount(w: dict):
+    """系统侧金额字段按优先级取第一个非空值（与原 or 链等价）。"""
+    for key in SYSTEM_AMOUNT_FIELDS:
+        if w.get(key):
+            return w.get(key)
+    return None
+
+
 # ---------- 对账单解析 ----------
 
 _HINTS = {
@@ -54,6 +62,17 @@ _HINTS = {
     "container_no": ("箱号", "柜号", "集装箱号"),
     "amount": ("金额", "运费", "应收", "应收金额", "价税合计", "合计"),
     "client": ("客户", "货主", "抬头"),
+}
+
+# 下列常量原先内联在解析/导出函数里，抽成模块常量只为 packs/ 快照可对照，
+# 不改变任何运行时行为（Step 0）。
+POSITIONAL_DEFAULT = {0: "booking_no", 1: "container_no", 2: "amount"}
+SYSTEM_AMOUNT_FIELDS = ("freight", "amount", "total_amount")
+STATUS_LABELS = {
+    "ok": "一致",
+    "amount_diff": "金额不符",
+    "missing_in_system": "系统无此单",
+    "missing_in_statement": "客户漏单",
 }
 
 
@@ -96,7 +115,7 @@ def parse_statement(text: str) -> dict:
         mode = "header"
     else:
         # 没有表头：按空白切，约定「单号 箱号 金额」的顺序
-        mapping = {0: "booking_no", 1: "container_no", 2: "amount"}
+        mapping = dict(POSITIONAL_DEFAULT)
         data = [re.split(r"\s+", ln) for ln in raw_lines]
         mode = "positional"
 
@@ -159,7 +178,7 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
             continue
 
         used.add(idx_of(w))
-        w_amt = _dec(w.get("freight") or w.get("amount") or w.get("total_amount"))
+        w_amt = _dec(_system_amount(w))
         if s_amt is not None and w_amt is not None:
             diff = s_amt - w_amt
             status = "ok" if abs(diff) <= tolerance else "amount_diff"
@@ -186,7 +205,7 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
             "booking_no": w.get("booking_no", ""),
             "container_no": w.get("container_no", ""),
             "statement_amount": None,
-            "system_amount": float(_dec(w.get("freight") or w.get("amount") or w.get("total_amount")) or 0),
+            "system_amount": float(_dec(_system_amount(w)) or 0),
             "diff": None,
             "note": "系统有、对账单没报（客户漏单，要追）",
         })
@@ -226,10 +245,8 @@ def export_csv(result: dict) -> str:
     buf.write("\ufeff")
     w = csv.writer(buf)
     w.writerow(["行号", "状态", "单号", "箱号", "对账单金额", "系统金额", "差额", "说明"])
-    label = {"ok": "一致", "amount_diff": "金额不符",
-             "missing_in_system": "系统无此单", "missing_in_statement": "客户漏单"}
     for r in result["rows"]:
-        w.writerow([r["line"] or "", label.get(r["status"], r["status"]),
+        w.writerow([r["line"] or "", STATUS_LABELS.get(r["status"], r["status"]),
                     r["booking_no"], r["container_no"],
                     r["statement_amount"] if r["statement_amount"] is not None else "",
                     r["system_amount"] if r["system_amount"] is not None else "",

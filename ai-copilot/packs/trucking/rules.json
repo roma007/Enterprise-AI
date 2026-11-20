@@ -1,0 +1,108 @@
+{
+  "validations": [
+    {
+      "id": "required",
+      "type": "builtin.required",
+      "level": "error",
+      "fields_from": "settings:rules.required",
+      "fallback_fields": [
+        "client",
+        "booking_no",
+        "container_type",
+        "pickup_addr",
+        "delivery_addr"
+      ]
+    },
+    {
+      "id": "container_checksum",
+      "type": "builtin.iso6346",
+      "level": "error",
+      "field": "container_no",
+      "enabled_from": "settings:rules.container_checksum"
+    },
+    {
+      "id": "container_qty",
+      "type": "builtin.qty_match",
+      "level": "warn",
+      "field": "container_qty",
+      "compare_to": "container_no",
+      "enabled_from": "settings:rules.container_checksum"
+    },
+    {
+      "id": "container_type",
+      "type": "builtin.enum",
+      "level": "warn",
+      "field": "container_type",
+      "values": [
+        "20FR",
+        "20GP",
+        "20OT",
+        "20RF",
+        "20TK",
+        "40FR",
+        "40GP",
+        "40HQ",
+        "40OT",
+        "40RF",
+        "40TK",
+        "45HQ",
+        "45RF"
+      ],
+      "aliases": {
+        "HC": "HQ"
+      }
+    },
+    {
+      "id": "seal_format",
+      "type": "builtin.regex",
+      "level": "warn",
+      "field": "seal_no",
+      "pattern": "[A-Za-z0-9]{5,15}"
+    },
+    {
+      "id": "phone_format",
+      "type": "builtin.regex",
+      "level": "warn",
+      "field": "factory_phone",
+      "pattern": "(1[3-9]\\d{9}|0\\d{2,3}\\d{7,8})"
+    },
+    {
+      "id": "address",
+      "type": "builtin.geo",
+      "level": "warn",
+      "fields": [
+        "pickup_addr",
+        "delivery_addr"
+      ],
+      "enabled_from": "settings:rules.address"
+    },
+    {
+      "id": "closing",
+      "type": "builtin.deadline",
+      "level": "error",
+      "field": "closing_time",
+      "warn_hours": 24,
+      "enabled_from": "settings:rules.closing"
+    },
+    {
+      "id": "window_after_closing",
+      "type": "builtin.ordering",
+      "level": "warn",
+      "fields": [
+        "loading_window",
+        "closing_time"
+      ],
+      "enabled_from": "settings:rules.closing"
+    }
+  ],
+  "review": {
+    "risk_fields": [
+      "container_no",
+      "container_type",
+      "container_qty",
+      "closing_time",
+      "factory_phone"
+    ],
+    "low_conf_warn": 0.6
+  }
+}

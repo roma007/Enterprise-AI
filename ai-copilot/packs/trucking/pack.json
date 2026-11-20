@@ -1,0 +1,29 @@
+{
+  "id": "trucking",
+  "name": "集卡/拖车",
+  "version": "0.1.0",
+  "description": "港口集卡托书 → 对账 → 应收；当前代码基线的冻结快照（Step 0）",
+  "documents": [
+    "booking",
+    "invoice",
+    "statement",
+    "aging",
+    "fees",
+    "cost"
+  ],
+  "settings_refs": [
+    "rules.required",
+    "rules.container_checksum",
+    "rules.closing",
+    "rules.address",
+    "reconcile.tolerance",
+    "settlement.tolerance",
+    "margin.match_days",
+    "margin.warn_margin",
+    "aging.bucket_1",
+    "aging.bucket_2",
+    "aging.bucket_3",
+    "aging.remind_days",
+    "aging.collect_days"
+  ]
+}

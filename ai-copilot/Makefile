@@ -2,7 +2,7 @@
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 PORT ?= 8790
 
-.PHONY: setup dev eval smoke ops-eval aiops-test aiops-collect xiefeng-public prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply verify-https pg-migrate pg-migrate-apply pg-test
+.PHONY: setup dev eval smoke ops-eval aiops-test aiops-collect xiefeng-public prewarm pairing goldset enhance amend simday intake sample invoice threeway reconcile aging settlement demo reset clean backup cleanup cleanup-apply verify-https pg-migrate pg-migrate-apply pg-test pack-export pack-lint pack-snapshot
 
 # 需要 Python 3.11 / 3.12（onnxruntime 尚无 3.14 的 wheel）
 setup:
@@ -23,6 +23,16 @@ aiops-test:
 
 aiops-collect:
 	PYTHONPATH=. $(PY) scripts/collect_aiops.py
+
+# 行业包（Step 0）：先冻结基线，再证明配置化前后一致
+pack-export:
+	PYTHONPATH=. $(PY) scripts/export_pack_baseline.py
+
+pack-lint:
+	PYTHONPATH=. $(PY) scripts/pack_lint.py
+
+pack-snapshot:
+	PYTHONPATH=. $(PY) scripts/pack_snapshot.py
 
 # 抓取协丰公开资料缓存（会前研究；不登录、不绕过权限）
 xiefeng-public:

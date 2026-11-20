@@ -36,6 +36,13 @@ VALID_TYPES = {
     "20OT", "40OT", "20FR", "40FR", "20TK", "40TK",
 }
 
+# 下列常量原先内联在校验函数里，抽成模块常量只为 packs/ 快照可对照，
+# 不改变任何运行时行为（Step 0）。
+SEAL_RE = re.compile(r"[A-Za-z0-9]{5,15}")
+PHONE_RE = re.compile(r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})")
+CLOSING_WARN_HOURS = 24
+LOW_CONF_WARN = 0.6
+
 
 def iso6346_check_digit(code: str) -> int | None:
     """返回 ISO 6346 校验位；格式不合法返回 None。"""
@@ -138,7 +145,7 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
 
     # 2. 低置信度字段（提醒）
     for key, fv in f.items():
-        if fv.value and 0 < fv.confidence < 0.6:
+        if fv.value and 0 < fv.confidence < LOW_CONF_WARN:
             checks.append(Check(
                 level="warn", code="W_LOW_CONF", field=key,
                 message=f"{SPEC_MAP[key].label} 置信度偏低（{fv.confidence:.0%}），请人工核对",
@@ -173,7 +180,7 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
 
     # 5. 封号格式
     for seal in [s for s in re.split(r"[,，;；\s]+", val("seal_no")) if s]:
-        if not re.fullmatch(r"[A-Za-z0-9]{5,15}", seal):
+        if not SEAL_RE.fullmatch(seal):
             checks.append(Check(
                 level="warn", code="W_SEAL_FORMAT", field="seal_no",
                 message=f"封号 {seal} 格式可疑（应为 5–15 位字母数字）",
@@ -181,7 +188,7 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
 
     # 6. 电话格式
     phone = re.sub(r"[\s\-]", "", val("factory_phone"))
-    if phone and not re.fullmatch(r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})", phone):
+    if phone and not PHONE_RE.fullmatch(phone):
         checks.append(Check(
             level="warn", code="W_PHONE", field="factory_phone",
             message=f"电话 {phone} 格式可疑",
@@ -199,7 +206,7 @@ def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
                 level="error", code="E_CLOSING_PASSED", field="closing_time",
                 message=f"截港时间 {fmt(closing)} 已过，此单赶不上本班船，请立即改配",
             ))
-        elif (closing - now).total_seconds() < 24 * 3600:
+        elif (closing - now).total_seconds() < CLOSING_WARN_HOURS * 3600:
             hours = (closing - now).total_seconds() / 3600
             checks.append(Check(
                 level="warn", code="W_CLOSING_SOON", field="closing_time",

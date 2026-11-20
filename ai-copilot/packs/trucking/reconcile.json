@@ -1,0 +1,55 @@
+{
+  "statement": {
+    "header_hints": {
+      "booking_no": [
+        "运单号",
+        "委托单号",
+        "单号",
+        "托书号",
+        "订单号",
+        "提单号"
+      ],
+      "container_no": [
+        "箱号",
+        "柜号",
+        "集装箱号"
+      ],
+      "amount": [
+        "金额",
+        "运费",
+        "应收",
+        "应收金额",
+        "价税合计",
+        "合计"
+      ],
+      "client": [
+        "客户",
+        "货主",
+        "抬头"
+      ]
+    },
+    "positional": [
+      "booking_no",
+      "container_no",
+      "amount"
+    ],
+    "amount_fields": [
+      "freight",
+      "amount",
+      "total_amount"
+    ]
+  },
+  "match": {
+    "keys": [
+      "booking_no",
+      "container_no"
+    ],
+    "normalize": "alnum_upper"
+  },
+  "statuses": {
+    "ok": "一致",
+    "amount_diff": "金额不符",
+    "missing_in_system": "系统无此单",
+    "missing_in_statement": "客户漏单"
+  }
+}

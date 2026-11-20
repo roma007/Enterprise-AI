@@ -47,6 +47,7 @@ def main() -> None:
         chk("最新在前", pack_state.history()[0]["to_id"] == "trucking")
 
         print("\n回滚")
+        chk("rollback_target=freight_audit", pack_state.rollback_target() == "freight_audit")
         pack_state.rollback(actor="u3", reason="撤销最近一次")
         chk("回滚到 freight_audit", pack_state.get_active_id() == "freight_audit")
         chk("history=3", len(pack_state.history()) == 3)

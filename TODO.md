@@ -14,6 +14,7 @@
   - [x] Step 3：`packs/freight_audit/` dry-run + `packdiff`，证明换行业只换配置 → **2026-11-20 完成（AI-59）**
   - [x] Step 4：`/api/packs`、激活/回滚、审计、设置页“行业包”页签 → **2026-11-20 完成（AI-60）**
   - [x] Step 5：热切换（活动闸门 + 原地刷新），激活/回滚不重启即时生效 → **2026-11-20 完成（AI-61）**
+  - [ ] 复盘遗留：`normalize_for_compare` / `normalize.py` 接线 pack `normalize` 元数据；`settlement_extract.py` 词表；多实例广播；任务入队锁定 `pack_id`
 
 - [ ] **诊断平台多租户 / HA 改造（供应商内部，不涉及智单）**
   - [x] 租户模型：`organizations` 增加 slug / status / settings

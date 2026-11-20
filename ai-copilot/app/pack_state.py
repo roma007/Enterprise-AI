@@ -143,8 +143,8 @@ def _clear_active() -> None:
             pass
 
 
-def rollback(entry_id: str | None = None, actor: str = "", reason: str = "") -> dict:
-    """回滚到某次切换之前的包；不传 entry_id 时撤销最近一次切换。"""
+def rollback_target(entry_id: str | None = None) -> str:
+    """返回回滚目标包 id（空串表示回到环境变量/默认包），不写状态。"""
     items = _history_load()
     if not items:
         raise ValueError("没有可回滚的切换记录")
@@ -152,10 +152,15 @@ def rollback(entry_id: str | None = None, actor: str = "", reason: str = "") -> 
         entry = next((x for x in items if x.get("id") == entry_id), None)
         if not entry:
             raise ValueError("切换记录不存在")
-        target = str(entry.get("from_id") or "")
-    else:
-        target = str(items[0].get("from_id") or "")
+        return str(entry.get("from_id") or "")
+    return str(items[0].get("from_id") or "")
 
+
+def rollback(entry_id: str | None = None, actor: str = "", reason: str = "",
+             target: str | None = None) -> dict:
+    """回滚到某次切换之前的包；不传 entry_id 时撤销最近一次切换。"""
+    if target is None:
+        target = rollback_target(entry_id)
     current = get_active_id()
     if target:
         state = {"id": target, "updated_at": _now(), "updated_by": actor or ""}

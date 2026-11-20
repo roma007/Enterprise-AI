@@ -63,6 +63,8 @@ def main() -> None:
     chk("匹配键=账单/运单/费用", reconcile._MATCH_KEYS == [
         "carrier_invoice_no", "shipment_no", "charge_code",
     ], str(reconcile._MATCH_KEYS))
+    chk("_containers 不依赖 multi 配置", reconcile._containers("A,B") == {"A", "B"},
+        str(reconcile._containers("A,B")))
     chk("对账表头含账单号", "carrier_invoice_no" in reconcile._HINTS, str(list(reconcile._HINTS)))
     chk("文本明细首列=账单号", statement.LINE_HINTS[0][1][0] == "账单号", str(statement.LINE_HINTS[0]))
     chk("费用词表为空", not fees.BUILTIN_FEES, str(len(fees.BUILTIN_FEES)))

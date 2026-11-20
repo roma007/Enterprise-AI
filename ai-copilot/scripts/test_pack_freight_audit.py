@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import address_check, invoice, reconcile, rules, schema  # noqa: E402
+from app import address_check, extract, invoice, reconcile, rules, schema  # noqa: E402
 
 ok = True
 
@@ -115,6 +115,13 @@ csv_text = reconcile.export_csv(r)
 header = csv_text.splitlines()[0]
 chk("CSV 展示字段来自 pack", "账单号" in header and "运单号" in header, header)
 chk("CSV 状态文案来自 pack", "金额不符" in csv_text, "")
+
+print("\n规则抽取不崩（集卡规则遇到新包字段要跳过）")
+d = extract.extract("承运商：顺达车队\n账单号：CI-1\n运单号：SHP-1\n费用代码：FREIGHT\n账单金额：1200.00",
+                    mode="rule", allow_llm=False)
+chk("extract 不崩", d.pack_id == "freight_audit", d.pack_id)
+chk("不注入幽灵字段 client", "client" not in d.fields, str(sorted(d.fields)[:5]))
+chk("必填项仍有校验", "E_REQUIRED" in [c.code for c in d.checks], str([c.code for c in d.checks]))
 
 print("\n空领域不崩")
 chk("空 geo 不崩", address_check.check_addresses("", "") == [])

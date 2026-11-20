@@ -219,7 +219,14 @@ def extract_by_rules(text: str) -> dict[str, FieldValue]:
     up = text.upper()
     out: dict[str, FieldValue] = {k: FieldValue() for k in FIELD_KEYS}
 
+    def has(key: str) -> bool:
+        fv = out.get(key)
+        return bool(fv and fv.value)
+
     def put(key: str, value: str | None, conf: float, cut: bool = True) -> None:
+        # 规则通道仍是集卡知识；其他行业包没有的 key 直接忽略，不能往草稿里塞幽灵字段。
+        if key not in out:
+            return
         if value:
             v = _cut_stop(value) if cut else value
             if v:
@@ -228,30 +235,30 @@ def extract_by_rules(text: str) -> dict[str, FieldValue]:
     put("client", _grab(text, (
         "委托单位", "客户名称", "客户", "货代名称", "货代", "委托方", "Client",
     )), 0.8)
-    if not out["client"].value:
+    if not has("client"):
         put("client", _verb_grab(text, "client"), 0.7)
 
     put("booking_no", _grab(text, (
         "委托单号", "托书编号", "托书号", "订单号", "原委托单", "原单号",
         "Booking No.", "Booking No", "Booking", "单号",
     )), 0.85)
-    if not out["booking_no"].value:
+    if not has("booking_no"):
         m = re.search(r"原(?:委托单|单号|单)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,})", text)
         if m:
             put("booking_no", m.group(1), 0.8)
-    if not out["booking_no"].value:
+    if not has("booking_no"):
         # "单号HT-1105" 这种没有分隔符的写法
         m = re.search(r"(?:单号|编号|订单号)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,})", text)
         if m:
             put("booking_no", m.group(1), 0.75)
-    if not out["booking_no"].value:
+    if not has("booking_no"):
         # 首行裸编号，如 "宏运-1105-1"、"HY-1105"
         m = re.search(r"^\s*([A-Za-z\u4e00-\u9fa5]{2,8}[-\s]?\d{3,}[-\d]*)", text, re.MULTILINE)
         if m:
             put("booking_no", m.group(1).strip(), 0.6)
     put("bl_no", _grab(text, ("提单号", "B/L NO", "B/L No.", "BL NO", "提单", "B/L")), 0.8)
     put("so_no", _grab(text, ("SO号", "SO NO", "S/O NO", "S/O", "SO")), 0.8)
-    if not out["so_no"].value:
+    if not has("so_no"):
         m = re.search(r"(?<![A-Z])(?:SO|S/O)[-\s]?(\d{4,})", text.upper())
         if m:
             put("so_no", f"SO-{m.group(1)}", 0.6)

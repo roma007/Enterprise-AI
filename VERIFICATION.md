@@ -1,7 +1,7 @@
 # 全项目核验报告
 
-> 核验日期：2026-11-12
-> 基线提交：`12ddead` + 经营驾驶舱（AI-55）
+> 核验日期：2026-11-20
+> 基线提交：`88e1219` + 行业包热切换（AI-61）；含复盘修复（extract 跨包、并发切换、回滚目标、演示隔离）
 > 范围：`backend`、`frontend`、`ai-copilot`、数据库迁移、API/OpenAPI、文档与全部 Mermaid 流程图、运维/安全配置。
 > 口径：**自动化通过 = 代码侧通过；真实客户/外部环境未验证的，明确写未验证，不用样例冒充。**
 
@@ -1185,6 +1185,31 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 多实例只保证当前实例即时生效；其他实例需重启，后续可加 PG 通知/定时版本检查。
 - 有长任务（批量/企微图片）在跑时切换返回 409，管理员稍后重试；不阻塞等待。
 - 不做代码/依赖热更新；切包只换领域数据与内存容器。
+
+### 5.58 行业包复盘修复（AI-61，2026-11-20）
+
+复盘发现并修复：
+
+- **P0 `/api/extract` 在非集卡包下 500**：`extract_by_rules` 直接访问 `out["client"]/["booking_no"]/["so_no"]`；已加 `has()` / `put()` 守卫，规则通道跳过当前包不存在的字段，不再注入幽灵字段。
+- **P0 并发切换**：`reload_pack` 只检查 `_active`，未检查 `_switching`；两个 activate 可能交错刷新。已加 `_switching` 拒绝。
+- **P1 `_containers` 依赖 `_MULTI_KEYS`**：非集卡包下不再按分隔符拆箱号；已改为始终按分隔符拆。
+- **P1 rollback 目标可能已被删除**：先 `rollback_target` + `load_pack(target)` 校验，再写状态；目标不可用返回 400。
+- **P1 非集卡包下集卡演示页返回错误数字**：`/api/*/demo` 在非 `trucking` 包下统一 409“演示数据仅适用于集卡包”。
+
+复验：
+
+- `make pack-test-freight` 27 项（含 `extract` 跨包不崩、不注入 `client`、必填仍校验）；
+- `make pack-hotswap-test` 30 项（含 `_containers` 独立于 `multi` 配置）；
+- `make pack-state-test` 13 项（含 `rollback_target`）；
+- `PACK_ID=freight_audit` 临时实例：`/api/extract` 200，`/api/{reconcile,consistency,aging,margin,settlement}/demo` 409；
+- 默认 `trucking`：`smoke.sh` 19/19，上述 demo 200，`make eval` 结果不变。
+
+仍遗留（未在本轮修）：
+
+- `normalize_for_compare` 仍按字段名硬编码，未使用 pack 的 `normalize` 元数据；第二包的金额/日期对比可能按文本比。
+- `normalize.py` 的 `_NORMALIZERS` 仍是集卡字段名映射。
+- `settlement_extract.py` 仍有一套硬编码 `LINE_HINTS`。
+- 多实例广播、任务入队锁定 `pack_id`。
 
 ---
 

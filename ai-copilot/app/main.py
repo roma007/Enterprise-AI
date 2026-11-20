@@ -179,6 +179,13 @@ async def pack_guard_middleware(request: Request, call_next):
 
     if request.url.path in {"/api/packs/activate", "/api/packs/rollback"}:
         return await call_next(request)
+    # 演示数据是集卡专用；切到其他包后不要让客户看到错误数字。
+    if request.url.path.startswith("/api/") and request.url.path.endswith("/demo"):
+        if pack.current_pack().id != "trucking":
+            return JSONResponse(
+                {"detail": "演示数据仅适用于集卡包（trucking）；请切回后再演示"},
+                status_code=409,
+            )
     with pack.request_guard():
         return await call_next(request)
 
@@ -331,21 +338,30 @@ def api_packs_rollback(req: dict, request: Request):
     """回滚到某次切换之前；不传 id 时撤销最近一次切换。"""
     from . import pack, pack_state
 
+    entry_id = str(req.get("id") or "").strip() or None
+    try:
+        target = pack_state.rollback_target(entry_id)
+        if target:
+            pack.load_pack(target)  # 回滚目标可能已被删除，先校验
+    except (ValueError, pack.PackError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         pack.assert_idle()
     except pack.PackBusy as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         change = pack_state.rollback(
-            str(req.get("id") or "").strip() or None,
-            actor=_uid(request), reason=str(req.get("reason") or "")[:200],
+            entry_id, actor=_uid(request), reason=str(req.get("reason") or "")[:200],
+            target=target,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         pack.reload_pack()
     except pack.PackBusy as exc:
         raise HTTPException(status_code=409, detail=f"已保存，但当前不能即时生效：{exc}") from exc
+    except pack.PackError as exc:
+        raise HTTPException(status_code=400, detail=f"回滚目标不可用：{exc}") from exc
     return {"ok": True, **api_packs(), "change": change}
 
 

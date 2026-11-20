@@ -97,10 +97,10 @@ def _values_for(key: str, value) -> list[str]:
 
 
 def _containers(v) -> set[str]:
-    """兼容旧调用：把任意文本拆成归一化箱号集合。"""
+    """兼容旧调用：把任意文本拆成归一化箱号集合（不依赖当前包的 multi 配置）。"""
     if not v:
         return set()
-    return set(_values_for("container_no", v))
+    return {_norm(x) for x in re.split(r"[,，、;；\s]+", str(v)) if _norm(x)}
 
 
 def _system_amount(w: dict):

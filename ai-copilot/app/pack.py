@@ -271,6 +271,8 @@ def reload_pack(pack_id: str | None = None) -> Pack:
     global _current, _switching
     loaded = load_pack(pack_id) if pack_id else load_pack()
     with _state:
+        if _switching:
+            raise PackBusy("正在切换行业包，请稍后重试")
         if _active > 0:
             raise PackBusy(f"有 {_active} 个请求/任务正在处理，请稍后重试")
         _switching = True

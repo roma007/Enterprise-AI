@@ -19,6 +19,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
+from .pack import active_pack
 
 
 def cuts() -> tuple[int, int, int]:
@@ -31,12 +32,8 @@ def buckets() -> tuple[str, str, str, str, str]:
     return ("未到期", f"1–{c1} 天", f"{c1 + 1}–{c2} 天", f"{c2 + 1}–{c3} 天", f"{c3} 天以上")
 
 _HINTS = {
-    "client": ("客户", "货主", "抬头", "单位"),
-    "invoice_no": ("发票号", "单号", "运单号", "应收单号"),
-    "amount": ("应收", "金额", "价税合计", "应收金额"),
-    "due_date": ("到期", "应收日期", "账期截止", "付款日"),
-    "paid_amount": ("已收", "已回款", "实收"),
-    "paid_date": ("回款日", "收款日", "实际收款"),
+    key: tuple(values)
+    for key, values in (active_pack().aging.get("header_hints") or {}).items()
 }
 
 

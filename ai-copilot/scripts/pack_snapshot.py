@@ -19,7 +19,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from app import address_check, aging, fees, invoice, margin, reconcile, rules, schema
+from app import address_check, aging, fees, invoice, margin, reconcile, rules, schema, settlement
 from app.pack import PACKS_DIR, active_pack, load_pack
 
 RAW_FILES = (
@@ -102,7 +102,7 @@ def main() -> None:
     eq("rules.LOW_CONF_WARN", rules.LOW_CONF_WARN, float(pack.review.get("low_conf_warn")))
     chk("rules.VALIDATORS 覆盖 pack 类型", all(r.type in rules.VALIDATORS for r in pack.validations))
 
-    print("\n[尚未接线的模块：仍与 pack 对照，Step 2 接线]")
+    print("\n[已接线模块：round-trip（Step 2）]")
     eq("reconcile header_hints", {k: list(v) for k, v in reconcile._HINTS.items()},
        pack.reconcile["statement"]["header_hints"])
     eq("reconcile positional", [v for _, v in sorted(reconcile.POSITIONAL_DEFAULT.items())],
@@ -115,6 +115,10 @@ def main() -> None:
     eq("fees header_hints", {k: list(v) for k, v in fees._HINTS.items()},
        pack.fees["header_hints"])
     eq("fees builtin_fees", sorted(fees.BUILTIN_FEES), pack.fees["builtin_fees"])
+    eq("settlement rate_hints", {k: list(v) for k, v in settlement._RATE_HINTS.items()},
+       (pack.fees.get("settlement") or {}).get("rate_hints"))
+    eq("settlement bill_hints", {k: list(v) for k, v in settlement._BILL_HINTS.items()},
+       (pack.fees.get("settlement") or {}).get("bill_hints"))
     eq("cost revenue_hints", {k: list(v) for k, v in margin._REVENUE_HINTS.items()},
        pack.cost["revenue_hints"])
     eq("cost cost_hints", {k: list(v) for k, v in margin._COST_HINTS.items()},

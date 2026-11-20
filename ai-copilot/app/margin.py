@@ -22,21 +22,17 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from . import thresholds as th
+from .pack import active_pack
 from .settlement import _dec, _parse
 
+_PACK_COST = active_pack().cost
 _REVENUE_HINTS = {
-    "date": ("日期", "业务日期", "开票日期", "date"),
-    "order_no": ("单号", "运单号", "委托单号", "订单号", "order"),
-    "truck": ("车辆", "车牌", "车号", "truck"),
-    "client": ("客户", "货主", "client"),
-    "revenue": ("应收", "收入", "运费", "revenue"),
+    key: tuple(values)
+    for key, values in (_PACK_COST.get("revenue_hints") or {}).items()
 }
 _COST_HINTS = {
-    "date": ("日期", "费用日期", "date"),
-    "truck": ("车辆", "车牌", "车号", "truck"),
-    "order_no": ("单号", "运单号", "委托单号", "订单号", "order"),
-    "category": ("科目", "费用类型", "类别", "category"),
-    "amount": ("金额", "费用", "支出", "amount"),
+    key: tuple(values)
+    for key, values in (_PACK_COST.get("cost_hints") or {}).items()
 }
 
 

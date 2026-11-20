@@ -28,28 +28,16 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from .config import ROOT
+from .pack import active_pack
 
 DICT_PATH = Path(ROOT / "data" / "fee_dict.txt")
 
-# 内置的常见费用名（子集，不是行业全集）
-BUILTIN_FEES = {
-    "运费", "拖车费", "运输费", "包干费", "提箱费", "落箱费", "装卸费",
-    "掏箱费", "装箱费", "报关费", "报检费", "文件费", "单证费", "订舱费",
-    "电放费", "thc", "码头操作费", "燃油附加费", "低硫燃油附加费",
-    "压夜费", "等候费", "待时费", "改单费", "退关费", "冲港费", "进港费",
-    "过磅费", "路桥费", "停车费", "司机补贴", "代垫费", "箱使费",
-    "滞箱费", "修箱费", "洗箱费", "熏蒸费", "保险费", "仓储费", "理货费",
-    "查验费", "铅封费", "打单费", "设备交接单费", "edi费", "港口费",
-}
-
+# 内置费用名与表头同义词来自行业包；现场补充仍走 data/fee_dict.txt。
+_PACK_FEES = active_pack().fees
+BUILTIN_FEES = frozenset(_PACK_FEES.get("builtin_fees") or ())
 _HINTS = {
-    "booking_no": ("运单号", "委托单号", "单号", "托书号", "提单号", "订单号", "趟次号"),
-    "fee_name": ("费用名称", "费用", "费目", "项目", "科目", "收费项目"),
-    "amount": ("金额", "费用金额", "应付", "报账金额", "结算金额", "合计"),
-    "qty": ("数量", "趟数", "吨位", "重量", "车数"),
-    "unit_price": ("单价", "价格", "运价", "费率"),
-    "vendor": ("车队", "供应商", "承运商", "外协"),
-    "date": ("日期", "发生日期", "费用日期"),
+    key: tuple(values)
+    for key, values in (_PACK_FEES.get("header_hints") or {}).items()
 }
 
 

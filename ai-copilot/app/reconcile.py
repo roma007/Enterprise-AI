@@ -12,6 +12,9 @@
 4. 系统有、客户没报                  → **漏单（要追）**
 
 第 4 类最容易被忽略，也最容易漏钱——所以必须双向比对，不能只顺着对账单看。
+
+Step 2：表头同义词、匹配键、金额字段、状态文案、展示字段来自行业包
+（`packs/<id>/reconcile.json`）；匹配/双向比对/汇总算法仍在本模块。
 """
 from __future__ import annotations
 
@@ -21,8 +24,22 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
+from .pack import active_pack
 
-# 容差运行时可调（A3）
+# 容差仍在 settings（reconcile.tolerance）；其余口径来自 pack。
+_PACK = active_pack()
+_SPEC = _PACK.reconcile
+_STATEMENT = _SPEC.get("statement") or {}
+_MATCH = _SPEC.get("match") or {}
+_DISPLAY = _STATEMENT.get("display") or {}
+
+_HINTS = {k: tuple(v) for k, v in (_STATEMENT.get("header_hints") or {}).items()}
+POSITIONAL_DEFAULT = {i: k for i, k in enumerate(_STATEMENT.get("positional") or [])}
+SYSTEM_AMOUNT_FIELDS = tuple(_STATEMENT.get("amount_fields") or ())
+STATUS_LABELS = dict(_SPEC.get("statuses") or {})
+_MATCH_KEYS = tuple(_MATCH.get("keys") or ("booking_no", "container_no"))
+_MULTI_KEYS = set(_MATCH.get("multi") or ())
+_AMOUNT_FIELD = _STATEMENT.get("amount_field") or "amount"
 
 
 def _dec(v) -> Decimal | None:
@@ -41,10 +58,14 @@ def _norm(v) -> str:
     return re.sub(r"[^0-9A-Za-z]", "", str(v or "")).upper()
 
 
-def _containers(v) -> set[str]:
-    if not v:
-        return set()
-    return {_norm(x) for x in re.split(r"[,，、;；\s]+", str(v)) if _norm(x)}
+def _values_for(key: str, value) -> list[str]:
+    """按匹配键取归一化值；multi 键（如箱号）按分隔符拆成多个。"""
+    if value is None or value == "":
+        return []
+    if key in _MULTI_KEYS:
+        return [_norm(x) for x in re.split(r"[,，、;；\s]+", str(value)) if _norm(x)]
+    v = _norm(value)
+    return [v] if v else []
 
 
 def _system_amount(w: dict):
@@ -56,25 +77,6 @@ def _system_amount(w: dict):
 
 
 # ---------- 对账单解析 ----------
-
-_HINTS = {
-    "booking_no": ("运单号", "委托单号", "单号", "托书号", "订单号", "提单号"),
-    "container_no": ("箱号", "柜号", "集装箱号"),
-    "amount": ("金额", "运费", "应收", "应收金额", "价税合计", "合计"),
-    "client": ("客户", "货主", "抬头"),
-}
-
-# 下列常量原先内联在解析/导出函数里，抽成模块常量只为 packs/ 快照可对照，
-# 不改变任何运行时行为（Step 0）。
-POSITIONAL_DEFAULT = {0: "booking_no", 1: "container_no", 2: "amount"}
-SYSTEM_AMOUNT_FIELDS = ("freight", "amount", "total_amount")
-STATUS_LABELS = {
-    "ok": "一致",
-    "amount_diff": "金额不符",
-    "missing_in_system": "系统无此单",
-    "missing_in_statement": "客户漏单",
-}
-
 
 def _map_header(cols: list[str]) -> dict[int, str]:
     mapping: dict[int, str] = {}
@@ -96,7 +98,7 @@ def parse_statement(text: str) -> dict:
     if not raw_lines:
         return {"rows": [], "mapping": {}, "note": "空对账单"}
 
-    # 1) 找表头行（含"单号/箱号/金额"之一）
+    # 1) 找表头行（含任一同义词）
     header_idx = -1
     for i, ln in enumerate(raw_lines[:5]):
         if any(h in ln for hints in _HINTS.values() for h in hints):
@@ -114,7 +116,7 @@ def parse_statement(text: str) -> dict:
         data = rows[1:]
         mode = "header"
     else:
-        # 没有表头：按空白切，约定「单号 箱号 金额」的顺序
+        # 没有表头：按空白切，按 pack 的 positional 顺序
         mapping = dict(POSITIONAL_DEFAULT)
         data = [re.split(r"\s+", ln) for ln in raw_lines]
         mode = "positional"
@@ -126,7 +128,7 @@ def parse_statement(text: str) -> dict:
         rec = {}
         for idx, key in mapping.items():
             rec[key] = (r[idx].strip() if idx < len(r) else "")
-        if not rec.get("booking_no") and not rec.get("container_no"):
+        if not any(rec.get(k) for k in _MATCH_KEYS):
             continue
         out.append(rec)
 
@@ -139,14 +141,16 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
               tolerance: Decimal | None = None) -> dict:
     if tolerance is None:
         tolerance = Decimal(str(th.get("reconcile.tolerance")))
-    by_no: dict[str, dict] = {}
-    by_box: dict[str, dict] = {}
+
+    # 按匹配键建索引：单值键后写覆盖（与原 by_no 一致），multi 键先写优先（与原 by_box 一致）。
+    indexes: dict[str, dict[str, dict]] = {key: {} for key in _MATCH_KEYS}
     for w in waybills:
-        no = _norm(w.get("booking_no"))
-        if no:
-            by_no[no] = w
-        for c in _containers(w.get("container_no")):
-            by_box.setdefault(c, w)
+        for key in _MATCH_KEYS:
+            for value in _values_for(key, w.get(key)):
+                if key in _MULTI_KEYS:
+                    indexes[key].setdefault(value, w)
+                else:
+                    indexes[key][value] = w
 
     used: set[int] = set()
     rows: list[dict] = []
@@ -154,23 +158,33 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
     def idx_of(w: dict) -> int:
         return id(w)
 
-    for i, s in enumerate(statement_rows):
-        s_no = _norm(s.get("booking_no"))
-        s_boxes = _containers(s.get("container_no"))
-        s_amt = _dec(s.get("amount"))
+    no_key = _DISPLAY.get("no") or "booking_no"
+    container_key = _DISPLAY.get("container") or "container_no"
 
-        w = by_no.get(s_no) if s_no else None
-        if w is None and s_boxes:
-            for c in s_boxes:
-                if c in by_box:
-                    w = by_box[c]
+    def display_values(w: dict | None, s: dict) -> tuple[str, str]:
+        no = (w.get(no_key) if w else "") or s.get(no_key, "")
+        container = (w.get(container_key) if w else "") or s.get(container_key, "")
+        return no, container
+
+    for i, s in enumerate(statement_rows):
+        s_amt = _dec(s.get(_AMOUNT_FIELD))
+
+        w = None
+        for key in _MATCH_KEYS:
+            for value in _values_for(key, s.get(key)):
+                if value in indexes[key]:
+                    w = indexes[key][value]
                     break
+            if w is not None:
+                break
+
+        no, container = display_values(w, s)
 
         if w is None:
             rows.append({
                 "line": i + 1, "status": "missing_in_system",
-                "booking_no": s.get("booking_no", ""),
-                "container_no": s.get("container_no", ""),
+                "no": no, "container": container,
+                "booking_no": no, "container_no": container,
                 "statement_amount": float(s_amt) if s_amt is not None else None,
                 "system_amount": None, "diff": None,
                 "note": "对账单有、系统里没有（可能多收或错开）",
@@ -188,8 +202,8 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
 
         rows.append({
             "line": i + 1, "status": status,
-            "booking_no": w.get("booking_no") or s.get("booking_no", ""),
-            "container_no": w.get("container_no") or s.get("container_no", ""),
+            "no": no, "container": container,
+            "booking_no": no, "container_no": container,
             "statement_amount": float(s_amt) if s_amt is not None else None,
             "system_amount": float(w_amt) if w_amt is not None else None,
             "diff": float(diff) if diff is not None else None,
@@ -200,10 +214,12 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
     for w in waybills:
         if idx_of(w) in used:
             continue
+        no = w.get(no_key, "")
+        container = w.get(container_key, "")
         rows.append({
             "line": None, "status": "missing_in_statement",
-            "booking_no": w.get("booking_no", ""),
-            "container_no": w.get("container_no", ""),
+            "no": no, "container": container,
+            "booking_no": no, "container_no": container,
             "statement_amount": None,
             "system_amount": float(_dec(_system_amount(w)) or 0),
             "diff": None,
@@ -244,12 +260,19 @@ def export_csv(result: dict) -> str:
     buf = io.StringIO()
     buf.write("\ufeff")
     w = csv.writer(buf)
-    w.writerow(["行号", "状态", "单号", "箱号", "对账单金额", "系统金额", "差额", "说明"])
+    no_label = _DISPLAY.get("no_label") or "单号"
+    container_label = _DISPLAY.get("container_label") or "箱号"
+    w.writerow(["行号", "状态", no_label, container_label,
+                "对账单金额", "系统金额", "差额", "说明"])
     for r in result["rows"]:
-        w.writerow([r["line"] or "", STATUS_LABELS.get(r["status"], r["status"]),
-                    r["booking_no"], r["container_no"],
-                    r["statement_amount"] if r["statement_amount"] is not None else "",
-                    r["system_amount"] if r["system_amount"] is not None else "",
-                    r["diff"] if r["diff"] is not None else "",
-                    r["note"]])
+        w.writerow([
+            r["line"] or "",
+            STATUS_LABELS.get(r["status"], r["status"]),
+            r.get("no") or r.get("booking_no", ""),
+            r.get("container") or r.get("container_no", ""),
+            r["statement_amount"] if r["statement_amount"] is not None else "",
+            r["system_amount"] if r["system_amount"] is not None else "",
+            r["diff"] if r["diff"] is not None else "",
+            r["note"],
+        ])
     return buf.getvalue()

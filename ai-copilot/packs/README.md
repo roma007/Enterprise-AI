@@ -6,11 +6,10 @@
 ## 当前状态
 
 - **Step 0 已完成**：`packs/trucking/` 冻结了原有字段/校验/口径。
-- **Step 1 已完成**：`app/schema.py`、`app/invoice.py`、`app/rules.py` 已经读 pack；
-  `packs/trucking/` 是托书/发票/校验的运行时源。
-- **Step 2 待做**：`reconcile` / `aging` / `fees` / `margin` / `geo` 仍用代码常量，
-  尚未切到 pack（`pack_snapshot.py` 会持续对照，防止漂移）。
-- `packs/freight_audit/`（买方运费审计）尚未创建，等 Step 3。
+- **Step 1 已完成**：`app/schema.py`、`app/invoice.py`、`app/rules.py` 已经读 pack。
+- **Step 2 已完成**：`reconcile` / `aging` / `fees` / `margin` / `geo` 也已读 pack；
+  `packs/trucking/` 现在是托书、发票、校验、对账、账龄、费用、成本、地域的运行时源。
+- **Step 3 待做**：`packs/freight_audit/`（买方运费审计）dry-run + `packdiff`。
 
 ## 目录
 

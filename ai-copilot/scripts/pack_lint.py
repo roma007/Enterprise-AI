@@ -133,17 +133,28 @@ def main() -> None:
     # ---- reconcile.json ----
     print("\n[reconcile.json]")
     st = reconcile.get("statement") or {}
+    match = reconcile.get("match") or {}
     chk("header_hints 非空", bool(st.get("header_hints")))
     chk("positional 非空", bool(st.get("positional")))
+    chk("amount_field 非空", bool(st.get("amount_field")))
     chk("amount_fields 非空", bool(st.get("amount_fields")))
-    chk("match.keys 非空", bool((reconcile.get("match") or {}).get("keys")))
+    chk("match.keys 非空", bool(match.get("keys")))
+    chk("match.multi 是 keys 子集", set(match.get("multi") or []) <= set(match.get("keys") or []))
     chk("statuses 非空", bool(reconcile.get("statuses")))
+    display = st.get("display") or {}
+    if display:
+        chk("display.no 非空", bool(display.get("no")))
+        chk("display.container 非空", bool(display.get("container")))
 
     # ---- aging / fees / cost ----
     print("\n[aging.json / fees.json / cost.json]")
     chk("aging.header_hints 非空", bool(aging.get("header_hints")))
     chk("fees.header_hints 非空", bool(fees.get("header_hints")))
     chk("fees.builtin_fees 非空", bool(fees.get("builtin_fees")))
+    settlement = fees.get("settlement") or {}
+    if settlement:
+        chk("fees.settlement.rate_hints 非空", bool(settlement.get("rate_hints")))
+        chk("fees.settlement.bill_hints 非空", bool(settlement.get("bill_hints")))
     chk("cost.revenue_hints 非空", bool(cost.get("revenue_hints")))
     chk("cost.cost_hints 非空", bool(cost.get("cost_hints")))
 

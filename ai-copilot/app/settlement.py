@@ -19,23 +19,17 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
+from .pack import active_pack
 
-# 容差运行时可调（A3）
-
+# 容差运行时可调（A3）；表头同义词来自 pack.fees.settlement。
+_SETTLEMENT = (active_pack().fees.get("settlement") or {})
 _RATE_HINTS = {
-    "carrier": ("车队", "承运商", "外协", "供应商"),
-    "route": ("线路", "路线", "起止", "区间"),
-    "container_type": ("箱型", "柜型", "车型"),
-    "price": ("单价", "价格", "运价"),
-    "unit": ("单位", "计价单位", "计费单位"),
+    key: tuple(values)
+    for key, values in (_SETTLEMENT.get("rate_hints") or {}).items()
 }
 _BILL_HINTS = {
-    "carrier": ("车队", "承运商", "外协", "供应商"),
-    "booking_no": ("单号", "运单号", "趟次号", "委托单号"),
-    "route": ("线路", "路线", "起止"),
-    "container_type": ("箱型", "柜型", "车型"),
-    "qty": ("数量", "趟数", "吨位", "重量", "车数"),
-    "claimed": ("报账", "金额", "结算金额", "应付金额"),
+    key: tuple(values)
+    for key, values in (_SETTLEMENT.get("bill_hints") or {}).items()
 }
 
 

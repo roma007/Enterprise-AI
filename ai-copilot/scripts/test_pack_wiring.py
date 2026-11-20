@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import extract, invoice, reconcile, rules, schema  # noqa: E402
+from app import address_check, aging, extract, fees, invoice, margin, reconcile, rules, schema, settlement  # noqa: E402
 
 ok = True
 
@@ -107,6 +107,8 @@ chk("全高风险字段 -> auto", rules.decide_review_level(auto) == "auto",
 print("\n对账口径")
 parsed = reconcile.parse_statement("运单号,箱号,金额\nT-001,CSQU3054383,100\n")
 chk("表头映射", parsed["mapping"] == {"booking_no": 0, "container_no": 1, "amount": 2}, str(parsed["mapping"]))
+parsed_box_only = reconcile.parse_statement("箱号,金额\nCSQU3054383,100\n")
+chk("只有箱号也保留", len(parsed_box_only["rows"]) == 1, str(parsed_box_only["rows"]))
 r = reconcile.reconcile(
     [{"booking_no": "T-001", "amount": "100"}, {"booking_no": "T-002", "amount": "50"}],
     [{"booking_no": "T-001", "freight": "90"}, {"booking_no": "T-003", "freight": "30"}],
@@ -115,7 +117,27 @@ statuses = {row["status"] for row in r["rows"]}
 chk("金额差异", "amount_diff" in statuses, str(statuses))
 chk("对账单有系统无", "missing_in_system" in statuses, str(statuses))
 chk("系统有对账单无", "missing_in_statement" in statuses, str(statuses))
-chk("CSV 使用 pack 状态文案", "金额不符" in reconcile.export_csv(r))
+csv_text = reconcile.export_csv(r)
+chk("CSV 使用 pack 状态文案", "金额不符" in csv_text)
+chk("CSV 表头使用 pack 展示字段", "单号" in csv_text.splitlines()[0] and "箱号" in csv_text.splitlines()[0], csv_text.splitlines()[0])
+# 只给箱号：按 match.keys 的第二键 + multi 仍能命中
+r_box = reconcile.reconcile(
+    [{"container_no": "CSQU3054383", "amount": "100"}],
+    [{"booking_no": "T-001", "container_no": "CSQU3054383", "freight": "100"}],
+)
+chk("箱号匹配", r_box["summary"]["ok"] == 1, str(r_box["summary"]))
+
+print("\n账龄 / 费用 / 毛利 / 地址词表")
+ar = aging.parse_receivables("客户,应收,到期\n测试客户,1000,2026-11-30\n")
+chk("账龄表头来自 pack", ar and ar[0].get("client") == "测试客户", str(ar[:1]))
+fee_rows = fees.parse_fee_text("单号,费用,金额\nT-001,运费,100\n")
+chk("费用表头来自 pack", fee_rows and fee_rows[0].get("fee_name") == "运费", str(fee_rows[:1]))
+rev = margin.parse_revenue("日期,单号,车辆,客户,应收\n2026-11-01,T-001,浙A1,测试客户,100\n")
+chk("毛利表头来自 pack", rev and rev[0].get("client") == "测试客户", str(rev[:1]))
+addr = address_check.check_one("宁波北仓", "pickup_addr", "提箱地")
+chk("地址词表来自 pack", any(c.code == "W_ADDR_TYPO" for c in addr), str([c.code for c in addr]))
+rates = settlement.parse_rates("车队,线路,箱型,单价,单位\n测试车队,宁波-上海,40HQ,1000,箱\n")
+chk("结算表头来自 pack", rates and rates[0].get("carrier") == "测试车队", str(rates[:1]))
 
 print("\n解析结果带 pack 版本")
 d = extract.extract("客户：测试货代\n委托单号：T-001\n船名航次：TEST / 001E", mode="rule", allow_llm=False)

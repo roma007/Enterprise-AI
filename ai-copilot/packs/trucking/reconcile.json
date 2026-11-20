@@ -33,15 +33,25 @@
       "container_no",
       "amount"
     ],
+    "amount_field": "amount",
     "amount_fields": [
       "freight",
       "amount",
       "total_amount"
-    ]
+    ],
+    "display": {
+      "no": "booking_no",
+      "container": "container_no",
+      "no_label": "单号",
+      "container_label": "箱号"
+    }
   },
   "match": {
     "keys": [
       "booking_no",
+      "container_no"
+    ],
+    "multi": [
       "container_no"
     ],
     "normalize": "alnum_upper"

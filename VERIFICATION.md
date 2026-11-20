@@ -1138,6 +1138,30 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - 自检：`scripts/test_dashboard.py` **18/18 通过**；`./scripts/smoke.sh` **19/19 通过**。
 - 边界：驾驶舱只读聚合，不替代业务页；三个演示模块不可加总；真实经营数据仍未接，AI-29/AI-55 保持演示定位。
 
+### 5.56 行业配置包 Step 0–4（AI-56–AI-60，2026-11-20）
+
+- Step 0（AI-56）：把现有托书/发票/校验/对账/账龄/费用/成本/地域/验收冻结为 `ai-copilot/packs/trucking/`；新增 `scripts/pack_lint.py`、`scripts/pack_snapshot.py`、`make pack-lint` / `pack-snapshot`。
+- Step 1（AI-57）：新增 `app/domain.py` / `app/pack.py`；`schema` / `invoice` / `rules` 改为读 pack；`Draft` 记录 `pack_id` / `pack_version`；`rules.json` 增至 10 条并带 `code/message`。
+- Step 2（AI-58）：`reconcile` / `aging` / `fees` / `settlement` / `margin` / `geo` 改为读 pack；对账新增 `match.keys` / `match.multi` / `display` / `amount_field`；结算表头进 `fees.settlement`。
+- Step 3（AI-59）：新增 `packs/freight_audit/`（买方运费审计 dry-run，10 审计字段 + 15 发票字段 + 4 规则 + 买方对账口径）；`app/pack.py` 支持部分 pack；`app/statement.py` 的 `line_hints` / `line_map` 读 pack；新增 `scripts/packdiff.py`、`scripts/test_pack_freight_audit.py`。
+- Step 4（AI-60）：新增 `app/pack_state.py`（激活指针 + 切换历史，SQLite/PG 双落盘）、`GET /api/packs`、`POST /api/packs/activate|rollback`、`GET /api/packs/history`；设置页“行业包”页签；v1 重启后生效。
+
+复验（本机 2026-11-20）：
+
+- `make pack-lint` / `make pack-snapshot` / `make pack-test`（34 项）全部通过；
+- `pack_lint.py packs/freight_audit` / `PACK_ID=freight_audit make pack-snapshot` / `make pack-test-freight`（24 项）全部通过；
+- `make pack-state-test` 12 项全部通过；
+- `make pack-diff` exit 0：差异只在 `packs/`，`app/` 内核未改；
+- `./scripts/smoke.sh` 19/19；`LLM_PROVIDER=rule make eval` exit 0（合成样本：tuned 100%，holdout 字段 98.7% / 整单 87.5%）；
+- API 端到端：激活 `freight_audit` → 重启后 `/api/meta` 返回审计字段 → 回滚 → 重启后回到托书字段；`/api/packs/history` 4 条记录；验证后已清理 `data/active_pack.json` / `data/pack_history.json`。
+
+边界：
+
+- `freight_audit` 是合成 dry-run，没有真实客户账单样本；真实准确率/POC 仍未验证；
+- 热切换未做：v1 激活/回滚只写指针，重启后生效；热切换需把模块级常量改成动态读取；
+- `statement.py` 的 `charge_code` 在文本层暂映射到 `remark`；OCR 行兜底仍是集卡形状；
+- 没有买方审计专属 UI；页面按 pack 字段渲染，但工作流仍需产品化。
+
 ---
 
 ## 6. 未验证 / 阻塞项

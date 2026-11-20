@@ -5,6 +5,16 @@
 
 ---
 
+## [未发布] · 2026-11-20 · 行业配置包 Step 0–4（AI-56–AI-60）
+
+- Step 0：字段/校验/对账/账龄/费用/成本/地域/验收冻结为 `packs/trucking/`；新增 `make pack-lint` / `pack-snapshot`。
+- Step 1：`app/domain.py` / `app/pack.py` 落地；`schema` / `invoice` / `rules` 读 pack；`Draft` 记录 `pack_id` / `pack_version`。
+- Step 2：`reconcile` / `aging` / `fees` / `settlement` / `margin` / `geo` 读 pack；对账支持 `match.keys` / `match.multi` / `display` / `amount_field`。
+- Step 3：新增 `packs/freight_audit/` 买方运费审计 dry-run；`packdiff` 证明差异只在配置，`app/` 内核不改。
+- Step 4：`/api/packs` 查看/激活/回滚 + 切换历史 + 设置页“行业包”页签；v1 重启后生效。
+- 自检：`pack-test` 34 项、`pack-test-freight` 24 项、`pack-state-test` 12 项；`smoke.sh` 19/19；`make eval` exit 0（合成样本）。
+- 边界：真实客户样本仍为 0；不做热切换；买方审计无专属 UI。
+
 ## [未发布] · 2026-11-13 · 经营驾驶舱（AI-55）
 
 - 新增 `app/dashboard.py` + `/dashboard`：老板/客户演示样张，聚合经营结果（`/insight`）、客户/线路（`/profit`）、能源/线路（`/fleet`）三个独立演示模块

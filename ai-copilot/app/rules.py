@@ -20,7 +20,7 @@ from datetime import datetime
 from . import thresholds as th
 from .address_check import check_addresses
 from .domain import Check, Draft, FieldValue, ValidationSpec
-from .pack import active_pack
+from .pack import current_pack, register_listener
 from .schema import BLOCKING_KEYS, LABELS
 
 # ---------- ISO 6346 ----------
@@ -38,21 +38,34 @@ _WEIGHTS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
 CONTAINER_RE = re.compile(r"(?<![A-Z0-9])([A-Z]{4}\d{7})(?![A-Z0-9])")
 
 # 兼容旧 import（store.py 用 RISK_KEYS；导出脚本/快照用其余常量）。
-_PACK = active_pack()
-_RULES = {r.id: r for r in _PACK.validations}
+# 可变容器原地刷新；正则/数值在 _apply 里重绑（运行时不再依赖它们）。
+VALID_TYPES: set[str] = set()
+RISK_KEYS: list[str] = []
+SEAL_RE = re.compile(r"[A-Za-z0-9]{5,15}")
+PHONE_RE = re.compile(r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})")
+CLOSING_WARN_HOURS = 24.0
+LOW_CONF_WARN = 0.6
 
 
-def _rule_params(rule_id: str) -> dict:
-    rule = _RULES.get(rule_id)
-    return rule.params if rule else {}
+def _apply(pack) -> None:
+    global SEAL_RE, PHONE_RE, CLOSING_WARN_HOURS, LOW_CONF_WARN
+    rules = {r.id: r for r in pack.validations}
+
+    def params(rule_id: str) -> dict:
+        rule = rules.get(rule_id)
+        return rule.params if rule else {}
+
+    VALID_TYPES.clear()
+    VALID_TYPES.update(params("container_type").get("values") or ())
+    RISK_KEYS[:] = list(pack.review.get("risk_fields") or ())
+    SEAL_RE = re.compile(params("seal_format").get("pattern") or r"[A-Za-z0-9]{5,15}")
+    PHONE_RE = re.compile(params("phone_format").get("pattern") or r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})")
+    CLOSING_WARN_HOURS = float(params("closing").get("warn_hours") or 24)
+    LOW_CONF_WARN = float(pack.review.get("low_conf_warn") or 0.6)
 
 
-VALID_TYPES = frozenset(_rule_params("container_type").get("values") or ())
-SEAL_RE = re.compile(_rule_params("seal_format").get("pattern") or r"[A-Za-z0-9]{5,15}")
-PHONE_RE = re.compile(_rule_params("phone_format").get("pattern") or r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})")
-CLOSING_WARN_HOURS = float(_rule_params("closing").get("warn_hours") or 24)
-LOW_CONF_WARN = float(_PACK.review.get("low_conf_warn") or 0.6)
-RISK_KEYS = tuple(_PACK.review.get("risk_fields") or ())
+_apply(current_pack())
+register_listener(_apply)
 
 
 def iso6346_check_digit(code: str) -> int | None:
@@ -157,7 +170,11 @@ def _enabled(rule: ValidationSpec) -> bool:
 def _required_fields(rule: ValidationSpec) -> list[str]:
     fallback = list(rule.params.get("fallback_fields") or BLOCKING_KEYS)
     ref = _setting_ref(rule.params.get("fields_from"))
-    return (th.get_list(ref) or fallback) if ref else fallback
+    fields = (th.get_list(ref) or fallback) if ref else fallback
+    # 切包后 settings 里可能还留着旧包的字段；过滤掉当前包不存在的 key。
+    known = {s.key for s in current_pack().documents["booking"]}
+    selected = [k for k in fields if k in known]
+    return selected or fallback
 
 
 def _msg(rule: ValidationSpec, key: str = "message", **kwargs) -> str:
@@ -182,7 +199,7 @@ def _required(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
 
 def _low_confidence(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
     threshold = (
-        float(active_pack().review.get("low_conf_warn") or 0.6)
+        float(current_pack().review.get("low_conf_warn") or 0.6)
         if rule.params.get("threshold_from") == "review.low_conf_warn"
         else float(rule.params.get("threshold") or 0.6)
     )
@@ -323,7 +340,7 @@ VALIDATORS = {
 def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
     now = now or datetime.now()
     checks: list[Check] = []
-    for rule in active_pack().validations:
+    for rule in current_pack().validations:
         if not _enabled(rule):
             continue
         fn = VALIDATORS.get(rule.type)
@@ -364,7 +381,7 @@ def decide_review_level(draft: Draft) -> str:
     low_floor = th.get("booking.low_conf_floor")
     auto_floor = th.get("booking.risk_auto_floor")
 
-    risk_keys = tuple(active_pack().review.get("risk_fields") or ())
+    risk_keys = tuple(current_pack().review.get("risk_fields") or ())
     required = th.get_list("rules.required") or list(BLOCKING_KEYS)
     watch = set(required) | set(risk_keys)
     low = [draft.fields[k].confidence for k in watch

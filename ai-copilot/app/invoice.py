@@ -20,19 +20,36 @@ from decimal import Decimal, InvalidOperation
 from . import thresholds as th
 from .config import settings
 from .llm import chat_json, mask, parse_json_loose
-from .pack import active_pack
+from .pack import current_pack, register_listener
 from .schema import Check, Draft, FieldValue
 
 PIPELINE_VERSION = "0.1.0"
 
-_PACK = active_pack()
-INVOICE_SPECS = _PACK.documents["invoice"]
-INVOICE_KEYS = tuple(s.key for s in INVOICE_SPECS)
-INV_LABELS = {s.key: s.label for s in INVOICE_SPECS}
-INV_SPEC = {s.key: s for s in INVOICE_SPECS}
-INV_BLOCKING = tuple(s.key for s in INVOICE_SPECS if s.blocking)
-INVOICE_PACK_ID = _PACK.id
-INVOICE_PACK_VERSION = _PACK.version
+INVOICE_SPECS: list = []
+INVOICE_KEYS: list[str] = []
+INV_LABELS: dict[str, str] = {}
+INV_SPEC: dict = {}
+INV_BLOCKING: list[str] = []
+INVOICE_PACK_ID = ""
+INVOICE_PACK_VERSION = ""
+
+
+def _apply(pack) -> None:
+    global INVOICE_PACK_ID, INVOICE_PACK_VERSION
+    specs = list(pack.documents["invoice"])
+    INVOICE_SPECS[:] = specs
+    INVOICE_KEYS[:] = [s.key for s in specs]
+    INV_LABELS.clear()
+    INV_LABELS.update({s.key: s.label for s in specs})
+    INV_SPEC.clear()
+    INV_SPEC.update({s.key: s for s in specs})
+    INV_BLOCKING[:] = [s.key for s in specs if s.blocking]
+    INVOICE_PACK_ID = pack.id
+    INVOICE_PACK_VERSION = pack.version
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 VALID_RATES = {"0", "0.01", "0.03", "0.05", "0.06", "0.09", "0.13"}
 
@@ -315,6 +332,6 @@ def extract_invoice(text: str, allow_llm: bool = True) -> Draft:
         review_level=level,
         model=settings.model if engine.startswith("llm:") else "",
         pipeline_version=PIPELINE_VERSION,
-        pack_id=INVOICE_PACK_ID,
-        pack_version=INVOICE_PACK_VERSION,
+        pack_id=current_pack().id,
+        pack_version=current_pack().version,
     )

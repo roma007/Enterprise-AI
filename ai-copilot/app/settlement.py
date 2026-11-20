@@ -19,18 +19,29 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
-from .pack import active_pack
+from .pack import current_pack, register_listener
 
 # 容差运行时可调（A3）；表头同义词来自 pack.fees.settlement。
-_SETTLEMENT = (active_pack().fees.get("settlement") or {})
-_RATE_HINTS = {
-    key: tuple(values)
-    for key, values in (_SETTLEMENT.get("rate_hints") or {}).items()
-}
-_BILL_HINTS = {
-    key: tuple(values)
-    for key, values in (_SETTLEMENT.get("bill_hints") or {}).items()
-}
+_RATE_HINTS: dict = {}
+_BILL_HINTS: dict = {}
+
+
+def _apply(pack) -> None:
+    settlement = (pack.fees or {}).get("settlement") or {}
+    _RATE_HINTS.clear()
+    _RATE_HINTS.update({
+        key: tuple(values)
+        for key, values in (settlement.get("rate_hints") or {}).items()
+    })
+    _BILL_HINTS.clear()
+    _BILL_HINTS.update({
+        key: tuple(values)
+        for key, values in (settlement.get("bill_hints") or {}).items()
+    })
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def _dec(v) -> Decimal | None:

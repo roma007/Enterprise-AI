@@ -1144,7 +1144,7 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - Step 1（AI-57）：新增 `app/domain.py` / `app/pack.py`；`schema` / `invoice` / `rules` 改为读 pack；`Draft` 记录 `pack_id` / `pack_version`；`rules.json` 增至 10 条并带 `code/message`。
 - Step 2（AI-58）：`reconcile` / `aging` / `fees` / `settlement` / `margin` / `geo` 改为读 pack；对账新增 `match.keys` / `match.multi` / `display` / `amount_field`；结算表头进 `fees.settlement`。
 - Step 3（AI-59）：新增 `packs/freight_audit/`（买方运费审计 dry-run，10 审计字段 + 15 发票字段 + 4 规则 + 买方对账口径）；`app/pack.py` 支持部分 pack；`app/statement.py` 的 `line_hints` / `line_map` 读 pack；新增 `scripts/packdiff.py`、`scripts/test_pack_freight_audit.py`。
-- Step 4（AI-60）：新增 `app/pack_state.py`（激活指针 + 切换历史，SQLite/PG 双落盘）、`GET /api/packs`、`POST /api/packs/activate|rollback`、`GET /api/packs/history`；设置页“行业包”页签；v1 重启后生效。
+- Step 4（AI-60）：新增 `app/pack_state.py`（激活指针 + 切换历史，SQLite/PG 双落盘）、`GET /api/packs`、`POST /api/packs/activate|rollback`、`GET /api/packs/history`；设置页“行业包”页签；Step 4 时重启后生效（AI-61 已改为即时生效）。
 
 复验（本机 2026-11-20）：
 
@@ -1158,9 +1158,33 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 边界：
 
 - `freight_audit` 是合成 dry-run，没有真实客户账单样本；真实准确率/POC 仍未验证；
-- 热切换未做：v1 激活/回滚只写指针，重启后生效；热切换需把模块级常量改成动态读取；
+- Step 4 时热切换未做；AI-61 已用“活动闸门 + 原地刷新”补齐（见 5.57）；
 - `statement.py` 的 `charge_code` 在文本层暂映射到 `remark`；OCR 行兜底仍是集卡形状；
 - 没有买方审计专属 UI；页面按 pack 字段渲染，但工作流仍需产品化。
+
+### 5.57 行业包热切换（AI-61，2026-11-20）
+
+- `app/pack.py`：新增 `request_guard()` / `PackBusy` / `register_listener()`；`reload_pack()` 在无活动请求/任务时原子替换并通知各模块原地刷新；有请求时抛 `PackBusy`，API 返回 409。
+- 模块常量改为可变容器 + `_apply(pack)`：
+  `schema`、`invoice`、`rules`、`reconcile`、`statement`、`aging`、`fees`、`margin`、`settlement`、`address_check`。
+- `thresholds.rules.required` 默认值跟随当前包的 blocking 字段；`rules._required_fields` 过滤新包不存在的 key。
+- FastAPI 中间件：除 `/api/packs/activate|rollback` 外，每个请求持读闸；`batchproc` 每个 job、企微图片后台任务各持读闸。
+- 设置页文案改为“即时生效”；`activate` / `rollback` 写指针后立即 `reload_pack()`。
+- 顺带修复 Step 2 回归：`consistency.py` 仍 import `reconcile._containers`，已恢复兼容别名。
+
+复验（本机 2026-11-20）：
+
+- `make pack-hotswap-test` **29/29**：trucking → freight_audit → trucking，字段/规则/对账/词表/必填默认全部跟随；持闸期间切换被拒；切回恢复。
+- `make pack-test` 34/34、`make pack-test-freight` 24/24、`make pack-state-test` 12/12、`make pack-lint` / `pack-snapshot` / `pack-diff` 全过。
+- `./scripts/smoke.sh` 19/19；`LLM_PROVIDER=rule make eval` exit 0（合成样本：tuned 100%，holdout 字段 98.7% / 整单 87.5%）。
+- API：activate `freight_audit` → **不重启** `/api/meta` 立即变审计字段、`restart_required=false`；rollback → **不重启**回到托书字段。
+- `consistency.demo()` 通过（回归修复）。
+
+边界：
+
+- 多实例只保证当前实例即时生效；其他实例需重启，后续可加 PG 通知/定时版本检查。
+- 有长任务（批量/企微图片）在跑时切换返回 409，管理员稍后重试；不阻塞等待。
+- 不做代码/依赖热更新；切包只换领域数据与内存容器。
 
 ---
 

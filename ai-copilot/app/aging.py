@@ -19,7 +19,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
-from .pack import active_pack
+from .pack import current_pack, register_listener
 
 
 def cuts() -> tuple[int, int, int]:
@@ -31,10 +31,19 @@ def buckets() -> tuple[str, str, str, str, str]:
     c1, c2, c3 = cuts()
     return ("未到期", f"1–{c1} 天", f"{c1 + 1}–{c2} 天", f"{c2 + 1}–{c3} 天", f"{c3} 天以上")
 
-_HINTS = {
-    key: tuple(values)
-    for key, values in (active_pack().aging.get("header_hints") or {}).items()
-}
+_HINTS: dict = {}
+
+
+def _apply(pack) -> None:
+    _HINTS.clear()
+    _HINTS.update({
+        key: tuple(values)
+        for key, values in (pack.aging.get("header_hints") or {}).items()
+    })
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def _dec(v) -> Decimal:

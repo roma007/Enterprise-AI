@@ -5,6 +5,16 @@
 
 ---
 
+## [未发布] · 2026-11-20 · 行业包热切换（AI-61）
+
+- `app/pack.py`：`request_guard` / `PackBusy` / `reload_pack` 监听器；请求/任务期间禁止换包，忙时 API 409。
+- `schema` / `invoice` / `rules` / `reconcile` / `statement` / `aging` / `fees` / `margin` / `settlement` / `address_check`：模块常量改可变容器，切包时原地刷新。
+- `thresholds.rules.required` 默认值跟随当前包；`rules._required_fields` 过滤幽灵字段。
+- FastAPI 中间件 + `batchproc` / 企微图片任务读闸；设置页“行业包”改为即时生效。
+- 自检：`pack-hotswap-test` 29 项、`pack-test` 34、`pack-test-freight` 24、`pack-state-test` 12、smoke 19/19、eval 通过。
+- 修复：`consistency.py` 的 `reconcile._containers` 回归。
+- 边界：多实例只保证当前实例；长任务在跑时切换返回 409；不做代码热更新。
+
 ## [未发布] · 2026-11-20 · 行业配置包 Step 0–4（AI-56–AI-60）
 
 - Step 0：字段/校验/对账/账龄/费用/成本/地域/验收冻结为 `packs/trucking/`；新增 `make pack-lint` / `pack-snapshot`。

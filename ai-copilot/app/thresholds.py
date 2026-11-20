@@ -25,7 +25,8 @@ from pathlib import Path
 
 from . import db
 from .config import ROOT
-from .schema import BLOCKING_KEYS, SPEC_MAP
+from .pack import current_pack, register_listener
+from .schema import SPEC_MAP
 
 PATH = ROOT / "data" / "settings.json"
 TPL_PLACEHOLDERS = ("client", "count", "outstanding", "overdue", "days")
@@ -72,7 +73,7 @@ SPECS: list[dict] = [
 
     # ---- 单证规则开关 ----
     {"key": "rules.required", "group": "单证规则", "type": "list",
-     "default": list(BLOCKING_KEYS),
+     "default": [],
      "label": "必填字段（缺失即阻断）",
      "hint": "勾选的字段为空时整单不可提交；至少保留 1 项"},
     {"key": "rules.container_checksum", "group": "单证规则", "type": "bool",
@@ -263,6 +264,17 @@ SPECS: list[dict] = [
 ]
 
 BY_KEY = {s["key"]: s for s in SPECS}
+
+
+def _apply(pack) -> None:
+    """规则必填项的默认值跟随当前包的 blocking 字段。"""
+    spec = BY_KEY.get("rules.required")
+    if spec is not None:
+        spec["default"][:] = [s.key for s in pack.documents["booking"] if s.blocking]
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def _now() -> str:

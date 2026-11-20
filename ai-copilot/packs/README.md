@@ -12,7 +12,7 @@
 - **Step 3 已完成**：新增 `packs/freight_audit/`（买方运费审计 dry-run），
   同一套 `app/` 内核不改代码可跑通；`packdiff` 证明差异只在配置。
 - **Step 4 已完成**：`/api/packs` 查看/激活/回滚、切换历史、设置页“行业包”页签。
-  v1 **保存后重启生效**，不做热切换。
+- **Step 5 已完成**：热切换（AI-61）——激活/回滚**即时生效**；有请求/任务在跑时返回 409。
 
 ## 目录
 
@@ -77,7 +77,7 @@ make pack-state-test # 激活/回滚历史自检（临时目录，不碰 data/�
   GET  /api/packs/history
   ```
 - 优先级：页面激活状态 > `PACK_ID` 环境变量 > 默认 `trucking`；
-- v1 只写指针，**重启服务后生效**；运行中的模块级常量不在请求中替换，避免半状态；
+- 写指针后 `reload_pack()` **即时生效**；请求/任务期间持读闸，忙时返回 409“稍后重试”；
 - SQLite 落 `data/active_pack.json` / `data/pack_history.json`；
   PostgreSQL 落 `app_settings` 的 `active_pack` / `pack_history`。
 

@@ -15,24 +15,46 @@ import re
 import unicodedata
 
 from .domain import Check, Draft, FieldSpec, FieldValue  # noqa: F401  （兼容旧 import）
-from .pack import active_pack
+from .pack import current_pack, register_listener
 
-PACK = active_pack()
+PACK = current_pack()
 PACK_ID: str = PACK.id
 PACK_VERSION: str = PACK.version
 
-SPECS: tuple[FieldSpec, ...] = PACK.documents["booking"]
-FIELD_KEYS: tuple[str, ...] = tuple(s.key for s in SPECS)
-LABELS: dict[str, str] = {s.key: s.label for s in SPECS}
-SPEC_MAP: dict[str, FieldSpec] = {s.key: s for s in SPECS}
-BLOCKING_KEYS: tuple[str, ...] = tuple(s.key for s in SPECS if s.blocking)
+# 可变容器：热切换时原地刷新，已 import 的模块看到同一对象的新内容。
+SPECS: list[FieldSpec] = []
+FIELD_KEYS: list[str] = []
+LABELS: dict[str, str] = {}
+SPEC_MAP: dict[str, FieldSpec] = {}
+BLOCKING_KEYS: list[str] = []
+
+
+def _apply(pack) -> None:
+    global PACK, PACK_ID, PACK_VERSION
+    PACK = pack
+    PACK_ID = pack.id
+    PACK_VERSION = pack.version
+    specs = list(pack.documents["booking"])
+    SPECS[:] = specs
+    FIELD_KEYS[:] = [s.key for s in specs]
+    LABELS.clear()
+    LABELS.update({s.key: s.label for s in specs})
+    SPEC_MAP.clear()
+    SPEC_MAP.update({s.key: s for s in specs})
+    BLOCKING_KEYS[:] = [s.key for s in specs if s.blocking]
+
+
+_apply(PACK)
+register_listener(_apply)
 
 
 def empty_draft() -> Draft:
+    pack = current_pack()
+    keys = [s.key for s in pack.documents["booking"]]
     return Draft(
-        fields={k: FieldValue() for k in FIELD_KEYS},
-        pack_id=PACK_ID,
-        pack_version=PACK_VERSION,
+        fields={k: FieldValue() for k in keys},
+        pack_id=pack.id,
+        pack_version=pack.version,
     )
 
 

@@ -8,7 +8,7 @@ import re
 import time
 from decimal import Decimal
 
-from .pack import active_pack
+from .pack import current_pack, register_listener
 from .table_extract import find_table_header, norm_date, parse_header_lines, parse_table, to_decimal
 
 # 明细列同义词来自 pack.reconcile.statement.line_hints；没配时退回集卡默认。
@@ -23,12 +23,23 @@ _DEFAULT_LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("remark", ("备注", "说明")),
 ]
 
-_STATEMENT_SPEC = (active_pack().reconcile.get("statement") or {})
-_raw_line_hints = _STATEMENT_SPEC.get("line_hints") or {}
-LINE_HINTS: list[tuple[str, tuple[str, ...]]] = (
-    [(str(key), tuple(values)) for key, values in _raw_line_hints.items()]
-    if _raw_line_hints else _DEFAULT_LINE_HINTS
-)
+_STATEMENT_SPEC: dict = {}
+LINE_HINTS: list[tuple[str, tuple[str, ...]]] = []
+
+
+def _apply(pack) -> None:
+    spec = (pack.reconcile or {}).get("statement") or {}
+    _STATEMENT_SPEC.clear()
+    _STATEMENT_SPEC.update(spec)
+    hints = spec.get("line_hints") or {}
+    LINE_HINTS[:] = (
+        [(str(key), tuple(values)) for key, values in hints.items()]
+        if hints else list(_DEFAULT_LINE_HINTS)
+    )
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 _WAYBILL_RE = re.compile(r"[A-Z]{2,4}\d{6,}")
 _CONTAINER_RE = re.compile(r"[A-Z]{4}\d{7}")
@@ -216,6 +227,7 @@ def to_reconcile_rows(document: dict) -> list[dict]:
     """
     from .reconcile import _AMOUNT_FIELD, _MATCH_KEYS
 
+    amount_field = _AMOUNT_FIELD[0]
     line_map = _STATEMENT_SPEC.get("line_map") or {}
     rows = []
     for line in document.get("lines", []):
@@ -223,11 +235,11 @@ def to_reconcile_rows(document: dict) -> list[dict]:
         for key in _MATCH_KEYS:
             src = line_map.get(key, key)
             row[key] = line.get(src) or ""
-        amount_key = line_map.get(_AMOUNT_FIELD, _AMOUNT_FIELD)
+        amount_key = line_map.get(amount_field, amount_field)
         amount = line.get(amount_key)
         if amount is None:
             amount = line.get("amount")
-        row[_AMOUNT_FIELD] = amount
+        row[amount_field] = amount
         rows.append(row)
     return rows
 

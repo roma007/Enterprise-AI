@@ -172,6 +172,17 @@ async def observe_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def pack_guard_middleware(request: Request, call_next):
+    """请求期间禁止换包；activate/rollback 自己不拿读闸，否则会死锁。"""
+    from . import pack
+
+    if request.url.path in {"/api/packs/activate", "/api/packs/rollback"}:
+        return await call_next(request)
+    with pack.request_guard():
+        return await call_next(request)
+
+
 def _uid(request: Request) -> str:
     u = getattr(request.state, "user", None) or {}
     return u.get("id", "")
@@ -305,16 +316,25 @@ def api_packs_activate(req: dict, request: Request):
         pack.load_pack(pack_id)
     except pack.PackError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        pack.assert_idle()
+        pack.reload_pack(pack_id)
+    except pack.PackBusy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     change = pack_state.set_active(
         pack_id, actor=_uid(request), reason=str(req.get("reason") or "")[:200])
-    return {"ok": True, "restart_required": True, **api_packs(), "change": change}
+    return {"ok": True, **api_packs(), "change": change}
 
 
 @app.post("/api/packs/rollback")
 def api_packs_rollback(req: dict, request: Request):
     """回滚到某次切换之前；不传 id 时撤销最近一次切换。"""
-    from . import pack_state
+    from . import pack, pack_state
 
+    try:
+        pack.assert_idle()
+    except pack.PackBusy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         change = pack_state.rollback(
             str(req.get("id") or "").strip() or None,
@@ -322,7 +342,11 @@ def api_packs_rollback(req: dict, request: Request):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"ok": True, "restart_required": True, **api_packs(), "change": change}
+    try:
+        pack.reload_pack()
+    except pack.PackBusy as exc:
+        raise HTTPException(status_code=409, detail=f"已保存，但当前不能即时生效：{exc}") from exc
+    return {"ok": True, **api_packs(), "change": change}
 
 
 @app.get("/api/packs/history")
@@ -1107,6 +1131,18 @@ def _handle_wecom_image(msg: dict, encrypted: bool,
 
 def _process_wecom_image(*, msg_id: str, media_id: str, from_user: str,
                          inbound_id: str, actor: str) -> None:
+    """后台任务入口：整个任务持读闸，期间不换包。"""
+    from . import pack
+
+    with pack.request_guard():
+        return _process_wecom_image_locked(
+            msg_id=msg_id, media_id=media_id, from_user=from_user,
+            inbound_id=inbound_id, actor=actor,
+        )
+
+
+def _process_wecom_image_locked(*, msg_id: str, media_id: str, from_user: str,
+                                inbound_id: str, actor: str) -> None:
     """后台任务：下载临时素材 → OCR → 抽取 → 入库 → 主动推送结果。"""
     try:
         data, filename, _ctype = wecom_api.download_media(media_id)

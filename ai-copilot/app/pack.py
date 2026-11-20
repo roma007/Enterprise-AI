@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
 
 from . import pack_state
 from .config import ROOT
@@ -200,27 +202,96 @@ def list_packs() -> list[dict]:
     return out
 
 
-_cache: Pack | None = None
+class PackBusy(RuntimeError):
+    """有请求/任务正在处理，不能安全切换行业包。"""
+
+
+_current: Pack | None = None
+_lock = threading.RLock()
+_listeners: list[Callable[[Pack], None]] = []
+_state = threading.Condition(_lock)
+_active = 0
+_switching = False
+
+
+def register_listener(fn: Callable[[Pack], None]) -> None:
+    """模块在 import 时注册刷新函数；reload 时原地刷新自己的容器。"""
+    if fn not in _listeners:
+        _listeners.append(fn)
 
 
 def active_pack() -> Pack:
-    """当前进程使用的行业包。
+    """全局当前包。
 
     优先级：`data/active_pack.json`（页面激活）> `PACK_ID` 环境变量 > `trucking`。
-    注意：页面激活/回滚只写指针，运行中的模块级常量在进程启动时生成，
-    所以**重启后生效**；不要在这里偷偷换缓存，否则会出现半状态。
     """
-    global _cache
-    if _cache is None:
-        _cache = load_pack()
-    return _cache
+    global _current
+    if _current is None:
+        with _lock:
+            if _current is None:
+                _current = load_pack()
+    return _current
+
+
+def current_pack() -> Pack:
+    """兼容别名：当前全局包（请求期间由 `request_guard` 保证不被切换）。"""
+    return active_pack()
+
+
+@contextmanager
+def request_guard() -> Iterator[None]:
+    """请求/任务闸门：持有期间禁止换包；切换期间新请求短暂等待。"""
+    global _active
+    with _state:
+        while _switching:
+            _state.wait()
+        _active += 1
+    try:
+        yield
+    finally:
+        with _state:
+            _active -= 1
+            if _active == 0:
+                _state.notify_all()
+
+
+def assert_idle() -> None:
+    """没有活动请求/任务时才允许切换。"""
+    with _state:
+        if _active > 0 or _switching:
+            raise PackBusy(f"有 {_active} 个请求/任务正在处理，请稍后重试")
 
 
 def reload_pack(pack_id: str | None = None) -> Pack:
-    """清缓存并重新加载；测试或多进程 worker 启动时使用。"""
-    global _cache
-    _cache = None
-    if pack_id:
-        _cache = load_pack(pack_id)
-        return _cache
-    return active_pack()
+    """加载新包 → 无活动请求时原子替换 → 通知所有模块原地刷新。
+
+    有请求/任务在跑时抛 `PackBusy`，不做半切换。
+    监听器失败时回退旧包并重刷。
+    """
+    global _current, _switching
+    loaded = load_pack(pack_id) if pack_id else load_pack()
+    with _state:
+        if _active > 0:
+            raise PackBusy(f"有 {_active} 个请求/任务正在处理，请稍后重试")
+        _switching = True
+    try:
+        with _lock:
+            old = _current
+            _current = loaded
+        try:
+            for fn in list(_listeners):
+                fn(loaded)
+        except Exception:
+            with _lock:
+                _current = old
+            for fn in list(_listeners):
+                try:
+                    fn(old)  # type: ignore[arg-type]
+                except Exception:
+                    pass
+            raise
+    finally:
+        with _state:
+            _switching = False
+            _state.notify_all()
+    return loaded

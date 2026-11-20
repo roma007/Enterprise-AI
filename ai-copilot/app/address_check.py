@@ -17,36 +17,46 @@ from __future__ import annotations
 
 import re
 
-from .pack import active_pack
+from .pack import current_pack, register_listener
 from .schema import Check
 
-_GEO = active_pack().geo
-
 # 城市 → 区县（只覆盖 pack 里配置的区域；不在表里的城市不参与一致性校验）
-DISTRICTS: dict[str, tuple[str, ...]] = {
-    city: tuple(names) for city, names in (_GEO.get("cities") or {}).items()
-}
-
+DISTRICTS: dict[str, tuple[str, ...]] = {}
 # 一个区县名可能属于多个城市时（如普陀），不做冲突判断
-_AMBIGUOUS = set(_GEO.get("ambiguous") or ())
-
-CITY_ALIASES: dict[str, tuple[str, ...]] = {
-    city: tuple(aliases) for city, aliases in (_GEO.get("city_aliases") or {}).items()
-}
-
+_AMBIGUOUS: set[str] = set()
+CITY_ALIASES: dict[str, tuple[str, ...]] = {}
 # 港区/堆场 → 合理城市。用于"洋山港 + 宁波市"这类跨区错误。
-TERMINALS: dict[str, set[str]] = {
-    term: set(cities) for term, cities in (_GEO.get("terminals") or {}).items()
-}
-
+TERMINALS: dict[str, set[str]] = {}
 # 常见错别字 / 同音字（保守：只列确定的）
-TYPOS: dict[str, str] = dict(_GEO.get("typos") or {})
-
+TYPOS: dict[str, str] = {}
 # 这些词出现，说明地址至少有个可定位的落点
-PLACE_WORDS = tuple(_GEO.get("place_words") or ())
-
+PLACE_WORDS: list[str] = []
 # 常见镇/街道，用来判断"春晓码头"这类短地址是否够具体
-TOWNS = tuple(_GEO.get("towns") or ())
+TOWNS: list[str] = []
+
+
+def _apply(pack) -> None:
+    geo = pack.geo or {}
+    DISTRICTS.clear()
+    DISTRICTS.update({city: tuple(names) for city, names in (geo.get("cities") or {}).items()})
+    _AMBIGUOUS.clear()
+    _AMBIGUOUS.update(geo.get("ambiguous") or ())
+    CITY_ALIASES.clear()
+    CITY_ALIASES.update({
+        city: tuple(aliases) for city, aliases in (geo.get("city_aliases") or {}).items()
+    })
+    TERMINALS.clear()
+    TERMINALS.update({
+        term: set(cities) for term, cities in (geo.get("terminals") or {}).items()
+    })
+    TYPOS.clear()
+    TYPOS.update(geo.get("typos") or {})
+    PLACE_WORDS[:] = list(geo.get("place_words") or ())
+    TOWNS[:] = list(geo.get("towns") or ())
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def _cities_in(text: str) -> list[str]:

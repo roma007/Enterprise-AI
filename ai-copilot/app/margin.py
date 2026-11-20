@@ -22,18 +22,29 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from . import thresholds as th
-from .pack import active_pack
+from .pack import current_pack, register_listener
 from .settlement import _dec, _parse
 
-_PACK_COST = active_pack().cost
-_REVENUE_HINTS = {
-    key: tuple(values)
-    for key, values in (_PACK_COST.get("revenue_hints") or {}).items()
-}
-_COST_HINTS = {
-    key: tuple(values)
-    for key, values in (_PACK_COST.get("cost_hints") or {}).items()
-}
+_REVENUE_HINTS: dict = {}
+_COST_HINTS: dict = {}
+
+
+def _apply(pack) -> None:
+    cost = pack.cost or {}
+    _REVENUE_HINTS.clear()
+    _REVENUE_HINTS.update({
+        key: tuple(values)
+        for key, values in (cost.get("revenue_hints") or {}).items()
+    })
+    _COST_HINTS.clear()
+    _COST_HINTS.update({
+        key: tuple(values)
+        for key, values in (cost.get("cost_hints") or {}).items()
+    })
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def parse_revenue(text: str) -> list[dict]:

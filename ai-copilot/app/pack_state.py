@@ -1,8 +1,7 @@
-"""行业包激活状态与历史（Step 4）。
+"""行业包激活状态与历史（Step 4 / AI-61）。
 
-v1 语义：激活/回滚只写“下次启动使用哪个包”的指针；运行中的模块级常量
-（schema.SPECS / invoice.INVOICE_SPECS / extract.SPECS 等）在进程启动时生成，
-所以**重启后生效**。这比热切换安全：不会出现规则已换、抽取字段没换的半状态。
+语义：写激活指针后由 `pack.reload_pack()` 即时刷新；请求/任务期间由
+`pack.request_guard()` 禁止换包，有活动请求时切换返回 `PackBusy`（API 409）。
 
 存储：
 - SQLite：`data/active_pack.json` + `data/pack_history.json`

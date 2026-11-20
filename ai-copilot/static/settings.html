@@ -187,15 +187,15 @@ function render(){
     const cur = (PACKS.available || []).find(p => p.id === PACKS.running) || {};
     const act = (PACKS.available || []).find(p => p.id === PACKS.active) || cur;
     const src = PACKS.source === 'state' ? '页面激活' : (PACKS.source === 'env' ? 'PACK_ID 环境变量' : '默认');
-    sections.push(`<section class="card" id="sec-packs"><h2>行业包<span class="tag">保存后重启生效</span></h2>
+    sections.push(`<section class="card" id="sec-packs"><h2>行业包<span class="tag">即时生效</span></h2>
       <div class="body">
         <div class="irow"><span>运行中</span><b>${esc(cur.name || PACKS.running)} · v${esc(cur.version || '')}</b></div>
-        <div class="irow"><span>已保存（下次启动）</span><b>${esc(act.name || PACKS.active)} · v${esc(act.version || '')}${PACKS.restart_required ? ' <span class="chg">待重启</span>' : ''}</b></div>
+        <div class="irow"><span>已保存</span><b>${esc(act.name || PACKS.active)} · v${esc(act.version || '')}${PACKS.restart_required ? ' <span class="chg">待生效</span>' : ''}</b></div>
         <div class="irow"><span>字段 / 校验</span><b>${cur.fields || 0} / ${cur.rules || 0}</b></div>
         <div class="irow"><span>来源</span><b>${esc(src)}</b></div>
         ${(PACKS.available || []).map(p => `<div class="irow"><span><b>${esc(p.name)}</b> · v${esc(p.version)}<br><small>${esc(p.description || '')}</small></span>
           <span>${p.id === PACKS.running ? '运行中' : (p.id === PACKS.active ? '已保存' : (admin ? `<button data-activate="${esc(p.id)}">切换</button>` : '<span class="empty">—</span>'))}</span></div>`).join('')}
-        <div class="note">切换/回滚只写激活指针；重启服务后新请求才使用新包。已在处理的请求不回溯。</div>
+        <div class="note">切换/回滚即时生效；有请求或后台任务在跑时会提示“稍后重试”，不会切成半状态。</div>
       </div>
       ${PACK_HIST.length ? `<div class="body"><div class="empty" style="padding-bottom:4px">切换历史（最近 8 条）</div>
         ${PACK_HIST.slice(0, 8).map(h => `<div class="hitem">
@@ -412,21 +412,21 @@ async function rollback(id, btn){
 
 async function activatePack(id){
   const reason = $('#reason').value.trim();
-  if(!confirm(`切换行业包到 ${id}？保存后需重启服务生效。`)) return;
+  if(!confirm(`切换行业包到 ${id}？切换后立即生效。`)) return;
   try{
     await j('/api/packs/activate', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({id, reason})});
-    toast('已保存；重启服务后生效'); await load();
+    toast('已切换并即时生效'); await load();
   }catch(e){ toast('切换失败：' + e.message); }
 }
 
 async function rollbackPack(id){
   const reason = $('#reason').value.trim();
-  if(!confirm('回滚到这次切换之前？保存后需重启服务生效。')) return;
+  if(!confirm('回滚到这次切换之前？回滚后立即生效。')) return;
   try{
     await j('/api/packs/rollback', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({id, reason})});
-    toast('已回滚；重启服务后生效'); await load();
+    toast('已回滚并即时生效'); await load();
   }catch(e){ toast('回滚失败：' + e.message); }
 }
 

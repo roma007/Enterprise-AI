@@ -28,17 +28,28 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from .config import ROOT
-from .pack import active_pack
+from .pack import current_pack, register_listener
 
 DICT_PATH = Path(ROOT / "data" / "fee_dict.txt")
 
 # 内置费用名与表头同义词来自行业包；现场补充仍走 data/fee_dict.txt。
-_PACK_FEES = active_pack().fees
-BUILTIN_FEES = frozenset(_PACK_FEES.get("builtin_fees") or ())
-_HINTS = {
-    key: tuple(values)
-    for key, values in (_PACK_FEES.get("header_hints") or {}).items()
-}
+BUILTIN_FEES: set[str] = set()
+_HINTS: dict = {}
+
+
+def _apply(pack) -> None:
+    fees = pack.fees or {}
+    BUILTIN_FEES.clear()
+    BUILTIN_FEES.update(fees.get("builtin_fees") or ())
+    _HINTS.clear()
+    _HINTS.update({
+        key: tuple(values)
+        for key, values in (fees.get("header_hints") or {}).items()
+    })
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def _dec(v) -> Decimal | None:

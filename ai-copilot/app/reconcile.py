@@ -24,22 +24,50 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
-from .pack import active_pack
+from .pack import current_pack, register_listener
 
 # 容差仍在 settings（reconcile.tolerance）；其余口径来自 pack。
-_PACK = active_pack()
-_SPEC = _PACK.reconcile
-_STATEMENT = _SPEC.get("statement") or {}
-_MATCH = _SPEC.get("match") or {}
-_DISPLAY = _STATEMENT.get("display") or {}
+# 可变容器原地刷新，保证热切换后已 import 的调用方看到新口径。
+_SPEC: dict = {}
+_STATEMENT: dict = {}
+_MATCH: dict = {}
+_DISPLAY: dict = {}
+_HINTS: dict = {}
+POSITIONAL_DEFAULT: dict = {}
+SYSTEM_AMOUNT_FIELDS: list = []
+STATUS_LABELS: dict = {}
+_MATCH_KEYS: list = []
+_MULTI_KEYS: set = set()
+_AMOUNT_FIELD: list[str] = ["amount"]
 
-_HINTS = {k: tuple(v) for k, v in (_STATEMENT.get("header_hints") or {}).items()}
-POSITIONAL_DEFAULT = {i: k for i, k in enumerate(_STATEMENT.get("positional") or [])}
-SYSTEM_AMOUNT_FIELDS = tuple(_STATEMENT.get("amount_fields") or ())
-STATUS_LABELS = dict(_SPEC.get("statuses") or {})
-_MATCH_KEYS = tuple(_MATCH.get("keys") or ("booking_no", "container_no"))
-_MULTI_KEYS = set(_MATCH.get("multi") or ())
-_AMOUNT_FIELD = _STATEMENT.get("amount_field") or "amount"
+
+def _apply(pack) -> None:
+    spec = pack.reconcile or {}
+    st = spec.get("statement") or {}
+    match = spec.get("match") or {}
+    _SPEC.clear()
+    _SPEC.update(spec)
+    _STATEMENT.clear()
+    _STATEMENT.update(st)
+    _MATCH.clear()
+    _MATCH.update(match)
+    _DISPLAY.clear()
+    _DISPLAY.update(st.get("display") or {})
+    _HINTS.clear()
+    _HINTS.update({k: tuple(v) for k, v in (st.get("header_hints") or {}).items()})
+    POSITIONAL_DEFAULT.clear()
+    POSITIONAL_DEFAULT.update({i: k for i, k in enumerate(st.get("positional") or [])})
+    SYSTEM_AMOUNT_FIELDS[:] = list(st.get("amount_fields") or ())
+    STATUS_LABELS.clear()
+    STATUS_LABELS.update(spec.get("statuses") or {})
+    _MATCH_KEYS[:] = list(match.get("keys") or ("booking_no", "container_no"))
+    _MULTI_KEYS.clear()
+    _MULTI_KEYS.update(match.get("multi") or ())
+    _AMOUNT_FIELD[0] = st.get("amount_field") or "amount"
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 
 def _dec(v) -> Decimal | None:
@@ -66,6 +94,13 @@ def _values_for(key: str, value) -> list[str]:
         return [_norm(x) for x in re.split(r"[,，、;；\s]+", str(value)) if _norm(x)]
     v = _norm(value)
     return [v] if v else []
+
+
+def _containers(v) -> set[str]:
+    """兼容旧调用：把任意文本拆成归一化箱号集合。"""
+    if not v:
+        return set()
+    return set(_values_for("container_no", v))
 
 
 def _system_amount(w: dict):
@@ -167,7 +202,7 @@ def reconcile(statement_rows: list[dict], waybills: list[dict],
         return no, container
 
     for i, s in enumerate(statement_rows):
-        s_amt = _dec(s.get(_AMOUNT_FIELD))
+        s_amt = _dec(s.get(_AMOUNT_FIELD[0]))
 
         w = None
         for key in _MATCH_KEYS:

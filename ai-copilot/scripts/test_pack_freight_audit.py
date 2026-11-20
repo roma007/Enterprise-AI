@@ -56,9 +56,9 @@ chk("PACK_ID", schema.PACK_ID == "freight_audit", schema.PACK_ID)
 chk("字段数", len(schema.SPECS) == 10, str(len(schema.SPECS)))
 chk("首个字段是承运商", schema.SPECS[0].key == "carrier", schema.SPECS[0].key)
 chk("发票字段仍兼容", invoice.INVOICE_KEYS[0] == "invoice_code", invoice.INVOICE_KEYS[0])
-chk("审核规则", [r.id for r in rules.active_pack().validations] == [
+chk("审核规则", [r.id for r in rules.current_pack().validations] == [
     "required", "low_confidence", "amount_format", "contract_rate_format",
-], str([r.id for r in rules.active_pack().validations]))
+], str([r.id for r in rules.current_pack().validations]))
 
 print("\n校验")
 c = codes(make(**{**FULL, "carrier_invoice_no": ""}), NOW)

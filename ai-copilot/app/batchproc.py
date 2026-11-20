@@ -32,6 +32,7 @@ from .config import ROOT
 from .extract import extract
 from .invoice import extract_invoice
 from .masking import MaskMap, fingerprint, mask_fields, mask_text
+from .pack import request_guard
 from .store import (
     _conn, add_batch_items, batch_cancel_requested, batch_items, claim_job,
     create_batch, enqueue_job, finish_job, get_batch, get_job, job_active,
@@ -207,10 +208,12 @@ def _loop() -> None:
         try:
             job = claim_job(WORKER_ID, LEASE_SECONDS)
             if job:
-                if job["kind"] == "batch":
-                    _process(job)
-                else:
-                    finish_job(job["id"], WORKER_ID, "failed", f"未知任务类型 {job['kind']}")
+                # 整个 job 持读闸：期间不允许换包，避免批内混两个包。
+                with request_guard():
+                    if job["kind"] == "batch":
+                        _process(job)
+                    else:
+                        finish_job(job["id"], WORKER_ID, "failed", f"未知任务类型 {job['kind']}")
                 continue
         except Exception as exc:  # noqa: BLE001
             print(f"[batch] worker 异常：{exc}")

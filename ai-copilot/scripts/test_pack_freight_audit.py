@@ -116,12 +116,22 @@ header = csv_text.splitlines()[0]
 chk("CSV 展示字段来自 pack", "账单号" in header and "运单号" in header, header)
 chk("CSV 状态文案来自 pack", "金额不符" in csv_text, "")
 
-print("\n规则抽取不崩（集卡规则遇到新包字段要跳过）")
-d = extract.extract("承运商：顺达车队\n账单号：CI-1\n运单号：SHP-1\n费用代码：FREIGHT\n账单金额：1200.00",
-                    mode="rule", allow_llm=False)
+print("\n规则抽取：pack extract 元数据生效")
+d = extract.extract(
+    "承运商：顺达车队\n账单号：CI-1\n运单号：SHP-1\n费用代码：FREIGHT\n"
+    "账单金额：1,200.00\n合同价：1000\n差异：200",
+    mode="rule", allow_llm=False,
+)
 chk("extract 不崩", d.pack_id == "freight_audit", d.pack_id)
 chk("不注入幽灵字段 client", "client" not in d.fields, str(sorted(d.fields)[:5]))
-chk("必填项仍有校验", "E_REQUIRED" in [c.code for c in d.checks], str([c.code for c in d.checks]))
+chk("承运商", d.fields["carrier"].value == "顺达车队", str(d.fields["carrier"].value))
+chk("账单号（alnum_upper 归一）", d.fields["carrier_invoice_no"].value == "CI1", str(d.fields["carrier_invoice_no"].value))
+chk("运单号（alnum_upper 归一）", d.fields["shipment_no"].value == "SHP1", str(d.fields["shipment_no"].value))
+chk("费用代码", d.fields["charge_code"].value == "FREIGHT", str(d.fields["charge_code"].value))
+chk("账单金额", d.fields["amount"].value == "1200.00", str(d.fields["amount"].value))
+chk("合同价", d.fields["contract_rate"].value == "1000", str(d.fields["contract_rate"].value))
+chk("必填项已齐", "E_REQUIRED" not in [c.code for c in d.checks],
+    str([c.code for c in d.checks]))
 
 print("\n空领域不崩")
 chk("空 geo 不崩", address_check.check_addresses("", "") == [])

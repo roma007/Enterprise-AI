@@ -9,7 +9,8 @@
         "example": "宏远国际货代",
         "blocking": true,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "booking_no",
@@ -18,7 +19,8 @@
         "example": "HY2026110501",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "bl_no",
@@ -27,7 +29,8 @@
         "example": "COSU6398471120",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "so_no",
@@ -36,7 +39,8 @@
         "example": "SO-778123",
         "blocking": false,
         "kind": "text",
-        "normalize": "so_no"
+        "normalize": "so_no",
+        "extract": {}
       },
       {
         "key": "container_type",
@@ -45,7 +49,8 @@
         "example": "40HQ",
         "blocking": true,
         "kind": "text",
-        "normalize": "container_type"
+        "normalize": "container_type",
+        "extract": {}
       },
       {
         "key": "container_qty",
@@ -54,7 +59,8 @@
         "example": "2",
         "blocking": false,
         "kind": "number",
-        "normalize": "quantity"
+        "normalize": "quantity",
+        "extract": {}
       },
       {
         "key": "container_no",
@@ -63,7 +69,8 @@
         "example": "CSQU3054383",
         "blocking": false,
         "kind": "text",
-        "normalize": "container_list"
+        "normalize": "container_list",
+        "extract": {}
       },
       {
         "key": "seal_no",
@@ -72,7 +79,8 @@
         "example": "SL8823101",
         "blocking": false,
         "kind": "text",
-        "normalize": "container_list"
+        "normalize": "container_list",
+        "extract": {}
       },
       {
         "key": "pickup_addr",
@@ -81,7 +89,8 @@
         "example": "北仑港区二期堆场",
         "blocking": true,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "delivery_addr",
@@ -90,7 +99,8 @@
         "example": "宁波北仑春晓工业园 3 号仓",
         "blocking": true,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "factory_contact",
@@ -99,7 +109,8 @@
         "example": "王主管",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "factory_phone",
@@ -108,7 +119,8 @@
         "example": "13800001234",
         "blocking": false,
         "kind": "text",
-        "normalize": "number"
+        "normalize": "number",
+        "extract": {}
       },
       {
         "key": "loading_window",
@@ -117,7 +129,8 @@
         "example": "2026-11-06 08:00~12:00",
         "blocking": false,
         "kind": "datetime",
-        "normalize": "datetime"
+        "normalize": "datetime",
+        "extract": {}
       },
       {
         "key": "closing_time",
@@ -126,7 +139,8 @@
         "example": "2026-11-07 18:00",
         "blocking": false,
         "kind": "datetime",
-        "normalize": "datetime"
+        "normalize": "datetime",
+        "extract": {}
       },
       {
         "key": "vessel_voyage",
@@ -135,7 +149,8 @@
         "example": "COSCO SHIPPING ARIES / 042E",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "depot",
@@ -144,7 +159,8 @@
         "example": "北仑三期堆场",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "cargo_desc",
@@ -153,7 +169,8 @@
         "example": "家用电器",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "gross_weight",
@@ -162,7 +179,8 @@
         "example": "18600",
         "blocking": false,
         "kind": "text",
-        "normalize": "number"
+        "normalize": "number",
+        "extract": {}
       },
       {
         "key": "freight",
@@ -171,7 +189,8 @@
         "example": "2600",
         "blocking": false,
         "kind": "text",
-        "normalize": "amount"
+        "normalize": "amount",
+        "extract": {}
       },
       {
         "key": "remark",
@@ -180,7 +199,8 @@
         "example": "需报关，周五前必须进港",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       }
     ]
   },
@@ -194,7 +214,8 @@
         "example": "033002100311",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "invoice_no",
@@ -203,7 +224,8 @@
         "example": "12345678",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "invoice_date",
@@ -212,7 +234,8 @@
         "example": "2026-10-28",
         "blocking": false,
         "kind": "text",
-        "normalize": "datetime"
+        "normalize": "datetime",
+        "extract": {}
       },
       {
         "key": "invoice_type",
@@ -221,7 +244,8 @@
         "example": "增值税专用发票",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "buyer_name",
@@ -230,7 +254,8 @@
         "example": "宁波宏运集卡运输有限公司",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "buyer_tax_id",
@@ -239,7 +264,8 @@
         "example": "9133020662M3QQRL4D",
         "blocking": true,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "seller_name",
@@ -248,7 +274,8 @@
         "example": "宁波北仑中石化加油站",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "seller_tax_id",
@@ -257,7 +284,8 @@
         "example": "91330200TF3NLDC9HT",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "amount",
@@ -266,7 +294,8 @@
         "example": "1234.56",
         "blocking": true,
         "kind": "text",
-        "normalize": "amount"
+        "normalize": "amount",
+        "extract": {}
       },
       {
         "key": "tax_rate",
@@ -275,7 +304,8 @@
         "example": "0.13",
         "blocking": false,
         "kind": "number",
-        "normalize": "number"
+        "normalize": "number",
+        "extract": {}
       },
       {
         "key": "tax_amount",
@@ -284,7 +314,8 @@
         "example": "160.49",
         "blocking": false,
         "kind": "text",
-        "normalize": "amount"
+        "normalize": "amount",
+        "extract": {}
       },
       {
         "key": "total_amount",
@@ -293,7 +324,8 @@
         "example": "1395.05",
         "blocking": true,
         "kind": "text",
-        "normalize": "amount"
+        "normalize": "amount",
+        "extract": {}
       },
       {
         "key": "item_summary",
@@ -302,7 +334,8 @@
         "example": "0# 柴油",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       },
       {
         "key": "check_code",
@@ -311,7 +344,8 @@
         "example": "",
         "blocking": false,
         "kind": "text",
-        "normalize": "text"
+        "normalize": "text",
+        "extract": {}
       },
       {
         "key": "remark",
@@ -320,7 +354,8 @@
         "example": "",
         "blocking": false,
         "kind": "text",
-        "normalize": "text_name"
+        "normalize": "text_name",
+        "extract": {}
       }
     ]
   }

@@ -72,6 +72,7 @@ def _parse_field(raw: dict, doc: str) -> FieldSpec:
         blocking=bool(raw.get("blocking", False)),
         kind=str(kind),
         normalize=str(normalize),
+        extract=dict(raw.get("extract") or {}),
     )
 
 

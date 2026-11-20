@@ -53,6 +53,26 @@ packs/
 
 > 改了会改变“字段含义/报告口径” → pack；只是松紧、开关、文案 → settings。
 
+## 规则抽取（extract）
+
+`fields.json` 的字段可以声明 `extract`，让规则模式（不调模型）也能产出字段：
+
+```json
+"extract": {
+  "type": "label | regex | amount | datetime | phone | container | seal",
+  "keywords": ["承运商", "车队", "供应商"],
+  "patterns": ["(?:账单号|Invoice No)\\s*[:：]?\\s*([A-Za-z0-9-]+)"],
+  "confidence": 0.85,
+  "limit": 80,
+  "split": true,
+  "cut": true
+}
+```
+
+- `regex` 的 `group(1)` 作为字段值；`label` 走关键词抓取；`amount` / `datetime` / `phone` / `container` / `seal` 是内置抽取器。
+- 新行业包优先用 `extract` 声明；`trucking` 仍保留兼容硬编码，保证既有评测不变。
+- `pack-lint` 校验 `extract.type` 与正则可编译。
+
 ## 命令
 
 ```bash

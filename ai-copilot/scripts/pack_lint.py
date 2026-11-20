@@ -22,6 +22,7 @@ DEFAULT_PACK = ROOT / "packs" / "trucking"
 
 VALIDATORS = set(VALIDATOR_TYPES)
 LEVELS = {"error", "warn", "info"}
+EXTRACT_TYPES = {"label", "verb", "regex", "amount", "datetime", "phone", "container", "seal"}
 
 ok = True
 
@@ -82,6 +83,18 @@ def main() -> None:
             chk(f"{doc}.{key} label 非空", bool(f.get("label")))
             chk(f"{doc}.{key} kind 合法", f.get("kind") in FIELD_KINDS, str(f.get("kind")))
             chk(f"{doc}.{key} normalize 合法", f.get("normalize") in NORMALIZERS, str(f.get("normalize")))
+            extract = f.get("extract") or {}
+            if extract:
+                etype = extract.get("type", "label")
+                chk(f"{doc}.{key} extract.type 合法", etype in EXTRACT_TYPES, str(etype))
+                chk(f"{doc}.{key} extract.keywords 是列表",
+                    isinstance(extract.get("keywords", []), list))
+                for pat in extract.get("patterns") or []:
+                    try:
+                        re.compile(pat)
+                        chk(f"{doc}.{key} extract.pattern 可编译", True)
+                    except re.error as exc:
+                        chk(f"{doc}.{key} extract.pattern 可编译", False, str(exc))
             all_fields[key] = f
 
     # ---- rules.json ----

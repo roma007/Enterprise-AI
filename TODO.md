@@ -16,7 +16,8 @@
   - [x] Step 5：热切换（活动闸门 + 原地刷新），激活/回滚不重启即时生效 → **2026-11-20 完成（AI-61）**
   - [x] 复盘遗留：`normalize_for_compare` / `normalize.py` 接线 pack `normalize` 元数据 → **2026-11-20 完成**
   - [x] 复盘遗留：`settlement_extract.py` 词表接线 `fees.settlement_extract` → **2026-11-20 完成**
-  - [ ] 复盘遗留：多实例广播；任务入队锁定 `pack_id`；规则抽取通道 pack 化
+  - [x] 复盘遗留：规则抽取支持 pack `extract` 元数据，freight_audit 规则模式可产出字段 → **2026-11-20 完成**
+  - [ ] 复盘遗留：多实例广播；任务入队锁定 `pack_id`；trucking 硬编码抽取迁移到 `extract` 元数据
 
 - [ ] **诊断平台多租户 / HA 改造（供应商内部，不涉及智单）**
   - [x] 租户模型：`organizations` 增加 slug / status / settings

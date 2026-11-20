@@ -40,6 +40,8 @@ class FieldSpec:
     blocking: bool = False
     kind: str = "text"
     normalize: str = "text"
+    # 规则抽取声明：type / keywords / patterns / confidence / limit / split / cut ...
+    extract: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

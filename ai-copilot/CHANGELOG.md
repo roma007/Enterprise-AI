@@ -14,7 +14,8 @@
 - P1：非 `trucking` 包下 `/api/*/demo` 统一 409，避免演示页显示错误数字。
 - P1：`normalize_for_compare` / `normalize.py` 改为按 pack `normalize` 元数据归一；金额/日期不再按文本比。
 - P2：`settlement_extract.py` 的明细列/表头别名改读 `fees.settlement_extract`；自定义词表无需改代码。
-- 自检：pack-test-freight 27、pack-hotswap 30、pack-state 13、pack-normalize 20、pack-settlement 11；默认 trucking smoke 19/19、eval 不变。
+- P1：规则抽取支持 pack `extract` 元数据（label/regex/amount/datetime/phone/container/seal）；`freight_audit` 规则模式可产出审计字段；trucking 硬编码不变。
+- 自检：pack-test-freight 33、pack-hotswap 30、pack-state 13、pack-normalize 20、pack-settlement 11；默认 trucking smoke 19/19、eval 不变。
 
 ## [未发布] · 2026-11-20 · 行业包热切换（AI-61）
 

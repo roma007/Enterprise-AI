@@ -215,6 +215,77 @@ def _cut_stop(v: str) -> str:
     return v[:m.start()].strip(" ：:，,") if m else v
 
 
+_EXTRACT_TYPES = {"label", "verb", "regex", "amount", "datetime", "phone", "container", "seal"}
+
+
+def _clean_extract(value: str, meta: dict) -> str:
+    v = (value or "").strip()
+    if meta.get("cut", True):
+        v = _cut_stop(v)
+    return v.strip()
+
+
+def _generic_extract(text: str, spec) -> tuple[str, float] | None:
+    """按字段的 extract 声明做通用规则抽取。
+
+    只实现固定几种抽取器，pack 不能写任意代码：
+    label / regex / amount / datetime / phone / container / seal。
+    """
+    meta = getattr(spec, "extract", None) or {}
+    if not meta:
+        return None
+    conf = float(meta.get("confidence", 0.8))
+
+    for pattern in meta.get("patterns") or []:
+        try:
+            m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        except re.error:
+            continue
+        if m:
+            value = m.group(1) if m.groups() else m.group(0)
+            value = _clean_extract(value, meta)
+            if value:
+                return value, conf
+
+    kind = meta.get("type") or "label"
+    keywords = tuple(meta.get("keywords") or ())
+
+    if kind == "amount":
+        for kw in keywords:
+            m = re.search(rf"(?:{re.escape(kw)})\s*[:：]?\s*([\d.,]+)", text, re.IGNORECASE)
+            if m:
+                value = _clean_extract(m.group(1), meta)
+                if value:
+                    return value, conf
+        return None
+
+    if kind == "datetime":
+        value = _dt_near(text, keywords)
+        return (_clean_extract(value, meta), conf) if value else None
+
+    if kind == "phone":
+        m = re.search(r"(?<!\d)((?:\+?86[-\s]?)?1[3-9]\d[-\s]?\d{4}[-\s]?\d{4})(?!\d)", text)
+        if not m:
+            m = re.search(r"(?<!\d)((?:0\d{2,3})[-\s]?\d{7,8})(?!\d)", text)
+        if m:
+            digits = re.sub(r"[^\d]", "", m.group(1))
+            if digits.startswith("86") and len(digits) == 13:
+                digits = digits[2:]
+            return digits, conf
+        return None
+
+    if kind == "container":
+        found = containers_in(text)
+        return (",".join(dict.fromkeys(found)), conf) if found else None
+
+    # label / verb / seal 都走关键词抓取；regex 已在上面优先处理。
+    value = _grab(text, keywords, meta.get("limit", 80),
+                  split=meta.get("split", True))
+    if value and meta.get("strip_datetime") and _looks_like_datetime(value):
+        value = None
+    return (_clean_extract(value, meta), conf) if value else None
+
+
 def extract_by_rules(text: str) -> dict[str, FieldValue]:
     up = text.upper()
     out: dict[str, FieldValue] = {k: FieldValue() for k in FIELD_KEYS}
@@ -396,6 +467,16 @@ def extract_by_rules(text: str) -> dict[str, FieldValue]:
     if remark:
         remark = re.sub(r"[;；]\s*", "，", remark)
     put("remark", remark, 0.7, cut=False)
+
+    # 通用 pack 抽取：只补硬编码通道没填的字段。
+    # 新行业包在 fields.json 里声明 extract，即可在规则模式产出字段。
+    for spec in SPECS:
+        if has(spec.key):
+            continue
+        got = _generic_extract(text, spec)
+        if got:
+            value, conf = got
+            put(spec.key, value, conf, cut=False)
 
     # D14：字段名容错匹配。只补空，绝不覆盖精确匹配到的值。
     try:

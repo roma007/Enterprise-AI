@@ -15,48 +15,24 @@ from __future__ import annotations
 import re
 import time
 import unicodedata
-from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from . import thresholds as th
 from .config import settings
 from .llm import chat_json, mask, parse_json_loose
+from .pack import active_pack
 from .schema import Check, Draft, FieldValue
 
 PIPELINE_VERSION = "0.1.0"
 
-
-@dataclass(frozen=True)
-class InvField:
-    key: str
-    label: str
-    hint: str = ""
-    example: str = ""
-    blocking: bool = False
-
-
-INVOICE_SPECS: tuple[InvField, ...] = (
-    InvField("invoice_code", "发票代码", "10-12 位数字，全电发票可能没有", "033002100311"),
-    InvField("invoice_no", "发票号码", "8 位或 20 位数字", "12345678", blocking=True),
-    InvField("invoice_date", "开票日期", "YYYY-MM-DD", "2026-10-28"),
-    InvField("invoice_type", "发票类型", "专票/普票/电子普票/全电发票", "增值税专用发票"),
-    InvField("buyer_name", "购买方名称", "付款方公司全称", "宁波宏运集卡运输有限公司"),
-    InvField("buyer_tax_id", "购买方税号", "18 位统一社会信用代码", "9133020662M3QQRL4D", blocking=True),
-    InvField("seller_name", "销售方名称", "开票方公司全称", "宁波北仑中石化加油站"),
-    InvField("seller_tax_id", "销售方税号", "18 位统一社会信用代码", "91330200TF3NLDC9HT"),
-    InvField("amount", "金额（不含税）", "不含税金额", "1234.56", blocking=True),
-    InvField("tax_rate", "税率", "0.13 / 0.09 / 0.06 / 0.03 / 0.01", "0.13"),
-    InvField("tax_amount", "税额", "增值税额", "160.49"),
-    InvField("total_amount", "价税合计", "金额 + 税额", "1395.05", blocking=True),
-    InvField("item_summary", "货物或服务", "品名摘要", "0# 柴油"),
-    InvField("check_code", "校验码", "专票 20 位", ""),
-    InvField("remark", "备注", "", ""),
-)
-
+_PACK = active_pack()
+INVOICE_SPECS = _PACK.documents["invoice"]
 INVOICE_KEYS = tuple(s.key for s in INVOICE_SPECS)
 INV_LABELS = {s.key: s.label for s in INVOICE_SPECS}
 INV_SPEC = {s.key: s for s in INVOICE_SPECS}
 INV_BLOCKING = tuple(s.key for s in INVOICE_SPECS if s.blocking)
+INVOICE_PACK_ID = _PACK.id
+INVOICE_PACK_VERSION = _PACK.version
 
 VALID_RATES = {"0", "0.01", "0.03", "0.05", "0.06", "0.09", "0.13"}
 
@@ -339,4 +315,6 @@ def extract_invoice(text: str, allow_llm: bool = True) -> Draft:
         review_level=level,
         model=settings.model if engine.startswith("llm:") else "",
         pipeline_version=PIPELINE_VERSION,
+        pack_id=INVOICE_PACK_ID,
+        pack_version=INVOICE_PACK_VERSION,
     )

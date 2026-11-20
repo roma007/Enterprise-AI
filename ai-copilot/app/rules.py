@@ -8,6 +8,9 @@
 - 箱号数量与箱量一致性
 
 所有规则都是确定性的，不依赖模型。模型负责"抽"，规则负责"挑错"。
+
+Step 1：校验的**顺序、参数、开关、文案**来自行业包（`packs/<id>/rules.json`）；
+算法本身仍在本模块，pack 不能写任意代码。
 """
 from __future__ import annotations
 
@@ -16,7 +19,9 @@ from datetime import datetime
 
 from . import thresholds as th
 from .address_check import check_addresses
-from .schema import Check, Draft, FieldValue, SPEC_MAP, BLOCKING_KEYS
+from .domain import Check, Draft, FieldValue, ValidationSpec
+from .pack import active_pack
+from .schema import BLOCKING_KEYS, LABELS
 
 # ---------- ISO 6346 ----------
 
@@ -31,17 +36,23 @@ _WEIGHTS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
 # 注意：不能用 \b。中文字符在 Unicode 下算 \w，会导致"箱号OOLU1234567"里的
 # 数字前没有词边界，正则整体失效。这里用显式的字母数字环视。
 CONTAINER_RE = re.compile(r"(?<![A-Z0-9])([A-Z]{4}\d{7})(?![A-Z0-9])")
-VALID_TYPES = {
-    "20GP", "40GP", "40HQ", "45HQ", "20RF", "40RF", "45RF",
-    "20OT", "40OT", "20FR", "40FR", "20TK", "40TK",
-}
 
-# 下列常量原先内联在校验函数里，抽成模块常量只为 packs/ 快照可对照，
-# 不改变任何运行时行为（Step 0）。
-SEAL_RE = re.compile(r"[A-Za-z0-9]{5,15}")
-PHONE_RE = re.compile(r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})")
-CLOSING_WARN_HOURS = 24
-LOW_CONF_WARN = 0.6
+# 兼容旧 import（store.py 用 RISK_KEYS；导出脚本/快照用其余常量）。
+_PACK = active_pack()
+_RULES = {r.id: r for r in _PACK.validations}
+
+
+def _rule_params(rule_id: str) -> dict:
+    rule = _RULES.get(rule_id)
+    return rule.params if rule else {}
+
+
+VALID_TYPES = frozenset(_rule_params("container_type").get("values") or ())
+SEAL_RE = re.compile(_rule_params("seal_format").get("pattern") or r"[A-Za-z0-9]{5,15}")
+PHONE_RE = re.compile(_rule_params("phone_format").get("pattern") or r"(1[3-9]\d{9}|0\d{2,3}\d{7,8})")
+CLOSING_WARN_HOURS = float(_rule_params("closing").get("warn_hours") or 24)
+LOW_CONF_WARN = float(_PACK.review.get("low_conf_warn") or 0.6)
+RISK_KEYS = tuple(_PACK.review.get("risk_fields") or ())
 
 
 def iso6346_check_digit(code: str) -> int | None:
@@ -123,104 +134,202 @@ def fmt(dt: datetime | None) -> str:
     return dt.strftime("%Y-%m-%d %H:%M") if dt else ""
 
 
-# ---------- 校验 ----------
+# ---------- 校验器 ----------
+
+def _val(draft: Draft, key: str | None) -> str:
+    if not key:
+        return ""
+    fv = draft.fields.get(key)
+    return (fv.value or "").strip() if fv else ""
+
+
+def _setting_ref(ref: str | None) -> str | None:
+    if isinstance(ref, str) and ref.startswith("settings:"):
+        return ref.split(":", 1)[1]
+    return None
+
+
+def _enabled(rule: ValidationSpec) -> bool:
+    ref = _setting_ref(rule.params.get("enabled_from"))
+    return th.get_bool(ref) if ref else True
+
+
+def _required_fields(rule: ValidationSpec) -> list[str]:
+    fallback = list(rule.params.get("fallback_fields") or BLOCKING_KEYS)
+    ref = _setting_ref(rule.params.get("fields_from"))
+    return (th.get_list(ref) or fallback) if ref else fallback
+
+
+def _msg(rule: ValidationSpec, key: str = "message", **kwargs) -> str:
+    template = rule.params.get(key) or ""
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError, ValueError):
+        return template
+
+
+def _required(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    checks: list[Check] = []
+    code = rule.params.get("code") or "E_REQUIRED"
+    for key in _required_fields(rule):
+        if not _val(draft, key):
+            checks.append(Check(
+                level=rule.level, code=code, field=key,
+                message=_msg(rule, label=LABELS.get(key, key)),
+            ))
+    return checks
+
+
+def _low_confidence(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    threshold = (
+        float(active_pack().review.get("low_conf_warn") or 0.6)
+        if rule.params.get("threshold_from") == "review.low_conf_warn"
+        else float(rule.params.get("threshold") or 0.6)
+    )
+    code = rule.params.get("code") or "W_LOW_CONF"
+    checks: list[Check] = []
+    for key, fv in draft.fields.items():
+        if fv.value and 0 < fv.confidence < threshold:
+            checks.append(Check(
+                level=rule.level, code=code, field=key,
+                message=_msg(rule, label=LABELS.get(key, key), confidence=fv.confidence),
+            ))
+    return checks
+
+
+def _split_containers(raw: str) -> list[str]:
+    return [c for c in re.split(r"[,，;；\s]+", raw) if c]
+
+
+def _iso6346(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    field = rule.params.get("field") or "container_no"
+    raw = _val(draft, field)
+    if not raw:
+        return []
+    code = rule.params.get("code") or "E_CONTAINER_CHECKSUM"
+    checks: list[Check] = []
+    for c in _split_containers(raw):
+        if not container_is_valid(c):
+            checks.append(Check(
+                level=rule.level, code=code, field=field,
+                message=_msg(rule, value=c),
+            ))
+    return checks
+
+
+def _qty_match(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    compare_to = rule.params.get("compare_to") or "container_no"
+    raw = _val(draft, compare_to)
+    if not raw:
+        return []
+    items = _split_containers(raw)
+    qty = re.sub(r"\D", "", _val(draft, rule.params.get("field") or "container_qty"))
+    if qty and int(qty) != len(items):
+        return [Check(
+            level=rule.level, code=rule.params.get("code") or "W_QTY_MISMATCH",
+            field=rule.params.get("field") or "container_qty",
+            message=_msg(rule, qty=qty, count=len(items)),
+        )]
+    return []
+
+
+def _enum(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    field = rule.params.get("field")
+    raw = _val(draft, field).replace(" ", "").upper()
+    if not raw:
+        return []
+    for alias, target in (rule.params.get("aliases") or {}).items():
+        raw = raw.replace(alias, target)
+    if raw not in set(rule.params.get("values") or ()):
+        return [Check(
+            level=rule.level, code=rule.params.get("code") or "W_ENUM",
+            field=field, message=_msg(rule, value=raw),
+        )]
+    return []
+
+
+def _regex(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    field = rule.params.get("field")
+    raw = _val(draft, field)
+    if not raw:
+        return []
+    pattern = re.compile(rule.params.get("pattern") or "")
+    strip = rule.params.get("strip")
+    items = re.split(r"[,，;；\s]+", raw) if rule.params.get("split") else [raw]
+    code = rule.params.get("code") or "W_FORMAT"
+    checks: list[Check] = []
+    for item in items:
+        value = re.sub(strip, "", item) if strip else item
+        if value and not pattern.fullmatch(value):
+            checks.append(Check(
+                level=rule.level, code=code, field=field,
+                message=_msg(rule, value=value),
+            ))
+    return checks
+
+
+def _geo(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    fields = rule.params.get("fields") or ["pickup_addr", "delivery_addr"]
+    return check_addresses(_val(draft, fields[0]), _val(draft, fields[1]))
+
+
+def _deadline(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    field = rule.params.get("field")
+    closing = parse_datetime(_val(draft, field), now)
+    if not closing:
+        return []
+    if closing < now:
+        return [Check(
+            level=rule.level, code=rule.params.get("code") or "E_CLOSING_PASSED",
+            field=field, message=_msg(rule, time=fmt(closing)),
+        )]
+    warn_hours = float(rule.params.get("warn_hours") or 24)
+    if (closing - now).total_seconds() < warn_hours * 3600:
+        hours = (closing - now).total_seconds() / 3600
+        return [Check(
+            level="warn", code=rule.params.get("code_warn") or "W_CLOSING_SOON",
+            field=field, message=_msg(rule, "message_warn", hours=hours),
+        )]
+    return []
+
+
+def _ordering(rule: ValidationSpec, draft: Draft, now: datetime) -> list[Check]:
+    fields = rule.params.get("fields") or []
+    if len(fields) < 2:
+        return []
+    a = parse_datetime(_val(draft, fields[0]), now)
+    b = parse_datetime(_val(draft, fields[1]), now)
+    if a and b and a > b:
+        return [Check(
+            level=rule.level, code=rule.params.get("code") or "W_ORDERING",
+            field=fields[0], message=_msg(rule),
+        )]
+    return []
+
+
+VALIDATORS = {
+    "builtin.required": _required,
+    "builtin.low_confidence": _low_confidence,
+    "builtin.iso6346": _iso6346,
+    "builtin.qty_match": _qty_match,
+    "builtin.enum": _enum,
+    "builtin.regex": _regex,
+    "builtin.geo": _geo,
+    "builtin.deadline": _deadline,
+    "builtin.ordering": _ordering,
+}
+
 
 def run_checks(draft: Draft, now: datetime | None = None) -> list[Check]:
     now = now or datetime.now()
     checks: list[Check] = []
-    f = draft.fields
-
-    def val(key: str) -> str:
-        v = f.get(key)
-        return (v.value or "").strip() if v else ""
-
-    # 1. 必填缺失（阻断）——字段清单可由配置中心调整
-    required = th.get_list("rules.required") or list(BLOCKING_KEYS)
-    for key in required:
-        if not val(key):
-            checks.append(Check(
-                level="error", code="E_REQUIRED", field=key,
-                message=f"缺少必填字段：{SPEC_MAP[key].label}",
-            ))
-
-    # 2. 低置信度字段（提醒）
-    for key, fv in f.items():
-        if fv.value and 0 < fv.confidence < LOW_CONF_WARN:
-            checks.append(Check(
-                level="warn", code="W_LOW_CONF", field=key,
-                message=f"{SPEC_MAP[key].label} 置信度偏低（{fv.confidence:.0%}），请人工核对",
-            ))
-
-    # 3. 箱号 ISO 6346 校验位（可关闭）
-    raw_containers = val("container_no")
-    if raw_containers and th.get_bool("rules.container_checksum"):
-        items = [c for c in re.split(r"[,，;；\s]+", raw_containers) if c]
-        bad = [c for c in items if not container_is_valid(c)]
-        for c in bad:
-            checks.append(Check(
-                level="error", code="E_CONTAINER_CHECKSUM", field="container_no",
-                message=f"箱号 {c} 未通过 ISO 6346 校验位验证，可能录错",
-            ))
-        # 箱号数量 vs 箱量
-        qty = re.sub(r"\D", "", val("container_qty"))
-        if qty and int(qty) != len(items):
-            checks.append(Check(
-                level="warn", code="W_QTY_MISMATCH", field="container_qty",
-                message=f"箱量为 {qty}，但识别到 {len(items)} 个箱号，请核对",
-            ))
-
-    # 4. 箱型合法性
-    ctype = val("container_type").replace(" ", "").upper()
-    if ctype:
-        if ctype.replace("HC", "HQ") not in VALID_TYPES:
-            checks.append(Check(
-                level="warn", code="W_CONTAINER_TYPE", field="container_type",
-                message=f"箱型 {ctype} 不在常见取值内（20GP/40HQ/40RF 等）",
-            ))
-
-    # 5. 封号格式
-    for seal in [s for s in re.split(r"[,，;；\s]+", val("seal_no")) if s]:
-        if not SEAL_RE.fullmatch(seal):
-            checks.append(Check(
-                level="warn", code="W_SEAL_FORMAT", field="seal_no",
-                message=f"封号 {seal} 格式可疑（应为 5–15 位字母数字）",
-            ))
-
-    # 6. 电话格式
-    phone = re.sub(r"[\s\-]", "", val("factory_phone"))
-    if phone and not PHONE_RE.fullmatch(phone):
-        checks.append(Check(
-            level="warn", code="W_PHONE", field="factory_phone",
-            message=f"电话 {phone} 格式可疑",
-        ))
-
-    # 6.5 地址校验（B5）：错别字、区县与城市冲突、港区与城市冲突、提卸同址（可关闭）
-    if th.get_bool("rules.address"):
-        checks.extend(check_addresses(val("pickup_addr"), val("delivery_addr")))
-
-    # 7. 截港时间（本行业最贵的错误，可关闭）
-    closing = parse_datetime(val("closing_time"), now)
-    if closing and th.get_bool("rules.closing"):
-        if closing < now:
-            checks.append(Check(
-                level="error", code="E_CLOSING_PASSED", field="closing_time",
-                message=f"截港时间 {fmt(closing)} 已过，此单赶不上本班船，请立即改配",
-            ))
-        elif (closing - now).total_seconds() < CLOSING_WARN_HOURS * 3600:
-            hours = (closing - now).total_seconds() / 3600
-            checks.append(Check(
-                level="warn", code="W_CLOSING_SOON", field="closing_time",
-                message=f"距截港仅剩 {hours:.1f} 小时，需优先安排",
-            ))
-
-    # 8. 装柜时间窗 vs 截港时间（跟截港检查一起开关）
-    window = parse_datetime(val("loading_window"), now)
-    if window and closing and th.get_bool("rules.closing") and window > closing:
-        checks.append(Check(
-            level="warn", code="W_WINDOW_AFTER_CLOSING", field="loading_window",
-            message="装柜时间晚于截港时间，时间安排矛盾",
-        ))
-
+    for rule in active_pack().validations:
+        if not _enabled(rule):
+            continue
+        fn = VALIDATORS.get(rule.type)
+        if fn is None:
+            raise RuntimeError(f"未知校验器：{rule.type}")
+        checks.extend(fn(rule, draft, now))
     return checks
 
 
@@ -235,13 +344,7 @@ def apply_rules(draft: Draft, now: datetime | None = None) -> Draft:
 # 判据不是"全对"，而是"高代价字段全对"：
 # 箱号错了要被码头退回、截港错了要误船、箱型错了要重新派车——这些才是罚款来源。
 # 地址写错最多返工一次，不构成"必须双人复核"的理由。
-RISK_KEYS = (
-    "container_no", "container_type", "container_qty",
-    "closing_time", "factory_phone",
-)
-# 阈值改为运行时可调，见 app/thresholds.py（A3）
-
-
+# 风险字段来自 pack.review.risk_fields；阈值仍由 settings 管。
 def decide_review_level(draft: Draft) -> str:
     """按风险字段的确定性 + 校验结果决定复核级别。
 
@@ -261,14 +364,16 @@ def decide_review_level(draft: Draft) -> str:
     low_floor = th.get("booking.low_conf_floor")
     auto_floor = th.get("booking.risk_auto_floor")
 
-    watch = set(th.get_list("rules.required") or BLOCKING_KEYS) | set(RISK_KEYS)
+    risk_keys = tuple(active_pack().review.get("risk_fields") or ())
+    required = th.get_list("rules.required") or list(BLOCKING_KEYS)
+    watch = set(required) | set(risk_keys)
     low = [draft.fields[k].confidence for k in watch
            if k in draft.fields and draft.fields[k].value]
     if low and min(low) < low_floor:
         return "double"
 
     warns = any(c.level == "warn" for c in draft.checks)
-    risk = [draft.fields[k].confidence for k in RISK_KEYS if k in draft.fields and draft.fields[k].value]
+    risk = [draft.fields[k].confidence for k in risk_keys if k in draft.fields and draft.fields[k].value]
 
     if not warns and risk and min(risk) >= auto_floor:
         return "auto"

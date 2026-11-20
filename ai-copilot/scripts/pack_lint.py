@@ -15,20 +15,12 @@ import sys
 from pathlib import Path
 
 from app import thresholds
+from app.domain import FIELD_KINDS, NORMALIZERS, VALIDATOR_TYPES
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PACK = ROOT / "packs" / "trucking"
 
-FIELD_KINDS = {"text", "datetime", "number", "enum"}
-NORMALIZERS = {
-    "text", "number", "amount", "datetime",
-    "container_list", "container_type", "so_no", "alnum_upper",
-}
-VALIDATORS = {
-    "builtin.required", "builtin.iso6346", "builtin.qty_match",
-    "builtin.enum", "builtin.regex", "builtin.geo",
-    "builtin.deadline", "builtin.ordering",
-}
+VALIDATORS = set(VALIDATOR_TYPES)
 LEVELS = {"error", "warn", "info"}
 
 ok = True
@@ -128,6 +120,9 @@ def main() -> None:
                 chk(f"{vid} pattern 可编译", False, str(exc))
         if vtype == "builtin.deadline":
             chk(f"{vid} warn_hours > 0", float(v.get("warn_hours") or 0) > 0)
+        ref = v.get("threshold_from")
+        if isinstance(ref, str) and ref.startswith("review."):
+            chk(f"{vid} threshold_from 可解析", ref.split(".", 1)[1] in (rules.get("review") or {}), str(ref))
 
     review = rules.get("review") or {}
     for f in review.get("risk_fields") or []:

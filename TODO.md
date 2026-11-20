@@ -9,7 +9,7 @@
 
 - [ ] **行业包（先验证深度，再复制宽度；设计见 `ai-copilot/docs/行业包设计.md`）**
   - [x] Step 0：冻结 `packs/trucking/` + `make pack-lint` / `make pack-snapshot` → **2026-11-20 完成（AI-56）**
-  - [ ] Step 1：`domain.py` / `pack.py`，`schema` / `invoice` / `rules` 读 pack
+  - [x] Step 1：`domain.py` / `pack.py`，`schema` / `invoice` / `rules` 读 pack → **2026-11-20 完成（AI-57）**
   - [ ] Step 2：`reconcile` / `aging` / `fees` / `margin` / `geo` 读 pack
   - [ ] Step 3：`packs/freight_audit/` dry-run + `packdiff`，证明换行业只换配置
   - [ ] Step 4：`/api/packs`、激活/回滚、审计、设置页“行业包”页签

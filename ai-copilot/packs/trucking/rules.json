@@ -4,6 +4,8 @@
       "id": "required",
       "type": "builtin.required",
       "level": "error",
+      "code": "E_REQUIRED",
+      "message": "缺少必填字段：{label}",
       "fields_from": "settings:rules.required",
       "fallback_fields": [
         "client",
@@ -14,9 +16,19 @@
       ]
     },
     {
+      "id": "low_confidence",
+      "type": "builtin.low_confidence",
+      "level": "warn",
+      "code": "W_LOW_CONF",
+      "message": "{label} 置信度偏低（{confidence:.0%}），请人工核对",
+      "threshold_from": "review.low_conf_warn"
+    },
+    {
       "id": "container_checksum",
       "type": "builtin.iso6346",
       "level": "error",
+      "code": "E_CONTAINER_CHECKSUM",
+      "message": "箱号 {value} 未通过 ISO 6346 校验位验证，可能录错",
       "field": "container_no",
       "enabled_from": "settings:rules.container_checksum"
     },
@@ -24,6 +36,8 @@
       "id": "container_qty",
       "type": "builtin.qty_match",
       "level": "warn",
+      "code": "W_QTY_MISMATCH",
+      "message": "箱量为 {qty}，但识别到 {count} 个箱号，请核对",
       "field": "container_qty",
       "compare_to": "container_no",
       "enabled_from": "settings:rules.container_checksum"
@@ -32,6 +46,8 @@
       "id": "container_type",
       "type": "builtin.enum",
       "level": "warn",
+      "code": "W_CONTAINER_TYPE",
+      "message": "箱型 {value} 不在常见取值内（20GP/40HQ/40RF 等）",
       "field": "container_type",
       "values": [
         "20FR",
@@ -56,15 +72,21 @@
       "id": "seal_format",
       "type": "builtin.regex",
       "level": "warn",
+      "code": "W_SEAL_FORMAT",
+      "message": "封号 {value} 格式可疑（应为 5–15 位字母数字）",
       "field": "seal_no",
-      "pattern": "[A-Za-z0-9]{5,15}"
+      "pattern": "[A-Za-z0-9]{5,15}",
+      "split": true
     },
     {
       "id": "phone_format",
       "type": "builtin.regex",
       "level": "warn",
+      "code": "W_PHONE",
+      "message": "电话 {value} 格式可疑",
       "field": "factory_phone",
-      "pattern": "(1[3-9]\\d{9}|0\\d{2,3}\\d{7,8})"
+      "pattern": "(1[3-9]\\d{9}|0\\d{2,3}\\d{7,8})",
+      "strip": "[\\s\\-]"
     },
     {
       "id": "address",
@@ -80,14 +102,20 @@
       "id": "closing",
       "type": "builtin.deadline",
       "level": "error",
+      "code": "E_CLOSING_PASSED",
+      "code_warn": "W_CLOSING_SOON",
+      "message": "截港时间 {time} 已过，此单赶不上本班船，请立即改配",
+      "message_warn": "距截港仅剩 {hours:.1f} 小时，需优先安排",
       "field": "closing_time",
-      "warn_hours": 24,
+      "warn_hours": 24.0,
       "enabled_from": "settings:rules.closing"
     },
     {
       "id": "window_after_closing",
       "type": "builtin.ordering",
       "level": "warn",
+      "code": "W_WINDOW_AFTER_CLOSING",
+      "message": "装柜时间晚于截港时间，时间安排矛盾",
       "fields": [
         "loading_window",
         "closing_time"

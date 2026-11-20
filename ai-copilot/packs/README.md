@@ -5,10 +5,11 @@
 
 ## 当前状态
 
-- **Step 0 已完成**：`packs/trucking/` 是当前代码的**冻结基线**，不参与运行时加载；
-  `scripts/pack_snapshot.py` 证明它与现有常量逐项一致。
-- **Step 1 起**：`app/schema.py`、`app/rules.py`、`app/reconcile.py` 等改为读 pack；
-  pack 才成为源。
+- **Step 0 已完成**：`packs/trucking/` 冻结了原有字段/校验/口径。
+- **Step 1 已完成**：`app/schema.py`、`app/invoice.py`、`app/rules.py` 已经读 pack；
+  `packs/trucking/` 是托书/发票/校验的运行时源。
+- **Step 2 待做**：`reconcile` / `aging` / `fees` / `margin` / `geo` 仍用代码常量，
+  尚未切到 pack（`pack_snapshot.py` 会持续对照，防止漂移）。
 - `packs/freight_audit/`（买方运费审计）尚未创建，等 Step 3。
 
 ## 目录
@@ -45,9 +46,10 @@ packs/
 
 ```bash
 cd ai-copilot
-make pack-export     # 从当前代码重新导出基线（Step 0 工具）
+make pack-export     # 重新导出基线（Step 0 工具；Step 1 后为 round-trip）
 make pack-lint       # 检查 pack 自身是否自洽
-make pack-snapshot   # 对照当前代码常量，证明逐项一致
+make pack-snapshot   # pack 加载 / 代码接线与 JSON 源对照
+make pack-test       # 固定时间跑 schema/invoice/rules 行为断言
 ```
 
 ## 规则

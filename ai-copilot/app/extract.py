@@ -23,7 +23,10 @@ from .rules import (
     fmt,
     parse_datetime,
 )
-from .schema import BLOCKING_KEYS, FIELD_KEYS, SPECS, Draft, FieldValue, empty_draft
+from .schema import (
+    BLOCKING_KEYS, FIELD_KEYS, PACK_ID, PACK_VERSION, SPECS,
+    Draft, FieldValue, empty_draft,
+)
 
 # 规则通道有最终裁决权的字段（无论置信度）
 RULE_AUTHORITATIVE = {
@@ -453,6 +456,8 @@ def _stamp(draft: Draft) -> Draft:
     draft.model = settings.model if draft.engine.startswith("llm:") else ""
     draft.prompt_version = prompt_version()
     draft.pipeline_version = PIPELINE_VERSION
+    draft.pack_id = PACK_ID
+    draft.pack_version = PACK_VERSION
     return draft
 
 

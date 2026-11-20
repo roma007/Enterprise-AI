@@ -1203,13 +1203,14 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - `make pack-state-test` 13 项（含 `rollback_target`）；
 - `make pack-normalize-test` 20 项：金额/日期/箱号/名称按 pack `normalize` 归一；
   trucking 的 `freight`/`closing_time`/`client`，freight_audit 的 `amount`/`contract_rate`/`carrier_invoice_no` 均通过；
+- `make pack-settlement-test` 11 项：trucking 默认词表 + 自定义 `fees.settlement_extract` 词表 + 恢复；
 - `PACK_ID=freight_audit` 临时实例：`/api/extract` 200，`/api/{reconcile,consistency,aging,margin,settlement}/demo` 409；
 - 默认 `trucking`：`smoke.sh` 19/19，上述 demo 200，`make eval` 结果不变。
 
 仍遗留（未在本轮修）：
 
-- `settlement_extract.py` 仍有一套硬编码 `LINE_HINTS`。
 - 多实例广播、任务入队锁定 `pack_id`。
+- 规则抽取通道仍是集卡知识；非集卡包规则模式不产出审计字段，实际靠 LLM 通道。
 
 ---
 

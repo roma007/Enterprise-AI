@@ -158,6 +158,10 @@ def main() -> None:
         if settlement:
             chk("fees.settlement.rate_hints 非空", bool(settlement.get("rate_hints")))
             chk("fees.settlement.bill_hints 非空", bool(settlement.get("bill_hints")))
+        extract = fees.get("settlement_extract") or {}
+        if extract:
+            chk("fees.settlement_extract.line_hints 非空", bool(extract.get("line_hints")))
+            chk("fees.settlement_extract.header_aliases 非空", bool(extract.get("header_aliases")))
     if cost:
         chk("cost.revenue_hints 非空", bool(cost.get("revenue_hints")))
         chk("cost.cost_hints 非空", bool(cost.get("cost_hints")))

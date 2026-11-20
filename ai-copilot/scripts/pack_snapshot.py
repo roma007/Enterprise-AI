@@ -19,7 +19,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from app import address_check, aging, fees, invoice, margin, reconcile, rules, schema, settlement
+from app import address_check, aging, fees, invoice, margin, reconcile, rules, schema, settlement, settlement_extract
 from app.pack import PACKS_DIR, active_pack, load_pack
 
 RAW_FILES = (
@@ -130,6 +130,14 @@ def main() -> None:
        (pack.fees.get("settlement") or {}).get("rate_hints") or {})
     eq("settlement bill_hints", {k: list(v) for k, v in settlement._BILL_HINTS.items()},
        (pack.fees.get("settlement") or {}).get("bill_hints") or {})
+    extract = pack.fees.get("settlement_extract") or {}
+    if extract:
+        eq("settlement_extract line_hints",
+           {k: list(v) for k, v in settlement_extract.LINE_HINTS},
+           extract.get("line_hints") or {})
+        eq("settlement_extract header_aliases",
+           {k: list(v) for k, v in settlement_extract.HEADER_ALIASES.items()},
+           extract.get("header_aliases") or {})
     eq("cost revenue_hints", {k: list(v) for k, v in margin._REVENUE_HINTS.items()},
        pack.cost.get("revenue_hints") or {})
     eq("cost cost_hints", {k: list(v) for k, v in margin._COST_HINTS.items()},

@@ -8,9 +8,10 @@ import re
 import time
 from decimal import Decimal
 
+from .pack import current_pack, register_listener
 from .table_extract import find_table_header, norm_date, parse_header_lines, parse_table, to_decimal
 
-LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
+_DEFAULT_LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("trip_no", ("趟次号", "趟次", "trip")),
     ("waybill_no", ("运单号", "委托单号", "提单号", "单号")),
     ("plate_no", ("车牌号", "车牌", "车号")),
@@ -22,6 +23,35 @@ LINE_HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("deduction", ("扣款", "罚款", "扣减")),
     ("remark", ("备注", "说明")),
 ]
+
+_DEFAULT_HEADER_ALIASES: dict[str, tuple[str, ...]] = {
+    "settlement_no": ("结算单号", "账单号", "settlement_no"),
+    "carrier_name": ("车队", "承运商", "供应商", "外协", "carrier"),
+    "period": ("周期", "账期", "期间", "period"),
+    "total_amount": ("合计", "总额", "total"),
+}
+
+LINE_HINTS: list[tuple[str, tuple[str, ...]]] = []
+HEADER_ALIASES: dict[str, tuple[str, ...]] = {}
+
+
+def _apply(pack) -> None:
+    section = (pack.fees or {}).get("settlement_extract") or {}
+    hints = section.get("line_hints") or {}
+    aliases = section.get("header_aliases") or {}
+    LINE_HINTS[:] = (
+        [(str(k), tuple(v)) for k, v in hints.items()]
+        if hints else list(_DEFAULT_LINE_HINTS)
+    )
+    HEADER_ALIASES.clear()
+    HEADER_ALIASES.update(
+        {str(k): tuple(v) for k, v in aliases.items()}
+        if aliases else _DEFAULT_HEADER_ALIASES
+    )
+
+
+_apply(current_pack())
+register_listener(_apply)
 
 _WAYBILL_RE = re.compile(r"[A-Z]{2,4}\d{6,}")
 _PLATE_RE = re.compile(r"[\u4e00-\u9fa5][A-Z][A-Z0-9]{4,6}")
@@ -139,10 +169,12 @@ def parse_settlement_text(
     if not rows:
         raise ValueError("未能从结算单中解析出明细行")
 
-    settlement_no = _header_value(headers, HEADER_ALIASES["settlement_no"])
-    carrier_name = _header_value(headers, HEADER_ALIASES["carrier_name"]) or ""
-    period_start, period_end = _parse_period(_header_value(headers, HEADER_ALIASES["period"]))
-    header_total = to_decimal(_header_value(headers, HEADER_ALIASES["total_amount"]))
+    settlement_no = _header_value(headers, HEADER_ALIASES.get("settlement_no", ()))
+    carrier_name = _header_value(headers, HEADER_ALIASES.get("carrier_name", ())) or ""
+    period_start, period_end = _parse_period(
+        _header_value(headers, HEADER_ALIASES.get("period", ())))
+    header_total = to_decimal(
+        _header_value(headers, HEADER_ALIASES.get("total_amount", ())))
 
     warnings: list[str] = []
     if not carrier_name:

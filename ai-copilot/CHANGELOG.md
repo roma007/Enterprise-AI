@@ -13,7 +13,8 @@
 - P1：rollback 先校验目标包存在，再写状态；目标被删除返回 400。
 - P1：非 `trucking` 包下 `/api/*/demo` 统一 409，避免演示页显示错误数字。
 - P1：`normalize_for_compare` / `normalize.py` 改为按 pack `normalize` 元数据归一；金额/日期不再按文本比。
-- 自检：pack-test-freight 27、pack-hotswap 30、pack-state 13、pack-normalize 20；默认 trucking smoke 19/19、eval 不变。
+- P2：`settlement_extract.py` 的明细列/表头别名改读 `fees.settlement_extract`；自定义词表无需改代码。
+- 自检：pack-test-freight 27、pack-hotswap 30、pack-state 13、pack-normalize 20、pack-settlement 11；默认 trucking smoke 19/19、eval 不变。
 
 ## [未发布] · 2026-11-20 · 行业包热切换（AI-61）
 

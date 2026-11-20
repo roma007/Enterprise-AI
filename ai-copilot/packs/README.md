@@ -24,7 +24,7 @@ packs/
     rules.json         # 校验规则（内置校验器 + 参数）
     reconcile.json     # 对账表头同义词、匹配键、金额字段、状态、展示字段
     aging.json         # 账龄表头同义词
-    fees.json          # 费用表头、内置费用名、外协结算表头
+    fees.json          # 费用表头、内置费用名、外协结算/结算单抽取词表
     cost.json          # 毛利收入/成本表头同义词
     geo.json           # 城市/区县/港区/错别字/镇街词表
     acceptance.json    # 验收指标与最小样本量

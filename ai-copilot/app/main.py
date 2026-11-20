@@ -54,6 +54,13 @@ app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    from . import pack
+    from .store import pending_pack_jobs
+
+    # 有排队中的批处理任务时不允许切包，避免“入队时 A、执行时 B”。
+    pack.register_busy_check(lambda: pending_pack_jobs("batch") > 0)
+    # PostgreSQL 多实例：其他实例切换后自动 reload；SQLite 单实例直接跳过。
+    pack.start_watcher()
     from .batchproc import start_worker as start_batch_worker
     start_batch_worker()
     delivery.start_worker()

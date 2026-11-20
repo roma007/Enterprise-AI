@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -210,15 +211,36 @@ class PackBusy(RuntimeError):
 _current: Pack | None = None
 _lock = threading.RLock()
 _listeners: list[Callable[[Pack], None]] = []
+_busy_checks: list[Callable[[], bool]] = []
 _state = threading.Condition(_lock)
 _active = 0
 _switching = False
+_watcher_started = False
 
 
 def register_listener(fn: Callable[[Pack], None]) -> None:
     """模块在 import 时注册刷新函数；reload 时原地刷新自己的容器。"""
     if fn not in _listeners:
         _listeners.append(fn)
+
+
+def register_busy_check(fn: Callable[[], bool]) -> None:
+    """注册“现在能否切包”的额外检查（如排队中的批处理任务）。"""
+    if fn not in _busy_checks:
+        _busy_checks.append(fn)
+
+
+def _busy_reason() -> str:
+    """调用方需持有 _state；返回非空表示不能切。"""
+    if _active > 0:
+        return f"有 {_active} 个请求/任务正在处理，请稍后重试"
+    for fn in list(_busy_checks):
+        try:
+            if fn():
+                return "有排队中的批处理任务，请等任务完成后再切换"
+        except Exception:
+            continue
+    return ""
 
 
 def active_pack() -> Pack:
@@ -259,8 +281,11 @@ def request_guard() -> Iterator[None]:
 def assert_idle() -> None:
     """没有活动请求/任务时才允许切换。"""
     with _state:
-        if _active > 0 or _switching:
-            raise PackBusy(f"有 {_active} 个请求/任务正在处理，请稍后重试")
+        if _switching:
+            raise PackBusy("正在切换行业包，请稍后重试")
+        reason = _busy_reason()
+        if reason:
+            raise PackBusy(reason)
 
 
 def reload_pack(pack_id: str | None = None) -> Pack:
@@ -274,8 +299,9 @@ def reload_pack(pack_id: str | None = None) -> Pack:
     with _state:
         if _switching:
             raise PackBusy("正在切换行业包，请稍后重试")
-        if _active > 0:
-            raise PackBusy(f"有 {_active} 个请求/任务正在处理，请稍后重试")
+        reason = _busy_reason()
+        if reason:
+            raise PackBusy(reason)
         _switching = True
     try:
         with _lock:
@@ -298,3 +324,42 @@ def reload_pack(pack_id: str | None = None) -> Pack:
             _switching = False
             _state.notify_all()
     return loaded
+
+
+def start_watcher(interval: float | None = None) -> None:
+    """多实例（PostgreSQL）激活状态监听：其他实例切换后自动 reload。
+
+    SQLite 是单实例部署，不需要监听。
+    """
+    global _watcher_started
+    if _watcher_started:
+        return
+    from . import db
+
+    if db.BACKEND != "postgres":
+        return
+    _watcher_started = True
+    seconds = float(interval or os.getenv("PACK_WATCH_SECONDS", "5") or 5)
+
+    def loop() -> None:
+        # 首轮强制 reload：避免进程 import 与 watcher 启动之间状态已变。
+        last: str | None = None
+        while True:
+            time.sleep(max(1.0, seconds))
+            try:
+                fp = json.dumps(pack_state.get_state(), sort_keys=True, ensure_ascii=False)
+                if last is not None and fp == last:
+                    continue
+                reload_pack()
+                last = fp
+                print(f"[pack] 检测到激活状态变化，已切换：{active_pack().id}")
+            except PackBusy:
+                # 本实例还有请求/任务，下一轮再试。
+                continue
+            except PackError as exc:
+                print(f"[pack] 激活状态指向的包不可用：{exc}")
+                last = fp
+            except Exception as exc:  # noqa: BLE001
+                print(f"[pack] 监听切换失败：{exc}")
+
+    threading.Thread(target=loop, name="pack-watcher", daemon=True).start()

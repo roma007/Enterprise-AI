@@ -14,8 +14,11 @@
 - P1：非 `trucking` 包下 `/api/*/demo` 统一 409，避免演示页显示错误数字。
 - P1：`normalize_for_compare` / `normalize.py` 改为按 pack `normalize` 元数据归一；金额/日期不再按文本比。
 - P2：`settlement_extract.py` 的明细列/表头别名改读 `fees.settlement_extract`；自定义词表无需改代码。
-- P1：规则抽取支持 pack `extract` 元数据（label/regex/amount/datetime/phone/container/seal）；`freight_audit` 规则模式可产出审计字段；trucking 硬编码不变。
-- 自检：pack-test-freight 33、pack-hotswap 30、pack-state 13、pack-normalize 20、pack-settlement 11；默认 trucking smoke 19/19、eval 不变。
+- P1：规则抽取支持 pack `extract` 元数据（label/regex/amount/datetime/phone/container/seal/quantity/container_type）；`freight_audit` 规则模式可产出审计字段；`trucking` 20 个托书字段全部迁到 `extract`。
+- 新增 `samples/extract_rule_baseline.json` + `make extract-regression-test`：28 份合成样本逐字段锁行为；迁移后仅 holdout#5 client 一处有意修正。
+- 多实例：PostgreSQL 下 `pack.start_watcher()` 按 `PACK_WATCH_SECONDS` 轮询激活状态并自动 `reload_pack`；首轮强制 reload。
+- 批处理任务：`jobs.pack_id` 入队/领取落库；领取时与当前包不一致直接失败；有排队任务时切换 409。
+- 自检：pack-test-freight 33、pack-hotswap 30、pack-state 13、pack-normalize 20、pack-settlement 11、extract-regression 30、pack-jobs 8；默认 trucking smoke 19/19、eval 不变。
 
 ## [未发布] · 2026-11-20 · 行业包热切换（AI-61）
 

@@ -59,7 +59,7 @@ packs/
 
 ```json
 "extract": {
-  "type": "label | regex | amount | datetime | phone | container | seal",
+  "type": "label | regex | amount | datetime | phone | container | seal | quantity | container_type",
   "keywords": ["承运商", "车队", "供应商"],
   "patterns": ["(?:账单号|Invoice No)\\s*[:：]?\\s*([A-Za-z0-9-]+)"],
   "confidence": 0.85,
@@ -69,8 +69,8 @@ packs/
 }
 ```
 
-- `regex` 的 `group(1)` 作为字段值；`label` 走关键词抓取；`amount` / `datetime` / `phone` / `container` / `seal` 是内置抽取器。
-- 新行业包优先用 `extract` 声明；`trucking` 仍保留兼容硬编码，保证既有评测不变。
+- `regex` 的 `group(1)` 作为字段值；`label` 走关键词抓取；其余是内置抽取器。
+- `trucking` 20 个托书字段已全部迁到 `extract`；改完跑 `make extract-regression-test` 对照逐字段基线。
 - `pack-lint` 校验 `extract.type` 与正则可编译。
 
 ## 命令
@@ -84,6 +84,7 @@ make pack-test       # 固定时间跑 schema/invoice/rules 行为断言
 make pack-test-freight  # 买方运费审计 dry-run（PACK_ID=freight_audit）
 make pack-diff       # trucking -> freight_audit 的差异
 make pack-state-test # 激活/回滚历史自检（临时目录，不碰 data/）
+make extract-regression-test  # 规则抽取逐字段回归（对照 samples/extract_rule_baseline.json）
 ```
 
 ## 激活与回滚
@@ -100,6 +101,9 @@ make pack-state-test # 激活/回滚历史自检（临时目录，不碰 data/�
 - 写指针后 `reload_pack()` **即时生效**；请求/任务期间持读闸，忙时返回 409“稍后重试”；
 - SQLite 落 `data/active_pack.json` / `data/pack_history.json`；
   PostgreSQL 落 `app_settings` 的 `active_pack` / `pack_history`。
+- PostgreSQL 多实例：其他实例按 `PACK_WATCH_SECONDS` 轮询激活状态并自动 `reload_pack`；
+  本实例有请求/任务时下一轮重试。
+- 批处理任务入队记录 `pack_id`；worker 领取时与当前包不一致直接失败；有排队任务时切换返回 409。
 
 ## 规则
 

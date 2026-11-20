@@ -10,7 +10,30 @@
         "blocking": true,
         "kind": "text",
         "normalize": "text_name",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "委托单位",
+                "客户名称",
+                "客户",
+                "货代名称",
+                "货代",
+                "委托方",
+                "Client"
+              ],
+              "confidence": 0.8
+            },
+            {
+              "type": "verb",
+              "patterns": [
+                "(?:客户|货代|委托方)(?:是|为)\\s*([^\\n，,；;。]+)"
+              ],
+              "confidence": 0.7
+            }
+          ]
+        }
       },
       {
         "key": "booking_no",
@@ -20,7 +43,47 @@
         "blocking": true,
         "kind": "text",
         "normalize": "text",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "委托单号",
+                "托书编号",
+                "托书号",
+                "订单号",
+                "原委托单",
+                "原单号",
+                "Booking No.",
+                "Booking No",
+                "Booking",
+                "单号"
+              ],
+              "confidence": 0.85
+            },
+            {
+              "type": "regex",
+              "patterns": [
+                "原(?:委托单|单号|单)\\s*[:：]?\\s*([A-Za-z0-9][A-Za-z0-9\\-]{2,})"
+              ],
+              "confidence": 0.8
+            },
+            {
+              "type": "regex",
+              "patterns": [
+                "(?:单号|编号|订单号)\\s*[:：]?\\s*([A-Za-z0-9][A-Za-z0-9\\-]{2,})"
+              ],
+              "confidence": 0.75
+            },
+            {
+              "type": "regex",
+              "patterns": [
+                "^\\s*([A-Za-z\\u4e00-\\u9fa5]{2,8}[-\\s]?\\d{3,}[-\\d]*)"
+              ],
+              "confidence": 0.6
+            }
+          ]
+        }
       },
       {
         "key": "bl_no",
@@ -30,7 +93,22 @@
         "blocking": false,
         "kind": "text",
         "normalize": "text",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "提单号",
+                "B/L NO",
+                "B/L No.",
+                "BL NO",
+                "提单",
+                "B/L"
+              ],
+              "confidence": 0.8
+            }
+          ]
+        }
       },
       {
         "key": "so_no",
@@ -40,7 +118,29 @@
         "blocking": false,
         "kind": "text",
         "normalize": "so_no",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "SO号",
+                "SO NO",
+                "S/O NO",
+                "S/O",
+                "SO"
+              ],
+              "confidence": 0.8
+            },
+            {
+              "type": "regex",
+              "patterns": [
+                "(?<![A-Z])(?:SO|S/O)[-\\s]?(\\d{4,})"
+              ],
+              "confidence": 0.6,
+              "prefix": "SO-"
+            }
+          ]
+        }
       },
       {
         "key": "container_type",
@@ -50,7 +150,42 @@
         "blocking": true,
         "kind": "text",
         "normalize": "container_type",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "container_type",
+              "confidence": 0.95,
+              "rules": [
+                {
+                  "pattern": "(?<!\\d)(20|40|45)\\s*(GP|HQ|HC|RF|OT|FR|TK)(?![A-Z])",
+                  "value": "{1}{2}",
+                  "postprocess": "container_type",
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "(?<!\\d)(40|45)\\s*H(?![A-Z])",
+                  "value": "{1}HQ",
+                  "confidence": 0.85
+                },
+                {
+                  "pattern": "高柜|40尺高|HQ",
+                  "value": "40HQ",
+                  "confidence": 0.65
+                },
+                {
+                  "pattern": "小柜|20尺|20寸",
+                  "value": "20GP",
+                  "confidence": 0.75
+                },
+                {
+                  "pattern": "大柜|40尺|40寸",
+                  "value": "40GP",
+                  "confidence": 0.65
+                }
+              ]
+            }
+          ]
+        }
       },
       {
         "key": "container_qty",
@@ -60,7 +195,57 @@
         "blocking": false,
         "kind": "number",
         "normalize": "quantity",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "quantity",
+              "confidence": 0.95,
+              "rules": [
+                {
+                  "pattern": "(?:箱量|数量|箱数|柜量|柜数|QTY)\\s*[:：|]?\\s*([^\\n]{1,24})",
+                  "group": 1,
+                  "postprocess": "qty_segment",
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "(20|40|45)\\s*(?:GP|HQ|HC|RF|OT|FR|TK)\\s*[x×*X]\\s*(\\d+)",
+                  "group": 2,
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "(\\d+)\\s*[x×*X]\\s*(?:20|40|45)\\s*(?:GP|HQ|HC|RF|OT|FR|TK)",
+                  "group": 1,
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "([一二两三四五六七八九十])\\s*[个x×*]?\\s*(?:20|40|45)\\s*(?:GP|HQ|HC|RF|OT|FR|TK)",
+                  "group": 1,
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "(?:20|40|45)\\s*(?:GP|HQ|HC|RF|OT|FR|TK)\\s*([一二两三四五六七八九十])\\s*个?",
+                  "group": 1,
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "([一二两三四五六七八九十])\\s*个\\s*(?:小柜|大柜|高柜|柜|箱)",
+                  "group": 1,
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "(?:小柜|大柜|高柜|柜|箱)\\s*([一二两三四五六七八九十])\\s*个",
+                  "group": 1,
+                  "confidence": 0.95
+                },
+                {
+                  "pattern": "(\\d+)\\s*[个x×*X]\\s*(?:小柜|大柜|高柜|箱|柜)",
+                  "group": 1,
+                  "confidence": 0.95
+                }
+              ]
+            }
+          ]
+        }
       },
       {
         "key": "container_no",
@@ -70,7 +255,14 @@
         "blocking": false,
         "kind": "text",
         "normalize": "container_list",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "container",
+              "confidence": 0.97
+            }
+          ]
+        }
       },
       {
         "key": "seal_no",
@@ -80,7 +272,32 @@
         "blocking": false,
         "kind": "text",
         "normalize": "container_list",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "regex",
+              "patterns": [
+                "(?:铅封号|封条号|封号|Seal No\\.?|Seal)[^\\nA-Za-z0-9]{0,10}([A-Za-z0-9、,，][A-Za-z0-9、,，\\- ]{2,80})"
+              ],
+              "postprocess": "seal_tokens",
+              "cut": false,
+              "confidence": 0.9
+            },
+            {
+              "type": "label",
+              "keywords": [
+                "铅封号",
+                "封条号",
+                "封号",
+                "Seal No.",
+                "Seal"
+              ],
+              "split": false,
+              "cut": false,
+              "confidence": 0.9
+            }
+          ]
+        }
       },
       {
         "key": "pickup_addr",
@@ -90,7 +307,41 @@
         "blocking": true,
         "kind": "text",
         "normalize": "text_name",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "提箱地址",
+                "提空箱点",
+                "提箱地点",
+                "提箱点",
+                "提箱地",
+                "装柜地址",
+                "装货地址",
+                "装货地",
+                "提柜",
+                "提箱",
+                "提空箱",
+                "Pick up",
+                "Pickup"
+              ],
+              "limit": 80,
+              "strip_datetime": true,
+              "confidence": 0.8
+            },
+            {
+              "type": "verb",
+              "patterns": [
+                "(?:装柜地址|装货地址|提箱地址|提箱地点|提箱点|提空箱点)\\s*[:：]\\s*([^\\n，,；;]+)",
+                "(?:提箱|提柜|工厂|装货|装箱)(?:在|于|是)\\s*([^\\n，,；;。]+)"
+              ],
+              "limit": 80,
+              "strip_datetime": true,
+              "confidence": 0.8
+            }
+          ]
+        }
       },
       {
         "key": "delivery_addr",
@@ -100,7 +351,42 @@
         "blocking": true,
         "kind": "text",
         "normalize": "text_name",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "卸货地址",
+                "送货地址",
+                "卸货地",
+                "送货地",
+                "目的地",
+                "送达地址",
+                "送达",
+                "卸货",
+                "送货",
+                "Delivery",
+                "Deliver to"
+              ],
+              "limit": 80,
+              "strip_datetime": true,
+              "confidence": 0.8
+            },
+            {
+              "type": "verb",
+              "patterns": [
+                "(?:卸货地址|送货地址|目的地|送达地址)\\s*[:：|]\\s*([^\\n，,；;]+)",
+                "(?:卸货地|送货地|目的地)(?:改成|改为|换成|是|为)\\s*([^\\n，,；;。]+)",
+                "(?:送到|送至|送货到)\\s*([^\\n，,；;。]+)",
+                "(?:去|到)\\s*([^\\n，,；;。]{2,30}?(?:码头|仓库|堆场|园区|工厂|仓|路|街|号))",
+                "(?:去|到)\\s*([\\u4e00-\\u9fa5]{2,8})"
+              ],
+              "limit": 80,
+              "strip_datetime": true,
+              "confidence": 0.8
+            }
+          ]
+        }
       },
       {
         "key": "factory_contact",
@@ -110,7 +396,30 @@
         "blocking": false,
         "kind": "text",
         "normalize": "text",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "工厂联系人",
+                "收货联系人",
+                "联系人",
+                "Contact",
+                "Attn"
+              ],
+              "postprocess": "name",
+              "confidence": 0.8
+            },
+            {
+              "type": "verb",
+              "patterns": [
+                "(?:联系人|Contact|Attn)\\s*[:：]?\\s*([\\u4e00-\\u9fa5A-Za-z]{2,6})"
+              ],
+              "postprocess": "name",
+              "confidence": 0.8
+            }
+          ]
+        }
       },
       {
         "key": "factory_phone",
@@ -120,7 +429,14 @@
         "blocking": false,
         "kind": "text",
         "normalize": "number",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "phone",
+              "confidence": 0.95
+            }
+          ]
+        }
       },
       {
         "key": "loading_window",
@@ -130,7 +446,22 @@
         "blocking": false,
         "kind": "datetime",
         "normalize": "datetime",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "datetime",
+              "keywords": [
+                "装柜",
+                "装箱",
+                "装货时间",
+                "时间窗",
+                "Loading",
+                "Stuffing"
+              ],
+              "confidence": 0.75
+            }
+          ]
+        }
       },
       {
         "key": "closing_time",
@@ -140,7 +471,24 @@
         "blocking": false,
         "kind": "datetime",
         "normalize": "datetime",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "datetime",
+              "keywords": [
+                "截港",
+                "截关",
+                "截单",
+                "Cut off",
+                "Cut-off",
+                "Cutoff",
+                "Closing",
+                "SI cut"
+              ],
+              "confidence": 0.93
+            }
+          ]
+        }
       },
       {
         "key": "vessel_voyage",
@@ -150,7 +498,33 @@
         "blocking": false,
         "kind": "text",
         "normalize": "text_name",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "船名航次",
+                "船名/航次",
+                "船名",
+                "航次",
+                "Vessel/Voyage",
+                "Vessel",
+                "Voyage"
+              ],
+              "limit": 60,
+              "confidence": 0.8
+            },
+            {
+              "type": "verb",
+              "patterns": [
+                "(?:船名航次|船名/航次|船名|航次|Vessel)\\s*[:：]\\s*([^\\n，,；;]+)",
+                "船(?:名)?(?:是|为)\\s*([^\\n，,；;。]+)"
+              ],
+              "limit": 60,
+              "confidence": 0.8
+            }
+          ]
+        }
       },
       {
         "key": "depot",
@@ -160,7 +534,21 @@
         "blocking": false,
         "kind": "text",
         "normalize": "text",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "提空箱点",
+                "提箱点",
+                "堆场",
+                "场站",
+                "Depot"
+              ],
+              "confidence": 0.75
+            }
+          ]
+        }
       },
       {
         "key": "cargo_desc",
@@ -170,7 +558,30 @@
         "blocking": false,
         "kind": "text",
         "normalize": "text_name",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "品名",
+                "货物描述",
+                "货物",
+                "货名",
+                "Commodity",
+                "Cargo"
+              ],
+              "confidence": 0.8
+            },
+            {
+              "type": "verb",
+              "patterns": [
+                "(?:品名|货物描述|货物|货名|商品|Commodity|Cargo)\\s*[:：]\\s*([^\\n，,；;]+)",
+                "货(?:是|为)\\s*([^\\n，,；;。]+)"
+              ],
+              "confidence": 0.8
+            }
+          ]
+        }
       },
       {
         "key": "gross_weight",
@@ -180,7 +591,18 @@
         "blocking": false,
         "kind": "text",
         "normalize": "number",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "regex",
+              "patterns": [
+                "(?:毛重|重量|G\\.?W\\.?|GROSS WEIGHT|KGS?)\\s*[:：]?\\s*([\\d.,]+)"
+              ],
+              "confidence": 0.9,
+              "postprocess": "number"
+            }
+          ]
+        }
       },
       {
         "key": "freight",
@@ -190,7 +612,18 @@
         "blocking": false,
         "kind": "text",
         "normalize": "amount",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "regex",
+              "patterns": [
+                "(?:运费|拖车费|报价|价格|单价|RATE|Freight)\\s*[:：]?\\s*([\\d.,]+)"
+              ],
+              "confidence": 0.85,
+              "postprocess": "number"
+            }
+          ]
+        }
       },
       {
         "key": "remark",
@@ -200,7 +633,25 @@
         "blocking": false,
         "kind": "text",
         "normalize": "text_name",
-        "extract": {}
+        "extract": {
+          "strategies": [
+            {
+              "type": "label",
+              "keywords": [
+                "特殊要求",
+                "备注",
+                "要求",
+                "注意",
+                "Remark"
+              ],
+              "limit": 160,
+              "split": false,
+              "cut": false,
+              "postprocess": "remark",
+              "confidence": 0.7
+            }
+          ]
+        }
       }
     ]
   },

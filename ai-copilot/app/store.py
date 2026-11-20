@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     attempts    INTEGER NOT NULL DEFAULT 0,
     last_error  TEXT,
     params_json TEXT,
+    pack_id     TEXT,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL,
     UNIQUE (kind, ref_id)
@@ -222,6 +223,7 @@ _EXTRA_COLUMNS = (
     ("batches", "cancel_requested", "INTEGER DEFAULT 0"),
     ("batches", "status", "TEXT DEFAULT 'idle'"),
     ("jobs", "params_json", "TEXT"),
+    ("jobs", "pack_id", "TEXT"),
     ("delivery_outbox", "worker", "TEXT"),
     ("delivery_outbox", "lease_until", "INTEGER"),
     ("runs", "actor", "TEXT DEFAULT ''"),
@@ -1397,22 +1399,29 @@ def revoke_user_sessions(user_id: str, except_jti: str = "") -> int:
 
 # ---------------- 多实例任务队列（D7） ----------------
 
-def enqueue_job(kind: str, ref_id: str, params: dict | None = None) -> dict | None:
-    """入队（幂等）。已有活跃任务时返回 None，避免重复跑。"""
+def enqueue_job(kind: str, ref_id: str, params: dict | None = None,
+                pack_id: str = "") -> dict | None:
+    """入队（幂等）。已有活跃任务时返回 None，避免重复跑。
+
+    `pack_id` 记录入队时的行业包；worker 领取时若与当前包不一致，
+    不混跑，直接失败并提示重新提交。
+    """
     now = _now()
     epoch = int(time.time())
     params_json = json.dumps(params or {}, ensure_ascii=False)
     with _conn() as conn:
         row = conn.execute(
             "INSERT INTO jobs (id, kind, ref_id, status, created_at, updated_at,"
-            " params_json) VALUES (?,?,?,'pending',?,?,?)"
+            " params_json, pack_id) VALUES (?,?,?,'pending',?,?,?,?)"
             " ON CONFLICT (kind, ref_id) DO UPDATE SET"
             " status='pending', worker=NULL, lease_until=NULL,"
-            " last_error=NULL, params_json=EXCLUDED.params_json, updated_at=?"
+            " last_error=NULL, params_json=EXCLUDED.params_json,"
+            " pack_id=EXCLUDED.pack_id, updated_at=?"
             " WHERE jobs.status IN ('pending','done','failed')"
             " OR (jobs.status='running' AND jobs.lease_until < ?)"
             " RETURNING *",
-            (uuid.uuid4().hex[:12], kind, ref_id, now, now, params_json, now, epoch),
+            (uuid.uuid4().hex[:12], kind, ref_id, now, now, params_json,
+             pack_id, now, epoch),
         ).fetchone()
     return dict(row) if row else None
 
@@ -1483,11 +1492,23 @@ def get_job(kind: str, ref_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def pending_pack_jobs(kind: str = "batch") -> int:
+    """排队/运行中的 pack 相关任务数；用于切换行业包前的 busy 检查。"""
+    now = int(time.time())
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM jobs WHERE kind=?"
+            " AND (status='pending' OR (status='running' AND lease_until >= ?))",
+            (kind, now),
+        ).fetchone()
+    return int(row["n"]) if row else 0
+
+
 def list_jobs(limit: int = 100) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
             "SELECT id, kind, ref_id, status, worker, lease_until, attempts,"
-            " last_error, created_at, updated_at FROM jobs"
+            " last_error, pack_id, created_at, updated_at FROM jobs"
             " ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]

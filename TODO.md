@@ -17,7 +17,8 @@
   - [x] 复盘遗留：`normalize_for_compare` / `normalize.py` 接线 pack `normalize` 元数据 → **2026-11-20 完成**
   - [x] 复盘遗留：`settlement_extract.py` 词表接线 `fees.settlement_extract` → **2026-11-20 完成**
   - [x] 复盘遗留：规则抽取支持 pack `extract` 元数据，freight_audit 规则模式可产出字段 → **2026-11-20 完成**
-  - [ ] 复盘遗留：多实例广播；任务入队锁定 `pack_id`；trucking 硬编码抽取迁移到 `extract` 元数据
+  - [x] 复盘遗留：trucking 20 个托书字段迁移到 `extract` + 逐字段回归基线 → **2026-11-20 完成**
+  - [x] 复盘遗留：多实例轮询广播 + 任务入队锁定 `pack_id` → **2026-11-20 完成**
 
 - [ ] **诊断平台多租户 / HA 改造（供应商内部，不涉及智单）**
   - [x] 租户模型：`organizations` 增加 slug / status / settings

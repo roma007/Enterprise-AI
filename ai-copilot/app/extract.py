@@ -16,7 +16,7 @@ import unicodedata
 
 from .config import settings
 from .llm import chat_json, mask, parse_json_loose
-from .normalize import canonicalize
+from .normalize import canonicalize, canon_qty
 from .rules import (
     apply_rules,
     containers_in,
@@ -122,49 +122,10 @@ def _grab(text: str, keys: tuple[str, ...], limit: int = 60, split: bool = True)
     return None
 
 
-_VERB_PATTERNS = {
-    "client": (
-        r"(?:客户|货代|委托方)(?:是|为)\s*([^\n，,；;。]+)",
-    ),
-    "factory_contact": (
-        r"(?:联系人|Contact|Attn)\s*[:：]?\s*([\u4e00-\u9fa5A-Za-z]{2,6})",
-    ),
-    "pickup_addr": (
-        r"(?:装柜地址|装货地址|提箱地址|提箱地点|提箱点|提空箱点)\s*[:：]\s*([^\n，,；;]+)",
-        r"(?:提箱|提柜|工厂|装货|装箱)(?:在|于|是)\s*([^\n，,；;。]+)",
-    ),
-    "delivery_addr": (
-        r"(?:卸货地址|送货地址|目的地|送达地址)\s*[:：|]\s*([^\n，,；;]+)",
-        r"(?:卸货地|送货地|目的地)(?:改成|改为|换成|是|为)\s*([^\n，,；;。]+)",
-        r"(?:送到|送至|送货到)\s*([^\n，,；;。]+)",
-        r"(?:去|到)\s*([^\n，,；;。]{2,30}?(?:码头|仓库|堆场|园区|工厂|仓|路|街|号))",
-        r"(?:去|到)\s*([\u4e00-\u9fa5]{2,8})",
-    ),
-    "vessel_voyage": (
-        r"(?:船名航次|船名/航次|船名|航次|Vessel)\s*[:：]\s*([^\n，,；;]+)",
-        r"船(?:名)?(?:是|为)\s*([^\n，,；;。]+)",
-    ),
-    "cargo_desc": (
-        r"(?:品名|货物描述|货物|货名|商品|Commodity|Cargo)\s*[:：]\s*([^\n，,；;]+)",
-        r"货(?:是|为)\s*([^\n，,；;。]+)",
-    ),
-}
-
-
 def _looks_like_datetime(v: str) -> bool:
     """地址字段里不该出现日期。"到11月8号" 这种会被误当送达地。"""
     return bool(re.search(r"\d{1,2}\s*[月/.\-]\s*\d{1,2}\s*[日号]?", v)) or \
         bool(re.search(r"\d{1,2}\s*[:：]\s*\d{2}", v))
-
-
-def _verb_grab(text: str, key: str, limit: int = 80, split: bool = True) -> str | None:
-    for pattern in _VERB_PATTERNS.get(key, ()):
-        m = re.search(pattern, text, re.IGNORECASE)
-        if m:
-            v = _clean(m.group(1), limit, split)
-            if v:
-                return v
-    return None
 
 
 def _dt_near(text: str, keys: tuple[str, ...]) -> str | None:
@@ -193,9 +154,6 @@ def _dt_near(text: str, keys: tuple[str, ...]) -> str | None:
     return None
 
 
-_CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
-           "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
-
 # OCR 会把相邻两个字段粘成一个文本框（"家用电器毛重：18600"），
 # 模型也可能把两个字段写在同一个 value 里。这里在"下一个字段名+冒号"处截断。
 _STOP_WORDS = tuple(sorted({
@@ -215,24 +173,66 @@ def _cut_stop(v: str) -> str:
     return v[:m.start()].strip(" ：:，,") if m else v
 
 
-_EXTRACT_TYPES = {"label", "verb", "regex", "amount", "datetime", "phone", "container", "seal"}
+_EXTRACT_TYPES = {
+    "label", "verb", "regex", "amount", "datetime", "phone",
+    "container", "seal", "quantity", "container_type",
+}
 
 
-def _clean_extract(value: str, meta: dict) -> str:
+def _render_template(template: str, m: re.Match) -> str:
+    def repl(g):
+        try:
+            return m.group(int(g.group(1))) or ""
+        except IndexError:
+            return ""
+    return re.sub(r"\{(\d+)\}", repl, str(template))
+
+
+def _qty_from_segment(seg: str) -> str | None:
+    nums = re.findall(r"\d+", seg)
+    if not nums:
+        return None
+    return nums[-1] if re.search(r"(GP|HQ|HC|RF|OT|FR|TK)", seg, re.IGNORECASE) else nums[0]
+
+
+def _postprocess(value: str, meta: dict) -> str | None:
     v = (value or "").strip()
+    if not v:
+        return None
+    prefix = meta.get("prefix")
+    if prefix and not v.upper().startswith(str(prefix).upper()):
+        v = f"{prefix}{v}"
+    kind = meta.get("postprocess")
+    if kind == "container_type":
+        v = v.replace(" ", "").upper().replace("HC", "HQ")
+    elif kind == "seal_tokens":
+        toks = [t.strip() for t in re.split(r"[、,，\s]+", v) if t.strip()]
+        toks = [t for t in toks if re.fullmatch(r"[A-Za-z0-9\-]{4,15}", t)]
+        v = ",".join(toks) if toks else ""
+    elif kind == "name":
+        v = re.sub(r"^(?:改成|改为|换成|是|为)", "", v).strip()
+        if re.search(r"[\d+]", v):
+            m = re.match(r"^[\u4e00-\u9fa5]{2,4}", v)
+            if m:
+                v = m.group(0)
+    elif kind == "remark":
+        v = re.sub(r"[;；]\s*", "，", v)
+    elif kind == "number":
+        v = v.replace(",", "")
+    if not v:
+        return None
+    if meta.get("strip_datetime") and _looks_like_datetime(v):
+        return None
     if meta.get("cut", True):
         v = _cut_stop(v)
-    return v.strip()
+    return v.strip() or None
 
 
-def _generic_extract(text: str, spec) -> tuple[str, float] | None:
-    """按字段的 extract 声明做通用规则抽取。
-
-    只实现固定几种抽取器，pack 不能写任意代码：
-    label / regex / amount / datetime / phone / container / seal。
-    """
-    meta = getattr(spec, "extract", None) or {}
+def _run_strategy(text: str, meta: dict) -> tuple[str, float] | None:
     if not meta:
+        return None
+    kind = meta.get("type") or "label"
+    if kind not in _EXTRACT_TYPES:
         return None
     conf = float(meta.get("confidence", 0.8))
 
@@ -241,248 +241,121 @@ def _generic_extract(text: str, spec) -> tuple[str, float] | None:
             m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         except re.error:
             continue
-        if m:
-            value = m.group(1) if m.groups() else m.group(0)
-            value = _clean_extract(value, meta)
-            if value:
-                return value, conf
+        if not m:
+            continue
+        group = int(meta.get("group", 1))
+        value = m.group(group) if m.groups() else m.group(0)
+        value = _postprocess(value, meta)
+        if value:
+            return value, conf
 
-    kind = meta.get("type") or "label"
+    if kind == "container_type":
+        for rule in meta.get("rules") or []:
+            try:
+                m = re.search(rule.get("pattern", ""), text, re.IGNORECASE | re.MULTILINE)
+            except re.error:
+                continue
+            if not m:
+                continue
+            value = _postprocess(
+                _render_template(rule.get("value", ""), m),
+                {**meta, **rule},
+            )
+            if value:
+                return value, float(rule.get("confidence", conf))
+        return None
+
+    if kind == "quantity":
+        for rule in meta.get("rules") or []:
+            try:
+                m = re.search(rule.get("pattern", ""), text, re.IGNORECASE | re.MULTILINE)
+            except re.error:
+                continue
+            if not m:
+                continue
+            group = int(rule.get("group", 1))
+            raw = m.group(group) if m.groups() else m.group(0)
+            value = _qty_from_segment(raw) if rule.get("postprocess") == "qty_segment" else canon_qty(raw)
+            value = _postprocess(value, {**meta, **rule, "postprocess": None})
+            if value:
+                return value, float(rule.get("confidence", conf))
+        return None
+
     keywords = tuple(meta.get("keywords") or ())
 
     if kind == "amount":
         for kw in keywords:
             m = re.search(rf"(?:{re.escape(kw)})\s*[:：]?\s*([\d.,]+)", text, re.IGNORECASE)
             if m:
-                value = _clean_extract(m.group(1), meta)
+                value = _postprocess(m.group(1), meta)
                 if value:
                     return value, conf
         return None
 
     if kind == "datetime":
         value = _dt_near(text, keywords)
-        return (_clean_extract(value, meta), conf) if value else None
+        value = _postprocess(value, meta) if value else None
+        return (value, conf) if value else None
 
     if kind == "phone":
         m = re.search(r"(?<!\d)((?:\+?86[-\s]?)?1[3-9]\d[-\s]?\d{4}[-\s]?\d{4})(?!\d)", text)
         if not m:
             m = re.search(r"(?<!\d)((?:0\d{2,3})[-\s]?\d{7,8})(?!\d)", text)
-        if m:
-            digits = re.sub(r"[^\d]", "", m.group(1))
-            if digits.startswith("86") and len(digits) == 13:
-                digits = digits[2:]
-            return digits, conf
-        return None
-
-    if kind == "container":
-        found = containers_in(text)
-        return (",".join(dict.fromkeys(found)), conf) if found else None
-
-    # label / verb / seal 都走关键词抓取；regex 已在上面优先处理。
-    value = _grab(text, keywords, meta.get("limit", 80),
-                  split=meta.get("split", True))
-    if value and meta.get("strip_datetime") and _looks_like_datetime(value):
-        value = None
-    return (_clean_extract(value, meta), conf) if value else None
-
-
-def extract_by_rules(text: str) -> dict[str, FieldValue]:
-    up = text.upper()
-    out: dict[str, FieldValue] = {k: FieldValue() for k in FIELD_KEYS}
-
-    def has(key: str) -> bool:
-        fv = out.get(key)
-        return bool(fv and fv.value)
-
-    def put(key: str, value: str | None, conf: float, cut: bool = True) -> None:
-        # 规则通道仍是集卡知识；其他行业包没有的 key 直接忽略，不能往草稿里塞幽灵字段。
-        if key not in out:
-            return
-        if value:
-            v = _cut_stop(value) if cut else value
-            if v:
-                out[key] = FieldValue(value=v.strip(), confidence=conf, source="rule")
-
-    put("client", _grab(text, (
-        "委托单位", "客户名称", "客户", "货代名称", "货代", "委托方", "Client",
-    )), 0.8)
-    if not has("client"):
-        put("client", _verb_grab(text, "client"), 0.7)
-
-    put("booking_no", _grab(text, (
-        "委托单号", "托书编号", "托书号", "订单号", "原委托单", "原单号",
-        "Booking No.", "Booking No", "Booking", "单号",
-    )), 0.85)
-    if not has("booking_no"):
-        m = re.search(r"原(?:委托单|单号|单)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,})", text)
-        if m:
-            put("booking_no", m.group(1), 0.8)
-    if not has("booking_no"):
-        # "单号HT-1105" 这种没有分隔符的写法
-        m = re.search(r"(?:单号|编号|订单号)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,})", text)
-        if m:
-            put("booking_no", m.group(1), 0.75)
-    if not has("booking_no"):
-        # 首行裸编号，如 "宏运-1105-1"、"HY-1105"
-        m = re.search(r"^\s*([A-Za-z\u4e00-\u9fa5]{2,8}[-\s]?\d{3,}[-\d]*)", text, re.MULTILINE)
-        if m:
-            put("booking_no", m.group(1).strip(), 0.6)
-    put("bl_no", _grab(text, ("提单号", "B/L NO", "B/L No.", "BL NO", "提单", "B/L")), 0.8)
-    put("so_no", _grab(text, ("SO号", "SO NO", "S/O NO", "S/O", "SO")), 0.8)
-    if not has("so_no"):
-        m = re.search(r"(?<![A-Z])(?:SO|S/O)[-\s]?(\d{4,})", text.upper())
-        if m:
-            put("so_no", f"SO-{m.group(1)}", 0.6)
-
-    # 箱型：标准写法 → 常见简写（40H/40HC）→ 口语（小柜/大柜/高柜/20尺）
-    m = re.search(r"(?<!\d)(20|40|45)\s*(GP|HQ|HC|RF|OT|FR|TK)(?![A-Z])", up)
-    if m:
-        put("container_type", f"{m.group(1)}{m.group(2)}".replace("HC", "HQ"), 0.95)
-    elif re.search(r"(?<!\d)(40|45)\s*H(?![A-Z])", up):
-        put("container_type", re.search(r"(?<!\d)(40|45)\s*H(?![A-Z])", up).group(1) + "HQ", 0.85)
-    elif re.search(r"高柜|40尺高|HQ", up):
-        put("container_type", "40HQ", 0.65)
-    elif re.search(r"小柜|20尺|20寸", up):
-        put("container_type", "20GP", 0.75)
-    elif re.search(r"大柜|40尺|40寸", up):
-        put("container_type", "40GP", 0.65)
-
-    # 箱量：显式声明 → 箱型×N → N×箱型 → 中文数量词
-    qty = None
-    m = re.search(r"(?:箱量|数量|箱数|柜量|柜数|QTY)\s*[:：|]?\s*([^\n]{1,24})", text, re.IGNORECASE)
-    if m:
-        seg = m.group(1)
-        nums = re.findall(r"\d+", seg)
-        if nums:
-            # "箱型/箱量：40GP / 1" 取最后一个；"箱量：1，箱号：..." 取第一个
-            qty = nums[-1] if re.search(r"(GP|HQ|HC|RF|OT|FR|TK)", seg, re.IGNORECASE) else nums[0]
-    if not qty:
-        m = re.search(r"(20|40|45)\s*(?:GP|HQ|HC|RF|OT|FR|TK)\s*[x×*X]\s*(\d+)", up)
-        if m:
-            qty = m.group(2)
-    if not qty:
-        m = re.search(r"(\d+)\s*[x×*X]\s*(?:20|40|45)\s*(?:GP|HQ|HC|RF|OT|FR|TK)", up)
-        if m:
-            qty = m.group(1)
-    if not qty:
-        m = re.search(r"([一二两三四五六七八九十])\s*[个x×*]?\s*(?:20|40|45)\s*(?:GP|HQ|HC|RF|OT|FR|TK)", up)
-        if m:
-            qty = str(_CN_NUM[m.group(1)])
-    if not qty:
-        m = re.search(r"(?:20|40|45)\s*(?:GP|HQ|HC|RF|OT|FR|TK)\s*([一二两三四五六七八九十])\s*个?", up)
-        if m:
-            qty = str(_CN_NUM[m.group(1)])
-    if not qty:
-        m = re.search(r"([一二两三四五六七八九十])\s*个\s*(?:小柜|大柜|高柜|柜|箱)", text)
-        if m:
-            qty = str(_CN_NUM[m.group(1)])
-    if not qty:
-        m = re.search(r"(?:小柜|大柜|高柜|柜|箱)\s*([一二两三四五六七八九十])\s*个", text)
-        if m:
-            qty = str(_CN_NUM[m.group(1)])
-    if not qty:
-        m = re.search(r"(\d+)\s*[个x×*X]\s*(?:小柜|大柜|高柜|箱|柜)", text)
-        if m:
-            qty = m.group(1)
-    put("container_qty", qty, 0.95)
-
-    cs = containers_in(text)
-    if cs:
-        put("container_no", ",".join(dict.fromkeys(cs)), 0.97, cut=False)
-
-    seal = None
-    m = re.search(
-        r"(?:铅封号|封条号|封号|Seal No\.?|Seal)[^\nA-Za-z0-9]{0,10}([A-Za-z0-9、,，][A-Za-z0-9、,，\- ]{2,80})",
-        text, re.IGNORECASE,
-    )
-    if m:
-        toks = [t.strip() for t in re.split(r"[、,，\s]+", m.group(1)) if t.strip()]
-        toks = [t for t in toks if re.fullmatch(r"[A-Za-z0-9\-]{4,15}", t)]
-        if toks:
-            seal = ",".join(toks)
-    if not seal:
-        seal = _grab(text, ("铅封号", "封条号", "封号", "Seal No.", "Seal"), split=False)
-    put("seal_no", seal, 0.9, cut=False)
-
-    pickup = _grab(text, (
-        "提箱地址", "提空箱点", "提箱地点", "提箱点", "提箱地", "装柜地址",
-        "装货地址", "装货地", "提柜", "提箱", "提空箱", "Pick up", "Pickup",
-    ), 80) or _verb_grab(text, "pickup_addr")
-    if pickup and _looks_like_datetime(pickup):
-        pickup = None
-    put("pickup_addr", pickup, 0.8)
-
-    delivery = _grab(text, (
-        "卸货地址", "送货地址", "卸货地", "送货地", "目的地", "送达地址",
-        "送达", "卸货", "送货", "Delivery", "Deliver to",
-    ), 80) or _verb_grab(text, "delivery_addr")
-    if delivery and _looks_like_datetime(delivery):
-        delivery = None
-    put("delivery_addr", delivery, 0.8)
-
-    contact = _grab(text, (
-        "工厂联系人", "收货联系人", "联系人", "Contact", "Attn",
-    )) or _verb_grab(text, "factory_contact")
-    if contact:
-        contact = re.sub(r"^(?:改成|改为|换成|是|为)", "", contact).strip()
-        # "陈小姐 13600004444" / "赵经理 +86 138…" → 只留姓名
-        if re.search(r"[\d+]", contact):
-            m = re.match(r"^[\u4e00-\u9fa5]{2,4}", contact)
-            if m:
-                contact = m.group(0)
-    put("factory_contact", contact, 0.8)
-
-    m = re.search(r"(?<!\d)((?:\+?86[-\s]?)?1[3-9]\d[-\s]?\d{4}[-\s]?\d{4})(?!\d)", text)
-    if not m:
-        m = re.search(r"(?<!\d)((?:0\d{2,3})[-\s]?\d{7,8})(?!\d)", text)
-    if m:
+        if not m:
+            return None
         digits = re.sub(r"[^\d]", "", m.group(1))
         if digits.startswith("86") and len(digits) == 13:
             digits = digits[2:]
-        put("factory_phone", digits, 0.95)
+        return digits, conf
 
-    put("loading_window", _dt_near(text, (
-        "装柜", "装箱", "装货时间", "时间窗", "Loading", "Stuffing",
-    )), 0.75)
-    put("closing_time", _dt_near(text, (
-        "截港", "截关", "截单", "Cut off", "Cut-off", "Cutoff", "Closing", "SI cut",
-    )), 0.93)
-    put("vessel_voyage", _grab(text, (
-        "船名航次", "船名/航次", "船名", "航次", "Vessel/Voyage", "Vessel", "Voyage",
-    ), 60) or _verb_grab(text, "vessel_voyage"), 0.8)
-    put("depot", _grab(text, ("提空箱点", "提箱点", "堆场", "场站", "Depot")), 0.75)
-    put("cargo_desc", _grab(text, (
-        "品名", "货物描述", "货物", "货名", "Commodity", "Cargo",
-    )) or _verb_grab(text, "cargo_desc"), 0.8)
+    if kind == "container":
+        found = containers_in(text)
+        if found:
+            return _postprocess(",".join(dict.fromkeys(found)), meta), conf
+        return None
 
-    m = re.search(r"(?:毛重|重量|G\.?W\.?|GROSS WEIGHT|KGS?)\s*[:：]?\s*([\d.,]+)", text, re.IGNORECASE)
-    if m:
-        put("gross_weight", m.group(1).replace(",", ""), 0.9)
+    # label / verb / seal
+    value = _grab(text, keywords, meta.get("limit", 80), split=meta.get("split", True))
+    value = _postprocess(value, meta) if value else None
+    return (value, conf) if value else None
 
-    m = re.search(r"(?:运费|拖车费|报价|价格|单价|RATE|Freight)\s*[:：]?\s*([\d.,]+)", text, re.IGNORECASE)
-    if m:
-        put("freight", m.group(1).replace(",", ""), 0.85)
 
-    remark = _grab(text, ("特殊要求", "备注", "要求", "注意", "Remark"), 160, split=False)
-    if remark:
-        remark = re.sub(r"[;；]\s*", "，", remark)
-    put("remark", remark, 0.7, cut=False)
+def _generic_extract(text: str, spec) -> tuple[str, float] | None:
+    """按字段的 extract 声明做通用规则抽取。
 
-    # 通用 pack 抽取：只补硬编码通道没填的字段。
-    # 新行业包在 fields.json 里声明 extract，即可在规则模式产出字段。
+    只实现固定几种抽取器，pack 不能写任意代码。
+    """
+    meta = getattr(spec, "extract", None) or {}
+    if not meta:
+        return None
+    strategies = meta.get("strategies")
+    if strategies:
+        for strategy in strategies:
+            got = _run_strategy(text, strategy)
+            if got:
+                return got
+        return None
+    return _run_strategy(text, meta)
+
+
+def extract_by_rules(text: str) -> dict[str, FieldValue]:
+    out: dict[str, FieldValue] = {k: FieldValue() for k in FIELD_KEYS}
+
+    def put(key: str, value: str | None, conf: float) -> None:
+        if key not in out or not value:
+            return
+        out[key] = FieldValue(value=value.strip(), confidence=conf, source="rule")
+
     for spec in SPECS:
-        if has(spec.key):
-            continue
         got = _generic_extract(text, spec)
         if got:
-            value, conf = got
-            put(spec.key, value, conf, cut=False)
+            put(spec.key, got[0], got[1])
 
     # D14：字段名容错匹配。只补空，绝不覆盖精确匹配到的值。
     try:
         from .fuzzy import fuzzy_fill
         for k, fv in fuzzy_fill(text, out).items():
-            if not out[k].value:
+            if k in out and not out[k].value:
                 out[k] = fv
     except Exception:
         pass

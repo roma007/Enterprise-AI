@@ -1204,16 +1204,21 @@ e2e 覆盖：登录/注册、项目列表与搜索、项目页签、页签记忆
 - `make pack-normalize-test` 20 项：金额/日期/箱号/名称按 pack `normalize` 归一；
   trucking 的 `freight`/`closing_time`/`client`，freight_audit 的 `amount`/`contract_rate`/`carrier_invoice_no` 均通过；
 - `make pack-settlement-test` 11 项：trucking 默认词表 + 自定义 `fees.settlement_extract` 词表 + 恢复；
-- 规则抽取 pack 化：`fields.json` 支持 `extract`（`label`/`regex`/`amount`/`datetime`/`phone`/`container`/`seal`）；`PACK_ID=freight_audit` 下 `/api/extract`（`use_llm=false`）返回
-  `carrier / carrier_invoice_no / shipment_no / charge_code / amount / contract_rate`，`review=auto`；trucking 仍走兼容硬编码，eval 不变；
+- `make pack-jobs-test` 8 项：`jobs.pack_id` 入队/领取落库；有排队批处理任务时 `reload_pack` 抛 `PackBusy`；
+- 多实例：PostgreSQL 下 `pack.start_watcher()` 按 `PACK_WATCH_SECONDS` 轮询 `app_settings.active_pack`，
+  状态变化自动 `reload_pack`；首轮强制 reload，避免启动竞态；忙时下轮重试；
+- `make extract-regression-test` 30 项：28 份合成样本逐字段/校验/复核级别对照 `samples/extract_rule_baseline.json`；
+  迁移后仅 holdout#5 `client` 一处有意修正（旧值带“单号…”，新值与金标一致），其余字段/置信度/来源/校验完全一致；
+- 规则抽取 pack 化：`fields.json` 支持 `extract`（`label`/`regex`/`amount`/`datetime`/`phone`/`container`/`seal`/`quantity`/`container_type`）；
+  `trucking` 20 个托书字段已全部迁到 `extract`；`PACK_ID=freight_audit` 下 `/api/extract`（`use_llm=false`）返回
+  `carrier / carrier_invoice_no / shipment_no / charge_code / amount / contract_rate`，`review=auto`；`make eval` 不变；
 - `PACK_ID=freight_audit` 临时实例：`/api/extract` 200，`/api/{reconcile,consistency,aging,margin,settlement}/demo` 409；
 - 默认 `trucking`：`smoke.sh` 19/19，上述 demo 200，`make eval` 结果不变。
 
 仍遗留（未在本轮修）：
 
-- 多实例广播、任务入队锁定 `pack_id`。
-- `trucking` 的硬编码抽取（箱型口语、箱量、封号等复杂启发式）尚未迁到 `extract` 元数据；
-  新行业包已可通过 `extract` 声明产出字段。
+- `settlement_extract.py` 的 OCR 兜底 `_ocr_rows` 仍是集卡正则（运单/车牌/线路）；
+  文本/CSV 路径已走 `fees.settlement_extract`。
 
 ---
 

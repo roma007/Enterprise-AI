@@ -32,7 +32,7 @@ from .config import ROOT
 from .extract import extract
 from .invoice import extract_invoice
 from .masking import MaskMap, fingerprint, mask_fields, mask_text
-from .pack import request_guard
+from .pack import current_pack, request_guard
 from .store import (
     _conn, add_batch_items, batch_cancel_requested, batch_items, claim_job,
     create_batch, enqueue_job, finish_job, get_batch, get_job, job_active,
@@ -70,7 +70,7 @@ def start_processing(batch_id: str, use_llm: bool = False, do_mask: bool = True,
     """入队。返回 False 表示已有实例在处理。"""
     job = enqueue_job("batch", batch_id, {
         "use_llm": use_llm, "do_mask": do_mask, "actor": actor,
-    })
+    }, pack_id=current_pack().id)
     if not job:
         return False
     set_batch_status(batch_id, "queued", cancel_requested=0)
@@ -210,7 +210,14 @@ def _loop() -> None:
             if job:
                 # 整个 job 持读闸：期间不允许换包，避免批内混两个包。
                 with request_guard():
-                    if job["kind"] == "batch":
+                    want = job.get("pack_id") or ""
+                    active = current_pack().id
+                    if want and want != active:
+                        finish_job(
+                            job["id"], WORKER_ID, "failed",
+                            f"任务入队时行业包为 {want}，当前为 {active}；请重新提交",
+                        )
+                    elif job["kind"] == "batch":
                         _process(job)
                     else:
                         finish_job(job["id"], WORKER_ID, "failed", f"未知任务类型 {job['kind']}")

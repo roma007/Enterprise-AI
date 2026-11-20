@@ -1,0 +1,3199 @@
+{
+ "tuned": [
+  {
+   "raw": "客户：宏远国际货代\n委托单号：HY2026110501\n提单号：COSU6398471120\n箱型：40HQ\n箱量：1\n箱号：CSQU3054383\n封号：SL8823101\n提箱地：北仑港区二期堆场\n卸货地：宁波北仑春晓工业园3号仓\n联系人：王主管\n电话：13800001234\n装柜时间：2026-11-06 08:00\n截港时间：2026-11-07 18:00\n船名航次：COSCO SHIPPING ARIES / 042E\n品名：家用电器\n毛重：18600\n运费：2600\n备注：需报关，周五前必须进港",
+   "fields": {
+    "client": {
+     "value": "宏远国际货代",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HY2026110501",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": "COSU6398471120",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CSQU3054383",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "SL8823101",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑港区二期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑春晓工业园3号仓",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "王主管",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13800001234",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-06 08:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-07 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "COSCO SHIPPING ARIES / 042E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "家用电器",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "18600",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2600",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "需报关,周五前必须进港",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-07 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：中远物流宁波分公司\n委托单号：ZY-2026-1108\n箱型：40HQ\n箱量：2\n箱号：CSQU3054383、TCLU1234568\n封号：SL8823101、SL8823102\n提箱地：北仑三期堆场\n卸货地：宁波杭州湾新区滨海二路 66 号\n联系人：李经理\n电话：13900002222\n装柜时间：2026-11-08 07:30\n截港时间：2026-11-09 20:00\n船名航次：EVER GIVEN / 118W\n品名：机械配件\n毛重：21500\n运费：2800\n备注：两箱必须同车",
+   "fields": {
+    "client": {
+     "value": "中远物流宁波分公司",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "ZY-2026-1108",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "2",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CSQU3054383,TCLU1234568",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "SL8823101,SL8823102",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑三期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波杭州湾新区滨海二路 66 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "李经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13900002222",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-08 07:30",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-09 20:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "EVER GIVEN / 118W",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "机械配件",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "21500",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2800",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "两箱必须同车",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-09 20:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "【拖车委托】\n货代名称：东方国际货运\n单号：DF20261106-03\n箱型/箱量：40GP / 1\n箱号：MSCU7654329\n封号：DF7788001\n提箱点：穿山港区堆场\n送货地址：宁波鄞州经济开发区金谷北路 128 号\n工厂联系人：张工\n工厂电话：0574-88886666\n装柜时间：11月6日 09:00\n截关时间：11月7日 16:30\n船名/航次：MAERSK EDINBURGH / 152E\n货物：服装\n毛重：13200 KGS\n报价：2400 元\n要求：及时反馈提柜信息",
+   "fields": {
+    "client": {
+     "value": "东方国际货运",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "DF20261106-03",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "MSCU7654329",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "DF7788001",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "穿山港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波鄞州经济开发区金谷北路 128 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "张工",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "057488886666",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-06 09:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-07 16:30",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "MAERSK EDINBURGH / 152E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": "穿山港区堆场",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "cargo_desc": {
+     "value": "服装",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "13200",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2400",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "及时反馈提柜信息",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-07 16:30 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "老陈，明天有票 40HQ 去北仑春晓，箱号 OOLU1234567，封号 CK0012345。\n工厂在小港江南路 88 号，联系人周厂长 13700003333。\n截港 11月8日 18点，船是 COSCO VIRGO 045E。\n客户是海通国际，单号 HT1108。运费 2500。",
+   "fields": {
+    "client": {
+     "value": "海通国际",
+     "confidence": 0.7,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HT1108",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "OOLU1234567",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "CK0012345",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "小港江南路 88 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "北仑春晓",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "周厂长",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13700003333",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-08 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "COSCO VIRGO 045E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": "2500",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-08 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "王总，明天北仑这票麻烦安排下：一个 40HQ，箱号 TCLU1234568，封号 FJ0099123。\n货是塑料粒子，毛重大概 19 吨。装柜地址：北仑小港街道江南路 88 号，送到春晓码头。\n截港时间 11月7日 18点。客户是宁波海通货代，单号 HT-2026-1105。\n拖车费 2600，报关我来。",
+   "fields": {
+    "client": {
+     "value": "宁波海通货代",
+     "confidence": 0.7,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HT-2026-1105",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "TCLU1234568",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "FJ0099123",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑小港街道江南路 88 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "春晓码头",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_phone": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "loading_window": {
+     "value": "2026-11-07 18:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-07 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "塑料粒子",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": "2600",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-07 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "Subject: Booking Request - SO-778123\n\nDear Ops,\n\nPlease arrange 1 x 40HQ for below shipment.\nClient: 环宇供应链\nBooking No.: HY-778123\nContainer No.: CMAU4567893\nSeal No.: HY5566778\nPick up: 北仑四期堆场\nDelivery: 宁波北仑大碶街道龙潭山路 9 号\nContact: 陈小姐 13600004444\nLoading: 2026-11-10 08:00\nCut off: 2026-11-11 17:00\nVessel/Voyage: ONE HARMONY / 023E\nCommodity: 化工品\nGross Weight: 19800\nFreight: 2700\n\nThanks.",
+   "fields": {
+    "client": {
+     "value": "环宇供应链",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HY-778123",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": "SO-778123",
+     "confidence": 0.6,
+     "source": "rule"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CMAU4567893",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "HY5566778",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑四期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑大碶街道龙潭山路 9 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "陈小姐",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13600004444",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-10 08:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-11 17:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "ONE HARMONY / 023E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "化工品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "19800",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2700",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-11 17:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：恒达物流\n单号：HD20261110\n箱型：20GP\n箱号：TEMU1234565\n提箱地：大榭港区堆场\n截港：11月12日 12:00\n备注：暂无其他要求",
+   "fields": {
+    "client": {
+     "value": "恒达物流",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HD20261110",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "20GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "TEMU1234565",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "pickup_addr": {
+     "value": "大榭港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_contact": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_phone": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-12 12:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "remark": {
+     "value": "暂无其他要求",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "delivery_addr",
+     "message": "缺少必填字段：卸货/送货地"
+    },
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-12 12:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：顺捷国际\n委托单号：SJ-1109-A\n箱型：40HQ\n箱量：3\n箱号：FSCU1234569、HLXU3021544、TEMU1234565\n封号：A1001、A1002、A1003\n提箱地：梅山港区堆场\n卸货地：宁波象山爵溪街道工业区\n联系人：吴主管\n电话：13500005555\n装柜：2026-11-09 06:00\n截港：2026-11-10 19:00\n船名航次：HMM ALGECIRAS / 007E\n品名：水产品\n毛重：24000\n运费：3200",
+   "fields": {
+    "client": {
+     "value": "顺捷国际",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "SJ-1109-A",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "3",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "FSCU1234569,HLXU3021544,TEMU1234565",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "A1001,A1002,A1003",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "梅山港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波象山爵溪街道工业区",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "吴主管",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13500005555",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-09 06:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-10 19:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "HMM ALGECIRAS / 007E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "水产品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "24000",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "3200",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-10 19:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "Hi，麻烦安排这票：\nClient / 客户：Ningbo Bright Logistics 宁波博莱特\nBooking / 单号：BL-2026-1110\n40HQ x 2\nContainer：MSCU7654329, OOLU1234567\nSeal：BR0099001, BR0099002\nPickup / 提箱：北仑二期堆场\nDelivery / 卸货：宁波镇海蛟川街道临江路 77 号\nContact / 联系人：赵经理 +86 138-0000-6666\nCut off / 截港：2026-11-12 15:00\nVessel：MSC ISABELLA / 331W\nCargo：纺织品\nG.W.：20500 KGS\nRate：2950",
+   "fields": {
+    "client": {
+     "value": "Ningbo Bright Logistics 宁波博莱特",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "BL-2026-1110",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "2",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "MSCU7654329,OOLU1234567",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "BR0099001,BR0099002",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波镇海蛟川街道临江路 77 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "赵经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13800006666",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-12 15:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "MSC ISABELLA / 331W",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "纺织品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "20500",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2950",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-12 15:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：嘉禾货运\n委托单号：JH-1028\n箱型：40HQ\n箱量：1\n箱号：CSQU3054383\n封号：JH1234567\n提箱地：北仑二期堆场\n卸货地：宁波北仑新碶街道明州路 500 号\n联系人：孙经理\n电话：13100007777\n装柜时间：2026-10-27 08:00\n截港时间：2026-10-28 18:00\n船名航次：COSCO PACIFIC / 099E\n品名：五金件\n毛重：17800\n运费：2550",
+   "fields": {
+    "client": {
+     "value": "嘉禾货运",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "JH-1028",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CSQU3054383",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "JH1234567",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑新碶街道明州路 500 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "孙经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13100007777",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-10-27 08:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-10-28 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "COSCO PACIFIC / 099E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "五金件",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "17800",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2550",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-10-28 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：联盛物流\n委托单号：LS-1111\n箱型：40GP\n箱量：1\n箱号：MSCU1234560\n封号：LS9988776\n提箱地：北仑三期堆场\n卸货地：宁波奉化江口街道工业园\n联系人：郑主管\n电话：13200008888\n装柜时间：2026-11-11 08:30\n截港时间：2026-11-12 17:00\n船名航次：EVER ACE / 067E\n品名：电子产品\n毛重：16500\n运费：2680",
+   "fields": {
+    "client": {
+     "value": "联盛物流",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "LS-1111",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "MSCU1234560",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "LS9988776",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑三期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波奉化江口街道工业园",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "郑主管",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13200008888",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-11 08:30",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-12 17:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "EVER ACE / 067E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "电子产品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "16500",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2680",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CONTAINER_CHECKSUM",
+     "field": "container_no",
+     "message": "箱号 MSCU1234560 未通过 ISO 6346 校验位验证，可能录错"
+    },
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-12 17:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：远航货代\n单号：YH-1112\n箱型：40HQ\n箱号：HLXU3021544\n封号：YH3344556\n提箱地：北仑四期堆场（提空箱）\n卸货地：慈溪市浒山街道明州路 288 号（送重箱）\n联系人：钱经理\n电话：13300009999\n装柜时间：2026-11-12 07:00\n截港时间：2026-11-13 18:00\n船名航次：CMA CGM LYRA / 210W\n品名：小家电\n毛重：18900\n运费：2750",
+   "fields": {
+    "client": {
+     "value": "远航货代",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "YH-1112",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "HLXU3021544",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "YH3344556",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑四期堆场(提空箱)",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "慈溪市浒山街道明州路 288 号(送重箱)",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "钱经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13300009999",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-12 07:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-13 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "CMA CGM LYRA / 210W",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "小家电",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "18900",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2750",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-13 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：泰隆国际\n委托单号：TL-1113\nS/O：SO-889900\n箱型：40HQ\n箱量：1\n箱号：COSU6398470\n封号：TL2233445\n提空箱点：穿山港区堆场\n送货地址：宁波北仑白峰街道海峰路 18 号\n工厂联系人：冯工\n联系电话：0574-86667788\n装柜时间：2026-11-13 09:00\n截关时间：2026-11-14 16:00\n船名航次：OOCL NAGOYA / 045E\n货物描述：钢制家具\n毛重：22,300 KGS\n运费：2,900 元",
+   "fields": {
+    "client": {
+     "value": "泰隆国际",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "TL-1113",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": "SO-889900",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "COSU6398470",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "TL2233445",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "穿山港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑白峰街道海峰路 18 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "冯工",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "057486667788",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-13 09:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-14 16:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "OOCL NAGOYA / 045E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": "穿山港区堆场",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "cargo_desc": {
+     "value": "钢制家具",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "22300",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2900",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-14 16:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：宁波中基外贸\nSO号：SO-556677\n箱型：20GP\n箱量：2\n箱号：TEMU1234565、FSCU1234569\n封号：ZJ001、ZJ002\n提箱地：北仑二期堆场\n卸货地：宁波余姚朗霞街道工业园\n联系人：朱经理\n电话：13400001111\n装柜时间：2026-11-14 08:00\n截港时间：2026-11-15 19:00\n船名航次：SITC QINGDAO / 112S\n品名：灯具\n毛重：19600\n运费：2300",
+   "fields": {
+    "client": {
+     "value": "宁波中基外贸",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": "SO-556677",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "container_type": {
+     "value": "20GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "2",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "TEMU1234565,FSCU1234569",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "ZJ001,ZJ002",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波余姚朗霞街道工业园",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "朱经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13400001111",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-14 08:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-15 19:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "SITC QINGDAO / 112S",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "灯具",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "19600",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2300",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "booking_no",
+     "message": "缺少必填字段：委托单号"
+    },
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-15 19:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "委托单位：宁波宏图国际贸易有限公司\n委托单号：HT-2026-1115\n箱型：40HQ\n箱量：1\n箱号：CMAU4567893\n封号：HT7700112\n提箱地：梅山港区堆场\n卸货地：宁波北仑柴桥街道环镇北路 12 号\n联系人：何主管\n电话：13500002233\n装柜时间：2026-11-15 07:30\n截港时间：2026-11-16 18:00\n船名航次：COSCO SHIPPING LEO / 088E\n品名：户外用品\n毛重：17400\n运费：2600\n备注：需要提前一天提柜",
+   "fields": {
+    "client": {
+     "value": "宁波宏图国际贸易有限公司",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HT-2026-1115",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CMAU4567893",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "HT7700112",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "梅山港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑柴桥街道环镇北路 12 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "何主管",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13500002233",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-15 07:30",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-16 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "COSCO SHIPPING LEO / 088E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "户外用品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "17400",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2600",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "需要提前一天提柜",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-16 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：宁波万顺货代\n单号：WS-1116\n箱型：40HQ\n箱号：OOLU1234567\n封号：WS8899001\n提箱地：北仑三期堆场\n卸货地：宁波镇海骆驼街道民和路 55 号\n联系人：许经理\n电话：13600003344\n装柜时间：11/16 上午\n截港时间：11/17 下午\n船名航次：ONE TRUTH / 055E\n品名：日用品\n毛重：16800\n运费：2500",
+   "fields": {
+    "client": {
+     "value": "宁波万顺货代",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "WS-1116",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "OOLU1234567",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "WS8899001",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑三期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波镇海骆驼街道民和路 55 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "许经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13600003344",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "vessel_voyage": {
+     "value": "ONE TRUTH / 055E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "日用品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "16800",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2500",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [],
+   "review_level": "auto"
+  },
+  {
+   "raw": "客户：华远国际物流\n委托单号：HY-1117\n箱型：40RF\n箱量：1\n箱号：HLXU3021544\n封号：HY1122334\n提箱地：北仑二期冷箱堆场\n卸货地：宁波北仑小港街道振兴路 9 号冷库\n联系人：罗经理\n电话：13700004455\n装柜时间：2026-11-17 06:00\n截港时间：2026-11-18 15:00\n船名航次：MAERSK SENTOSA / 144E\n品名：冷冻食品\n毛重：20800\n运费：3600\n备注：全程-18度，需预冷，司机需带温度记录仪，到厂后先联系冷库值班室",
+   "fields": {
+    "client": {
+     "value": "华远国际物流",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HY-1117",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40RF",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "HLXU3021544",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "HY1122334",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期冷箱堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑小港街道振兴路 9 号冷库",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "罗经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13700004455",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-17 06:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-18 15:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "MAERSK SENTOSA / 144E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "冷冻食品",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "20800",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "3600",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "全程-18度,需预冷,司机需带温度记录仪,到厂后先联系冷库值班室",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-18 15:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：宁兴贸易\n单号：NX-1118\n箱型：20GP\n箱量：1\n箱号：FSCU1234569\n封号：NX5566778\n提箱地：大榭港区堆场\n卸货地：宁波奉化岳林街道南山路 66 号\n联系人：严经理\n电话：13800005566\n装柜时间：2026-11-18 08:00\n截港时间：2026-11-19 17:30\n船名航次：SITC SHANGHAI / 201S\n品名：文具\n毛重：12800\n运费：2100",
+   "fields": {
+    "client": {
+     "value": "宁兴贸易",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "NX-1118",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "20GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "FSCU1234569",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "NX5566778",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "大榭港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波奉化岳林街道南山路 66 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "严经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13800005566",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-18 08:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-19 17:30",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "SITC SHANGHAI / 201S",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "文具",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "12800",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2100",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-19 17:30 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "截港 2026-11-20 18:00 之前必须进港。\n运费 2650，客户是天成国际，单号 TC-1119。\n40HQ 一个，箱号 CSQU3054383，封号 TC1234500。\n提箱在北仑二期堆场，送到宁波北仑霞浦街道长江路 33 号。\n联系人 蔡经理，电话 13900006677，装柜 2026-11-19 07:00。\n船名航次 COSCO SHIPPING GEMINI / 033E，品名 家具，毛重 18200。",
+   "fields": {
+    "client": {
+     "value": "天成国际",
+     "confidence": 0.7,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "TC-1119",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CSQU3054383",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "TC1234500",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑霞浦街道长江路 33 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "蔡经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13900006677",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-19 07:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-20 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "COSCO SHIPPING GEMINI / 033E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "家具",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "18200",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2650",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_CLOSING_PASSED",
+     "field": "closing_time",
+     "message": "截港时间 2026-11-20 18:00 已过，此单赶不上本班船，请立即改配"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：中远海运物流\n委托单号：ZY-1120\n提单号：COSU6398471120\nSO号：SO-990011\n箱型：40HQ\n箱量：2\n箱号：MSCU7654329,OOMA1234560\n封号：ZY0011001,ZY0011002\n提箱地：穿山港区堆场\n卸货地：宁波北仑春晓街道洋沙山路 8 号\n联系人：邓主管\n电话：13700007788\n装柜时间：2026-11-20 08:00\n截港时间：2026-11-21 19:00\n船名航次：COSCO SHIPPING ARIES / 051E\n品名：汽车配件\n毛重：22600\n运费：3000\n备注：需报关，随车带装箱单和发票",
+   "fields": {
+    "client": {
+     "value": "中远海运物流",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "ZY-1120",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": "COSU6398471120",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "so_no": {
+     "value": "SO-990011",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "2",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "MSCU7654329,OOMA1234560",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "ZY0011001,ZY0011002",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "穿山港区堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑春晓街道洋沙山路 8 号",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "邓主管",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13700007788",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-20 08:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-11-21 19:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "COSCO SHIPPING ARIES / 051E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "汽车配件",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "22600",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "3000",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "需报关,随车带装箱单和发票",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [],
+   "review_level": "auto"
+  }
+ ],
+ "holdout": [
+  {
+   "raw": "北仑一票，40HQ，箱号 OOLU1234567，明天下午6点截港，客户是永鑫货代，单号 YX-1201，送到北仑春晓，联系人沈经理 13712345678",
+   "fields": {
+    "client": {
+     "value": "永鑫货代",
+     "confidence": 0.7,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "YX-1201",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "OOLU1234567",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "pickup_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "delivery_addr": {
+     "value": "北仑春晓",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "沈经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13712345678",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "pickup_addr",
+     "message": "缺少必填字段：提箱/装货地"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户｜宏达物流\n单号｜HD-1202\n箱型｜40GP\n箱数｜2\n箱号｜TCLU1234568、FCMU1122336\n封号｜HD001、HD002\n提箱｜北仑二期\n卸货｜宁波北仑大港工业城\n电话｜13612345678\n截港｜2026-11-25 18:00",
+   "fields": {
+    "client": {
+     "value": "宏达物流",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "HD-1202",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "2",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "TCLU1234568,FCMU1122336",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "HD001,HD002",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑大港工业城",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_phone": {
+     "value": "13612345678",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-25 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [],
+   "review_level": "auto"
+  },
+  {
+   "raw": "客户：宁波远达\n委托单号：ＹＤ－１２０３\n箱型：４０ＨＱ\n箱号：ＭＳＣＵ７６５４３２９\n截港时间：２０２６－１１－２６　１８：００",
+   "fields": {
+    "client": {
+     "value": "宁波远达",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "YD-1203",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "MSCU7654329",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "pickup_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "delivery_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_contact": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_phone": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-26 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "pickup_addr",
+     "message": "缺少必填字段：提箱/装货地"
+    },
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "delivery_addr",
+     "message": "缺少必填字段：卸货/送货地"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "Booking: ABC-1204\nParty: Global Trans\nEquip: 2x40HQ\nCntr: HLXU3021544, TGHU7788993\nSeal: GT1001, GT1002\nPickup: Beilun Depot 3\nDelivery: Ningbo Zhenhai\nContact: Mr. Lin\nCut-off: 2026-11-27 17:00\nVessel: MSC ARIES 012W\nCommodity: Auto parts\nGW: 21000\nFreight: 2800",
+   "fields": {
+    "client": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "booking_no": {
+     "value": "ABC-1204",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "2",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "HLXU3021544,TGHU7788993",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "GT1001,GT1002",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "Beilun Depot 3",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "Ningbo Zhenhai",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "Mr. Lin",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-27 17:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "MSC ARIES 012W",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": "3",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "cargo_desc": {
+     "value": "Auto parts",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "21000",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "2800",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "client",
+     "message": "缺少必填字段：客户/货代"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "张师傅你好，那票货客户改成 20GP 了，箱号还是 TEMU1234565，封号没变 TM7788990，\n截关提前到 11月28日 16点，卸货地改成余姚，联系人换成王工 13898765432，单号 TZ-1205。",
+   "fields": {
+    "client": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "booking_no": {
+     "value": "TZ-1205",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "20GP",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_no": {
+     "value": "TEMU1234565",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "TM7788990",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "delivery_addr": {
+     "value": "余姚",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "王工",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13898765432",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-28 16:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "client",
+     "message": "缺少必填字段：客户/货代"
+    },
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "pickup_addr",
+     "message": "缺少必填字段：提箱/装货地"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：安捷货运 单号 AJ-1206 40HQ 一个 箱号 CMAU4567893",
+   "fields": {
+    "client": {
+     "value": "安捷货运",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "AJ-1206 40HQ 一个",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CMAU4567893",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "pickup_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "delivery_addr": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_contact": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "factory_phone": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "pickup_addr",
+     "message": "缺少必填字段：提箱/装货地"
+    },
+    {
+     "level": "error",
+     "code": "E_REQUIRED",
+     "field": "delivery_addr",
+     "message": "缺少必填字段：卸货/送货地"
+    }
+   ],
+   "review_level": "blocked"
+  },
+  {
+   "raw": "客户：通达物流，委托单号：TD1207，箱型：40HQ，箱量：1，箱号：CSQU3054383，封号：TD6677889，提箱地：北仑三期堆场，卸货地：宁波慈溪，联系人：刘经理，电话：13912345678，截港时间：2026-11-29 18:00，运费：2700",
+   "fields": {
+    "client": {
+     "value": "通达物流",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "TD1207",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40HQ",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "CSQU3054383",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "TD6677889",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑三期堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波慈溪",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "刘经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13912345678",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "closing_time": {
+     "value": "2026-11-29 18:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "gross_weight": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "freight": {
+     "value": "2700",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    }
+   },
+   "checks": [],
+   "review_level": "auto"
+  },
+  {
+   "raw": "客户：联合国际\n单号：LH-1208\n箱型：40RF\n箱量：1\n箱号：HLXU3021544\n封号：LH9900112\n提箱地：北仑二期冷箱堆场\n卸货地：宁波北仑梅山保税港区\n联系人：顾经理\n电话：13755556666\n装柜时间：2026-11-30 06:00\n截港时间：2026-12-01 15:00\n船名航次：MAERSK HANOI / 155E\n品名：冷冻肉类\n毛重：20500\n运费：3800\n备注：全程-18度，需预冷2小时，随车带温度记录仪和卫生证书，到厂先联系冷库值班室 0574-88880000",
+   "fields": {
+    "client": {
+     "value": "联合国际",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "booking_no": {
+     "value": "LH-1208",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "bl_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "so_no": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "container_type": {
+     "value": "40RF",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_qty": {
+     "value": "1",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "container_no": {
+     "value": "HLXU3021544",
+     "confidence": 0.97,
+     "source": "rule"
+    },
+    "seal_no": {
+     "value": "LH9900112",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "pickup_addr": {
+     "value": "北仑二期冷箱堆场",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "delivery_addr": {
+     "value": "宁波北仑梅山保税港区",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_contact": {
+     "value": "顾经理",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "factory_phone": {
+     "value": "13755556666",
+     "confidence": 0.95,
+     "source": "rule"
+    },
+    "loading_window": {
+     "value": "2026-11-30 06:00",
+     "confidence": 0.75,
+     "source": "rule"
+    },
+    "closing_time": {
+     "value": "2026-12-01 15:00",
+     "confidence": 0.93,
+     "source": "rule"
+    },
+    "vessel_voyage": {
+     "value": "MAERSK HANOI / 155E",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "depot": {
+     "value": null,
+     "confidence": 0.0,
+     "source": "missing"
+    },
+    "cargo_desc": {
+     "value": "冷冻肉类",
+     "confidence": 0.8,
+     "source": "rule"
+    },
+    "gross_weight": {
+     "value": "20500",
+     "confidence": 0.9,
+     "source": "rule"
+    },
+    "freight": {
+     "value": "3800",
+     "confidence": 0.85,
+     "source": "rule"
+    },
+    "remark": {
+     "value": "全程-18度,需预冷2小时,随车带温度记录仪和卫生证书,到厂先联系冷库值班室 0574-88880000",
+     "confidence": 0.7,
+     "source": "rule"
+    }
+   },
+   "checks": [],
+   "review_level": "auto"
+  }
+ ]
+}
